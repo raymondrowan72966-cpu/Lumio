@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npx *)",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(where node *)",
+      "PowerShell(Get-Command node, npx, python, python3, php, dotnet -ErrorAction SilentlyContinue)"
+    ]
+  }
+}
