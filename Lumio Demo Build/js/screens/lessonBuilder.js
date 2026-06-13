@@ -41,7 +41,8 @@ function renderLessonBuilder(lessonId) {
       ${renderBuilderTopbar(course, lesson)}
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
-        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--surface-0); position:relative;" id="lesson-canvas-wrap">
+        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--theme-bg-style, var(--surface-50)); position:relative;" id="lesson-canvas-wrap">
+          ${ambientBlobs([['var(--pastel-lavender)', '300px', '300px', '-80px', '-60px', null, null]])}
           <div style="max-width:720px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1;" id="lesson-canvas">
             ${renderCanvasBlocks(blocks)}
           </div>
@@ -166,32 +167,6 @@ function renderBlockLibrary(lesson, course) {
       .editable-text:hover { box-shadow:0 0 0 1px var(--border); }
       .editable-text:focus { box-shadow:0 0 0 2px var(--theme-primary, var(--indigo)); }
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
-
-      /* Document-style insertion points */
-      .drop-zone { position:relative; height:14px; margin:0; display:flex; align-items:center; justify-content:center; }
-      .drop-zone-line { position:absolute; left:0; right:0; top:50%; height:2px; background:transparent; border-radius:2px; transform:translateY(-50%); transition:background-color .12s, height .12s; }
-      .drop-zone-add {
-        position:relative; z-index:2; width:22px; height:22px; border-radius:50%;
-        border:1px solid var(--border); background:var(--surface-0); color:var(--ink-400);
-        font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
-        cursor:pointer; opacity:0; transition:opacity .12s, color .12s, border-color .12s, background-color .12s;
-      }
-      .drop-zone:hover .drop-zone-add,
-      .drop-zone-add:focus-visible { opacity:1; }
-      .drop-zone:hover .drop-zone-line { background:var(--border); }
-      .drop-zone-add:hover, .drop-zone-add:focus-visible {
-        border-color:var(--theme-primary, var(--indigo)); color:var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
-      }
-      /* While a block is being dragged, faintly reveal every insertion line so placement stays obvious */
-      #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
-      .drop-zone.drag-active .drop-zone-line { background:var(--theme-primary, var(--indigo)); height:3px; }
-      #lesson-canvas.dragging-block .drop-zone-add { opacity:0; }
-
-      /* Empty-lesson insertion prompt */
-      .empty-canvas { position:relative; text-align:center; padding:28px 24px; }
-      .empty-canvas-line { position:absolute; left:0; right:0; top:24px; height:0; border-top:1px dashed var(--border); }
-      .empty-canvas-add { position:relative; opacity:1; width:28px; height:28px; font-size:16px; margin:0 auto; }
-      .empty-canvas.drag-active .empty-canvas-line { border-top-style:solid; border-color:var(--theme-primary, var(--indigo)); }
     </style>
   `;
   return html;
@@ -207,44 +182,34 @@ function blockTile(b) {
 /* ============================================================
    CANVAS
    ============================================================ */
-/* Document-style insertion point: a thin line that highlights on hover/drag,
-   plus a small centered "+" control for click-to-insert. Always present in
-   the DOM (for drag/drop targeting) but visually near-invisible at rest. */
 function dropZone(index) {
-  return `
-    <div class="drop-zone" data-drop-index="${index}">
-      <div class="drop-zone-line"></div>
-      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block here">+</button>
-    </div>
-  `;
+  return `<div class="drop-zone" data-drop-index="${index}" style="height:10px; margin:2px 0; border-radius:6px; transition:all .12s;"></div>`;
 }
 
-/* Insertion point below the last block — same thin-line/"+" affordance as
-   the inter-block drop zones, so the canvas ends without a heavy reserved box. */
+/* Permanent, always-visible drop target below the last block, so authors
+   can drop a new block at the end of the lesson without having to target
+   the thin inter-block drop zones. */
 function endOfCanvasDropZone(index) {
-  return `
-    <div class="drop-zone end-of-canvas-drop" data-drop-index="${index}">
-      <div class="drop-zone-line"></div>
-      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block at end of lesson">+</button>
-    </div>
-  `;
+  return `<div class="drop-zone end-of-canvas-drop" data-drop-index="${index}" style="margin-top:16px; min-height:36px; border:2px dashed transparent; border-radius:10px; background:transparent; transition:all .12s;"></div>`;
 }
 
 function renderCanvasBlocks(blocks) {
   if (blocks.length === 0) {
     return `
-      <div class="empty-canvas fade-in" id="empty-canvas-drop">
-        <div class="empty-canvas-line"></div>
-        <button class="drop-zone-add empty-canvas-add" data-drop-index="0" title="Insert block" aria-label="Insert your first block">+</button>
-        <p class="text-sm text-muted mt-12">Drag a block from the library, click + to add one, or let Lumio draft a starting point.</p>
-        <button class="btn btn-secondary btn-sm mt-12" id="ai-draft-lesson">✨ Draft this lesson with AI</button>
+      <div class="card card-pad text-center fade-in" style="padding:60px 30px; border:2px dashed var(--border);" id="empty-canvas-drop">
+        <div style="font-size:40px;">🎨</div>
+        <h3 class="mt-16" style="font-size:16px;">Start with a block</h3>
+        <p class="text-sm text-muted mt-8" style="max-width:380px; margin:8px auto 0;">
+          Drag a block from the library, or let Lumio draft a starting point for this lesson.
+        </p>
+        <button class="btn btn-primary mt-24" id="ai-draft-lesson">✨ Draft this lesson with AI</button>
       </div>
     `;
   }
 
   let html = dropZone(0);
   blocks.forEach((block, i) => {
-    html += renderBlockWrapper(block, i, blocks.length, blocks[i + 1]);
+    html += renderBlockWrapper(block, i, blocks.length);
     html += dropZone(i + 1);
   });
   html += endOfCanvasDropZone(blocks.length);
@@ -367,46 +332,7 @@ function applyLivePreview(block, index) {
   else applyBlockStylesToDom(block, index);
 }
 
-/* Block types that render directly on the canvas as page content, without
-   card chrome (background/border-radius/shadow/border). Selection is shown
-   via an outline instead of a permanent border. */
-const CARDLESS_BLOCK_TYPES = new Set([
-  // Headings
-  'heading', 'heading_paragraph',
-  // Paragraphs
-  'paragraph',
-  // Quotes
-  'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel',
-  // Lists
-  'list_numbered', 'list_checkbox', 'list_bullet',
-  // Images
-  'image', 'image_text', 'text_on_image',
-  // Gallery
-  'carousel', 'column_grid',
-  // Dividers
-  'continue', 'numbered_divider', 'line_divider',
-]);
-
-/* Document-flow vertical rhythm for cardless blocks. */
-const FLOW_SPACING = '20px';   // default rhythm between cardless blocks (16-24px range)
-const FLOW_SPACING_TIGHT = '8px'; // tighter spacing for closely-related content
-
-const HEADING_BLOCK_TYPES = new Set(['heading', 'heading_paragraph']);
-const LIST_BLOCK_TYPES = new Set(['list_numbered', 'list_checkbox', 'list_bullet']);
-
-/* Margin-bottom for a cardless block, based on its relationship to the next block:
-   - heading -> paragraph stays visually connected (tight)
-   - a list following heading/paragraph content stays grouped with it (tight)
-   - everything else uses the standard document rhythm */
-function cardlessFlowMargin(block, nextBlock) {
-  if (nextBlock && CARDLESS_BLOCK_TYPES.has(nextBlock.type)) {
-    if (HEADING_BLOCK_TYPES.has(block.type) && nextBlock.type === 'paragraph') return FLOW_SPACING_TIGHT;
-    if (LIST_BLOCK_TYPES.has(nextBlock.type) && (HEADING_BLOCK_TYPES.has(block.type) || block.type === 'paragraph')) return FLOW_SPACING_TIGHT;
-  }
-  return FLOW_SPACING;
-}
-
-function renderBlockWrapper(block, index, total, nextBlock) {
+function renderBlockWrapper(block, index, total) {
   const isExpanded = BuilderUI.expandedBlocks.has(index);
   const isSelected = BuilderUI.selected === index;
   const ds = block.design || {};
@@ -414,31 +340,19 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   const alignStyle = ds.align ? `text-align:${ds.align};` : '';
   const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
   const moveButtons = `
-        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" aria-label="Move block up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===0?'0.4':'1'};">↑</button>
-        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" aria-label="Move block down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
-  const { treatment } = DesignSystem.resolveBlockStyle(block);
-  // Pure visual dividers carry no content for assistive technology to announce.
-  const DECORATIVE_DIVIDER_TYPES = new Set(['line_divider', 'numbered_divider']);
-  const ariaHidden = (AccessibilityRuntime.ACCESSIBILITY_OF(block.type).decorative && DECORATIVE_DIVIDER_TYPES.has(block.type))
-    ? ' aria-hidden="true"' : '';
-  // 'columns' keeps its fixed 4px margin (does not inherit cardlessFlowMargin's
-  // heading/list grouping rules), exactly as before this refactor.
-  const cardlessMargin = block.type === 'columns' ? '4px' : cardlessFlowMargin(block, nextBlock);
-  const wrapperStyle = treatment === 'cardless'
-    ? `position:relative; border-radius:0; margin-bottom:${cardlessMargin};
-       outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;
-       background:transparent; box-shadow:none;`
-    : `position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
-       margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
-       box-shadow:${isSelected ? 'var(--shadow-md)' : 'var(--shadow-soft)'};`;
+        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===0?'0.4':'1'};">↑</button>
+        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
   return `
-    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="${wrapperStyle}"${ariaHidden}>
+    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="
+      position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
+      margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
+      box-shadow:${isSelected ? 'var(--shadow-md)' : 'var(--shadow-soft)'};">
       <div class="block-toolbar" style="position:absolute; top:-14px; left:14px; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:5;">
         <span class="drag-handle" draggable="true" data-index="${index}" title="Drag to reorder"
           style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">⠿ ${blockLabel(block.type)}</span>
-        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✨</button>
-        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">⧉</button>
-        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✕</button>${moveButtons}
+        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✨</button>
+        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">⧉</button>
+        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✕</button>${moveButtons}
       </div>
       <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
@@ -457,6 +371,7 @@ function escapeHtml(str) {
   return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+const COLUMN_BG_LIST = ['var(--pastel-lavender)', 'var(--pastel-cyan)', 'var(--pastel-pink)', 'var(--pastel-peach)'];
 const DEFAULT_COLUMNS = ['Column 1 content...', 'Column 2 content...'];
 const DEFAULT_TABLE_ROWS = [
   ['Step', 'Owner', 'Timeline'],
@@ -479,7 +394,7 @@ function renderBlockContent(block, editable) {
     case 'columns': {
       const cols = d.cols || DEFAULT_COLUMNS;
       return `<div style="display:grid; grid-template-columns:repeat(${cols.length},1fr); gap:16px;">
-        ${cols.map((c, i) => `<div style="${i > 0 ? 'border-left:1px solid var(--border); padding-left:16px;' : ''}"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}">${escapeHtml(c)}</div></div>`).join('')}
+        ${cols.map((c, i) => `<div class="card card-pad" style="background:${COLUMN_BG_LIST[i % COLUMN_BG_LIST.length]}; border:none;"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}">${escapeHtml(c)}</div></div>`).join('')}
       </div>`;
     }
     case 'table': {
@@ -513,14 +428,12 @@ function renderBlockContent(block, editable) {
         <p style="font-size:18px; font-style:italic;">"${d.text || 'Progress over perfection.'}"</p>
         <p class="text-sm mt-12">— ${d.author || 'Company Values'}</p>
       </div>`;
-    case 'quote_carousel': {
-      const quotes = (d.quotes && d.quotes.length) ? d.quotes : [{text:'“Curiosity over certainty.”'},{text:'“Clarity over cleverness.”'},{text:'“People over process.”'}];
+    case 'quote_carousel':
       return `<div class="flex gap-12" style="overflow-x:auto;">
-        ${quotes.map(q => `
-          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;"><p class="text-sm">${q.text||''}</p>${q.author?`<p class="text-sm text-muted mt-8">— ${q.author}</p>`:''}</div>
+        ${['“Curiosity over certainty.”','“Clarity over cleverness.”','“People over process.”'].map(q => `
+          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;"><p class="text-sm">${q}</p></div>
         `).join('')}
       </div>`;
-    }
 
     case 'list_numbered':
       return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Steps'}</h3><ol style="padding-left:20px; line-height:1.9;">${(d.items || ['Log in to the HR portal','Complete your profile','Review your benefits']).map(i=>`<li>${i}</li>`).join('')}</ol>`;
@@ -537,21 +450,15 @@ function renderBlockContent(block, editable) {
         <div><h3 style="font-size:16px;">${d.heading || 'Heading'}</h3><p class="text-sm mt-8" style="line-height:1.7;">${d.body || 'Supporting paragraph text goes here.'}</p></div>
       </div>`;
     case 'text_on_image':
-      return `<div style="${d.imageUrl ? `background-image:url('${d.imageUrl}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);'} border-radius:var(--r-md); padding:40px; color:#fff; text-align:center;">
+      return `<div style="background:var(--gradient-warm); border-radius:var(--r-md); padding:40px; color:#fff; text-align:center;">
         <h3 style="font-size:18px; color:#fff;">${d.heading || 'Bold headline on image'}</h3>
         <p class="text-sm mt-8">${d.body || 'Supporting text overlaid on a background image.'}</p>
       </div>`;
 
     case 'carousel':
-      return `<div class="flex gap-12" style="overflow-x:auto;">${((d.items && d.items.length) ? d.items : ['Slide 1','Slide 2','Slide 3']).map(s=>imagePlaceholder(s, 120, 180)).join('')}</div>`;
+      return `<div class="flex gap-12" style="overflow-x:auto;">${[1,2,3].map(n=>imagePlaceholder('Slide '+n, 120, 180)).join('')}</div>`;
     case 'column_grid':
-      return `<div style="display:grid; grid-template-columns:repeat(${Math.min(((d.items&&d.items.length)||3), 3)},1fr); gap:12px;">${((d.items&&d.items.length) ? d.items : [{title:'Item 1'},{title:'Item 2'},{title:'Item 3'}]).map(item=>`
-        <div class="card card-pad text-center">
-          ${item.imageUrl ? `<img src="${item.imageUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:var(--r-sm);"/>` : imagePlaceholder(item.title||'Item', 80)}
-          <div style="font-weight:600; font-size:13px; margin-top:8px;">${item.title||''}</div>
-          ${item.description ? `<div class="text-sm text-muted mt-4">${item.description}</div>` : ''}
-        </div>
-      `).join('')}</div>`;
+      return `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">${[1,2,3].map(n=>imagePlaceholder('Item '+n, 90)).join('')}</div>`;
 
     case 'audio':
       return `<div class="card card-pad flex items-center gap-12" style="background:var(--pastel-cyan); border:none;"><span style="font-size:22px;">🔊</span><div style="flex:1;"><div style="font-weight:600; font-size:13px;">${d.title || 'Welcome message from our CEO'}</div><div style="height:6px; background:#fff; border-radius:99px; margin-top:8px;"><div style="width:35%; height:100%; background:var(--cyan); border-radius:99px;"></div></div></div><span class="text-sm text-muted">2:14</span></div>`;
@@ -561,7 +468,7 @@ function renderBlockContent(block, editable) {
         <span class="text-sm" style="position:absolute; bottom:10px; left:14px; opacity:0.8;">${d.title || 'Welcome video — 1:32'}</span>
       </div>`;
     case 'file':
-      return `<div class="card card-pad flex items-center gap-12" style="border:1px dashed var(--border);"><span style="font-size:22px;">📎</span><div><div style="font-weight:600; font-size:13px;">${d.filename || 'Employee-Handbook.pdf'}</div><div class="text-sm text-muted">${d.filesize || '2.4 MB'}${d.url ? ' · linked' : ''}</div></div></div>`;
+      return `<div class="card card-pad flex items-center gap-12" style="border:1px dashed var(--border);"><span style="font-size:22px;">📎</span><div><div style="font-weight:600; font-size:13px;">${d.filename || 'Employee-Handbook.pdf'}</div><div class="text-sm text-muted">${d.filesize || '2.4 MB'}</div></div></div>`;
 
     case 'accordion':
       return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Accordion'}</h3>
@@ -577,38 +484,32 @@ function renderBlockContent(block, editable) {
       return `<div class="tabs" style="border-bottom:1px solid var(--border);">
           ${(d.tabs || ['Overview','Details','FAQ']).map((t,i)=>`<div class="tab ${i===0?'active':''}">${t}</div>`).join('')}
         </div>
-        <div class="text-sm mt-12">${(d.contents && d.contents[0]) || d.content || 'Tab content appears here. Switch tabs to reveal more.'}</div>`;
-    case 'labelled_graphic': {
-      const hsPositions = [['20%','30%'],['55%','55%'],['75%','25%'],['35%','75%'],['85%','70%'],['10%','65%']];
-      const hotspots = (d.hotspots && d.hotspots.length) ? d.hotspots : [{label:'1'},{label:'2'},{label:'3'}];
-      return `<div style="${d.imageUrl ? `background-image:url('${d.imageUrl}'); background-size:cover; background-position:center;` : 'background:var(--pastel-lavender);'} border-radius:var(--r-md); height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
-        ${!d.imageUrl ? '<span style="font-size:32px;">🗺️</span>' : ''}
-        ${hotspots.map((h,i)=>`
-          <span style="position:absolute; left:${hsPositions[i % hsPositions.length][0]}; top:${hsPositions[i % hsPositions.length][1]}; width:24px; height:24px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-soft);">${i+1}</span>
+        <div class="text-sm mt-12">${d.content || 'Tab content appears here. Switch tabs to reveal more.'}</div>`;
+    case 'labelled_graphic':
+      return `<div style="background:var(--pastel-lavender); border-radius:var(--r-md); height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
+        <span style="font-size:32px;">🗺️</span>
+        ${[['20%','30%','1'],['55%','55%','2'],['75%','25%','3']].map(([l,t,n])=>`
+          <span style="position:absolute; left:${l}; top:${t}; width:24px; height:24px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-soft);">${n}</span>
         `).join('')}
       </div>`;
-    }
     case 'process':
       return `<h3 style="font-size:15px; margin-bottom:14px;">${d.heading || 'Process'}</h3>
         <div class="flex items-center gap-8" style="overflow-x:auto;">
-          ${(d.steps || ['Submit Request','Manager Review','HR Approval','Access Granted']).map((s,i,arr)=>{
-            const title = typeof s === 'string' ? s : (s.title || '');
-            const description = typeof s === 'string' ? '' : (s.description || '');
-            return `<div class="card card-pad" style="min-width:130px; text-align:center; background:${i===0?'var(--pastel-lavender)':'var(--surface-0)'};">
+          ${(d.steps || ['Submit Request','Manager Review','HR Approval','Access Granted']).map((s,i,arr)=>`
+            <div class="card card-pad" style="min-width:130px; text-align:center; background:${i===0?'var(--pastel-lavender)':'var(--surface-0)'};">
               <div class="pill pill-indigo" style="margin-bottom:6px;">Step ${i+1}</div>
-              <div class="text-sm" style="font-weight:600;">${title}</div>
-              ${description ? `<div class="text-sm text-muted mt-4">${description}</div>` : ''}
+              <div class="text-sm" style="font-weight:600;">${s}</div>
             </div>
-            ${i<arr.length-1 ? '<span style="color:var(--ink-400);">→</span>' : ''}`;
-          }).join('')}
+            ${i<arr.length-1 ? '<span style="color:var(--ink-400);">→</span>' : ''}
+          `).join('')}
         </div>`;
     case 'scenario':
       return `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
         <div class="pill pill-cyan mb-8">🌳 Branching Scenario</div>
         <p style="font-weight:600; font-size:14px;">${d.prompt || 'A customer calls upset about a delayed shipment. How do you respond?'}</p>
         <div class="flex-col gap-8 mt-12">
-          ${(d.choices && d.choices.length ? d.choices : ['Apologize and offer a solution','Explain that it is not your department','Transfer the call immediately']).map(c => `
-            <div class="card card-pad" style="background:var(--surface-0); font-size:13px; cursor:pointer;">→ ${typeof c === 'string' ? c : c.text}</div>
+          ${(d.choices || ['Apologize and offer a solution','Explain that it is not your department','Transfer the call immediately']).map(c => `
+            <div class="card card-pad" style="background:var(--surface-0); font-size:13px; cursor:pointer;">→ ${c}</div>
           `).join('')}
         </div>
       </div>`;
@@ -626,37 +527,27 @@ function renderBlockContent(block, editable) {
         </div>
       </div>`;
     case 'button':
-      return `<div style="text-align:center;"><button class="btn btn-primary">${d.label || 'View Resource →'}</button>${d.url ? `<div class="text-sm text-muted mt-8">${d.url}</div>` : ''}</div>`;
+      return `<div style="text-align:center;"><button class="btn btn-primary">${d.label || 'View Resource →'}</button></div>`;
 
     case 'chart_bar':
-      return chartPreview('bar', d);
+      return chartPreview('bar');
     case 'chart_line':
-      return chartPreview('line', d);
-    case 'chart_pie': {
-      const items = (d.items && d.items.length) ? d.items : [{label:'Engineering',value:40},{label:'Sales',value:30},{label:'Support',value:30}];
-      const colors = ['var(--indigo)','var(--cyan)','var(--orange)','var(--teal)'];
-      const total = items.reduce((s,it)=>s+(Number(it.value)||0),0) || 1;
-      let acc = 0;
-      const segments = items.map((it,i) => {
-        const start = acc/total*100;
-        acc += (Number(it.value)||0);
-        const end = acc/total*100;
-        return `${colors[i%colors.length]} ${start}% ${end}%`;
-      }).join(', ');
-      return `${d.title ? `<h3 style="font-size:15px; margin-bottom:14px;">${d.title}</h3>` : ''}
-      <div style="display:flex; align-items:center; gap:24px;">
-        <div style="width:120px; height:120px; border-radius:50%; background:conic-gradient(${segments});"></div>
+      return chartPreview('line');
+    case 'chart_pie':
+      return `<div style="display:flex; align-items:center; gap:24px;">
+        <div style="width:120px; height:120px; border-radius:50%; background:conic-gradient(var(--indigo) 0% 40%, var(--cyan) 40% 70%, var(--orange) 70% 100%);"></div>
         <div class="text-sm">
-          ${items.map((it,i)=>`<div class="flex items-center gap-8 ${i>0?'mt-8':''}"><span style="width:10px;height:10px;border-radius:50%;background:${colors[i%colors.length]};display:inline-block;"></span> ${it.label||''} — ${Math.round((Number(it.value)||0)/total*100)}%</div>`).join('')}
+          <div class="flex items-center gap-8"><span style="width:10px;height:10px;border-radius:50%;background:var(--indigo);display:inline-block;"></span> Engineering — 40%</div>
+          <div class="flex items-center gap-8 mt-8"><span style="width:10px;height:10px;border-radius:50%;background:var(--cyan);display:inline-block;"></span> Sales — 30%</div>
+          <div class="flex items-center gap-8 mt-8"><span style="width:10px;height:10px;border-radius:50%;background:var(--orange);display:inline-block;"></span> Support — 30%</div>
         </div>
       </div>`;
-    }
 
     case 'continue':
       return `<div style="text-align:center; padding:8px 0;"><button class="btn btn-secondary">${d.label || 'Continue'} ▾</button>
         <p class="text-sm text-muted mt-8">Content below stays hidden until the learner clicks Continue.</p></div>`;
     case 'numbered_divider':
-      return `<div class="flex items-center gap-12"><div style="width:32px; height:32px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;">${d.number || '2'}</div>${d.label ? `<div style="font-weight:600;">${d.label}</div>` : ''}<div style="flex:1; height:1px; background:var(--border);"></div></div>`;
+      return `<div class="flex items-center gap-12"><div style="width:32px; height:32px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700;">${d.number || '2'}</div><div style="flex:1; height:1px; background:var(--border);"></div></div>`;
     case 'line_divider':
       return `<div style="height:1px; background:var(--border);"></div>`;
 
@@ -699,29 +590,13 @@ function imagePlaceholder(label, height, width) {
   </div>`;
 }
 
-function chartPreview(kind, d) {
-  d = d || {};
-  const title = d.title ? `<h3 style="font-size:15px; margin-bottom:14px;">${d.title}</h3>` : '';
+function chartPreview(kind) {
   if (kind === 'bar') {
-    const items = (d.items && d.items.length) ? d.items : [{label:'',value:60},{label:'',value:90},{label:'',value:40},{label:'',value:75},{label:'',value:55}];
-    const max = Math.max(...items.map(it => Number(it.value) || 0), 1);
-    return `${title}<div class="flex items-end gap-12" style="height:140px;">
-      ${items.map(it => `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;">
-        <div style="width:100%; background:var(--gradient-primary); height:${Math.max((Number(it.value)||0)/max*100, 2)}%; border-radius:6px 6px 0 0;"></div>
-      </div>`).join('')}
-    </div>
-    ${items.some(it=>it.label) ? `<div class="flex gap-12 mt-4">${items.map(it=>`<div class="text-sm" style="flex:1; text-align:center;">${it.label||''}</div>`).join('')}</div>` : ''}`;
+    return `<div class="flex items-end gap-12" style="height:140px;">
+      ${[60,90,40,75,55].map(h => `<div style="flex:1; background:var(--gradient-primary); height:${h}%; border-radius:6px 6px 0 0;"></div>`).join('')}
+    </div>`;
   }
-  const items = (d.items && d.items.length) ? d.items : [{label:'',value:20},{label:'',value:50},{label:'',value:40},{label:'',value:80},{label:'',value:65},{label:'',value:90}];
-  const max = Math.max(...items.map(it => Number(it.value) || 0), 1);
-  const n = items.length;
-  const points = items.map((it, i) => {
-    const x = n > 1 ? (i / (n - 1)) * 300 : 150;
-    const y = 90 - ((Number(it.value) || 0) / max) * 80;
-    return `${x},${y}`;
-  }).join(' ');
-  return `${title}<svg viewBox="0 0 300 100" style="width:100%; height:120px;"><polyline points="${points}" fill="none" stroke="var(--indigo)" stroke-width="3"/></svg>
-  ${items.some(it=>it.label) ? `<div class="flex justify-between text-sm mt-4">${items.map(it=>`<span>${it.label||''}</span>`).join('')}</div>` : ''}`;
+  return `<svg viewBox="0 0 300 100" style="width:100%; height:120px;"><polyline points="0,80 60,50 120,60 180,20 240,35 300,10" fill="none" stroke="var(--indigo)" stroke-width="3"/></svg>`;
 }
 
 function knowledgeCheckMC(d) {
@@ -1141,7 +1016,7 @@ function renderRightTabContent(block, index, course) {
     } else if (block.type === 'accordion') {
       extra = `<div class="field"><label class="flex items-center gap-8"><input type="checkbox"/> Expand first item by default</label></div>`;
     } else if (block.type === 'continue') {
-      extra = `<div class="field"><label>Button label</label><input class="input content-field" data-field="label" value="${d.label || 'Continue'}" /></div>`;
+      extra = `<div class="field"><label>Button label</label><input class="input" id="cont-label" value="${d.label || 'Continue'}" /></div>`;
     } else {
       extra = `<p class="text-sm text-muted">No additional settings for this block.</p>`;
     }
@@ -1169,20 +1044,6 @@ function renderRightTabContent(block, index, course) {
         ['Heading', 'heading', d.heading, 'input'],
         ['Body text', 'body', d.body, 'textarea'],
       ]) + aiActions(true);
-    case 'text_on_image':
-      return contentFields([
-        ['Heading', 'heading', d.heading, 'input'],
-        ['Body text', 'body', d.body, 'textarea'],
-        ['Image URL', 'imageUrl', d.imageUrl, 'input'],
-      ]) + aiActions(true);
-    case 'column_grid':
-      return `<div class="field"><label>Items (one per line, format: Title :: Description :: Image URL)</label><textarea class="textarea content-field" data-field="columnItems" rows="6">${(d.items||[]).map(it=>`${it.title||''} :: ${it.description||''} :: ${it.imageUrl||''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'process':
-      return contentFields([['Process title', 'heading', d.heading, 'input']]) +
-        `<div class="field"><label>Steps (one per line, format: Step :: Description)</label><textarea class="textarea content-field" data-field="processSteps" rows="6">${(d.steps||[]).map(s=> typeof s === 'string' ? s : `${s.title||''}${s.description?` :: ${s.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'labelled_graphic':
-      return contentFields([['Image URL', 'imageUrl', d.imageUrl, 'input']]) +
-        `<div class="field"><label>Hotspots (one per line, format: Label :: Description)</label><textarea class="textarea content-field" data-field="hotspots" rows="6">${(d.hotspots||[]).map(h=>`${h.label||''}${h.description?` :: ${h.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
     case 'image':
       return contentFields([['Alt text', 'label', d.label, 'input']]) + aiActions(true) + `<button class="btn btn-secondary w-full mt-8">📤 Replace image</button>`;
     case 'quote1': case 'quote2': case 'quote3': case 'quote4': case 'quote_image':
@@ -1197,71 +1058,6 @@ function renderRightTabContent(block, index, course) {
         `<button class="btn btn-secondary w-full mt-8" id="ai-gen-kc">✨ Regenerate from lesson content</button>`;
     case 'continue':
       return `<p class="text-sm text-muted">This divider pauses content below until the learner clicks Continue — great for pacing and reducing cognitive load.</p>`;
-    case 'chart_bar': case 'chart_line': case 'chart_pie':
-      return contentFields([['Chart title', 'title', d.title, 'input']]) +
-        `<div class="field"><label>Data (one per line, format: Label :: Value)</label><textarea class="textarea content-field" data-field="chartItems" rows="6">${(d.items||[]).map(it=>`${it.label||''} :: ${it.value??''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'numbered_divider':
-      return contentFields([
-        ['Number', 'number', d.number, 'input'],
-        ['Label (optional)', 'label', d.label, 'input'],
-      ]);
-    case 'accordion':
-      return contentFields([['Heading', 'heading', d.heading, 'input']]) +
-        `<div class="field"><label>Items (one per line, format: Title :: Content)</label><textarea class="textarea content-field" data-field="accordionItems" rows="6">${(d.items||[]).map(it=>`${it.title||''} :: ${it.content||''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'tabs':
-      return `<div class="field"><label>Tabs (one per line, format: Tab label :: Tab content)</label><textarea class="textarea content-field" data-field="tabsData" rows="6">${(d.tabs||[]).map((t,i)=>`${t} :: ${(d.contents&&d.contents[i])||''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'flashcard_grid':
-      return `<div class="field"><label>Cards (one per line)</label><textarea class="textarea content-field" data-field="cards" rows="5">${(d.cards||[]).join('\n')}</textarea></div>` + aiActions();
-    case 'flashcard_stack':
-      return contentFields([
-        ['Front (question)', 'front', d.front, 'textarea'],
-        ['Back (answer)', 'back', d.back, 'textarea'],
-      ]) + aiActions();
-    case 'kc_multiple_response':
-      return contentFields([['Question', 'question', d.question, 'textarea']]) +
-        `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
-         <div class="field"><label>Correct options (numbers, comma-separated)</label><input class="input content-field" data-field="correctMulti" value="${(d.correct||[]).map(i=>i+1).join(', ')}"/></div>` +
-        `<button class="btn btn-secondary w-full mt-8" id="ai-gen-kc">✨ Regenerate from lesson content</button>`;
-    case 'kc_matching':
-      return `<div class="field"><label>Left items (one per line)</label><textarea class="textarea content-field" data-field="left" rows="4">${(d.left||[]).join('\n')}</textarea></div>
-        <div class="field"><label>Right matches (one per line, same order as left)</label><textarea class="textarea content-field" data-field="right" rows="4">${(d.right||[]).join('\n')}</textarea></div>
-        <p class="text-sm text-muted mt-8">Each right-hand item should be the correct match for the left-hand item on the same line.</p>`;
-    case 'kc_fill_gap':
-      return contentFields([
-        ['Sentence (use ____ for the gap)', 'text', d.text, 'textarea'],
-        ['Correct answer', 'answer', d.answer, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">For multiple acceptable answers, separate with "|" (e.g. colour|color).</p>`;
-    case 'kc_ordering':
-      return `<div class="field"><label>Items, in correct order (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>
-        <p class="text-sm text-muted mt-8">Learners will see these in shuffled order and must arrange them to match this order.</p>`;
-    case 'button':
-      return contentFields([
-        ['Button label', 'label', d.label, 'input'],
-        ['Link URL', 'url', d.url, 'input'],
-      ]) + `<div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="content-field" data-field="newTab" ${d.newTab ? 'checked' : ''}/> Open link in new tab</label></div>`;
-    case 'file':
-      return contentFields([
-        ['File name', 'filename', d.filename, 'input'],
-        ['File size', 'filesize', d.filesize, 'input'],
-        ['File URL', 'url', d.url, 'input'],
-      ]);
-    case 'video':
-      return contentFields([
-        ['Video URL', 'url', d.url, 'input'],
-        ['Caption', 'title', d.title, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">Paste a direct video file URL (.mp4) or a YouTube/Vimeo link.</p>`;
-    case 'audio':
-      return contentFields([
-        ['Audio URL', 'url', d.url, 'input'],
-        ['Title', 'title', d.title, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">Paste a direct audio file URL (.mp3, .wav).</p>`;
-    case 'carousel':
-      return `<div class="field"><label>Slides (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>` + aiActions();
-    case 'quote_carousel':
-      return `<div class="field"><label>Quotes (one per line, format: Quote text | Author)</label><textarea class="textarea content-field" data-field="quotes" rows="5">${(d.quotes||[]).map(q=>`${q.text||''}${q.author?` | ${q.author}`:''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'scenario':
-      return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
-        `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
     default:
       return `<p class="text-sm text-muted">Edit the ${blockLabel(block.type)} block's content directly on the canvas, or use AI to generate a draft.</p>` + aiActions();
   }
@@ -1492,27 +1288,6 @@ function bindBuilderEvents(course, lesson, blocks) {
     }
   }));
 
-  // Clicking empty canvas whitespace (not on a block) clears the current selection.
-  const canvasWrap = document.getElementById('lesson-canvas-wrap');
-  if (canvasWrap) {
-    canvasWrap.addEventListener('click', (e) => {
-      if (e.target.closest('.canvas-block')) return;
-      if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
-      BuilderUI.selected = null;
-      BuilderUI.expandedBlocks = new Set();
-      renderLessonBuilder(lesson.id);
-    });
-  }
-
-  // ESC deselects the currently selected block.
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
-    BuilderUI.selected = null;
-    BuilderUI.expandedBlocks = new Set();
-    renderLessonBuilder(lesson.id);
-  });
-
   // Block toolbar actions
   app.querySelectorAll('.del-block-btn').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1546,53 +1321,10 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelectorAll('.content-field').forEach(f => f.addEventListener('input', (e) => {
     const block = blocks[BuilderUI.selected];
     const field = e.target.dataset.field;
-    if (e.target.type === 'checkbox') {
-      block.data[field] = e.target.checked;
-    } else if (field === 'items' || field === 'cards' || field === 'options' || field === 'left' || field === 'right') {
+    if (field === 'items') {
       block.data[field] = e.target.value.split('\n').filter(x=>x.trim());
-    } else if (field === 'correctMulti') {
-      block.data.correct = e.target.value.split(',').map(s=>parseInt(s.trim(),10)-1).filter(n=>!isNaN(n) && n>=0);
-    } else if (field === 'accordionItems') {
-      block.data.items = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [title, content] = line.split('::').map(s => s.trim());
-        return { title, content };
-      });
-    } else if (field === 'tabsData') {
-      const lines = e.target.value.split('\n').filter(x=>x.trim());
-      block.data.tabs = lines.map(line => line.split('::')[0].trim());
-      block.data.contents = lines.map(line => (line.split('::')[1] || '').trim());
     } else if (field === 'correct') {
       block.data[field] = parseInt(e.target.value) - 1;
-    } else if (field === 'quotes') {
-      block.data[field] = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [text, author] = line.split('|').map(s => s.trim());
-        return { text, author };
-      });
-    } else if (field === 'choices') {
-      block.data[field] = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [text, feedback] = line.split('::').map(s => s.trim());
-        return { text, feedback };
-      });
-    } else if (field === 'columnItems') {
-      block.data.items = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [title, description, imageUrl] = line.split('::').map(s => (s||'').trim());
-        return { title, description, imageUrl: imageUrl || undefined };
-      });
-    } else if (field === 'processSteps') {
-      block.data.steps = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [title, description] = line.split('::').map(s => s.trim());
-        return description ? { title, description } : title;
-      });
-    } else if (field === 'hotspots') {
-      block.data.hotspots = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [label, description] = line.split('::').map(s => (s||'').trim());
-        return { label, description };
-      });
-    } else if (field === 'chartItems') {
-      block.data.items = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [label, value] = line.split('::').map(s => (s||'').trim());
-        return { label, value: parseFloat(value) || 0 };
-      });
     } else {
       block.data[field] = e.target.value;
     }
@@ -2060,46 +1792,58 @@ function bindDragAndDrop(lesson, blocks) {
     });
   });
 
-  // Drop zones (between/above/below blocks, and end-of-canvas) — thin
-  // insertion lines that highlight on dragover.
-  app.querySelectorAll('.drop-zone').forEach(zone => {
+  // Drop zones (between/above/below blocks)
+  app.querySelectorAll('.drop-zone:not(.end-of-canvas-drop)').forEach(zone => {
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
-      zone.classList.add('drag-active');
+      zone.style.background = 'var(--pastel-lavender)';
+      zone.style.height = '36px';
     });
     zone.addEventListener('dragleave', () => {
-      zone.classList.remove('drag-active');
+      zone.style.background = 'transparent';
+      zone.style.height = '10px';
     });
     zone.addEventListener('drop', (e) => {
-      zone.classList.remove('drag-active');
+      zone.style.background = 'transparent';
+      zone.style.height = '10px';
       handleLibraryOrCanvasDrop(e, parseInt(zone.dataset.dropIndex), blocks, lesson);
     });
   });
 
-  // While any block is being dragged, faintly reveal every insertion line
-  // so placement options stay obvious without a permanent heavy outline.
-  const canvasEl = app.querySelector('#lesson-canvas');
-  if (canvasEl) {
-    document.addEventListener('dragstart', () => canvasEl.classList.add('dragging-block'));
-    document.addEventListener('dragend', () => canvasEl.classList.remove('dragging-block'));
-  }
-
-  // Click "+" on an insertion line to add a paragraph block at that position.
-  app.querySelectorAll('.drop-zone-add').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      insertBlockAndFocus('paragraph', blocks, lesson, parseInt(btn.dataset.dropIndex));
+  // End-of-canvas drop zone — hidden by default, only shown while a block
+  // is being dragged, so the canvas ends cleanly after the final block.
+  const endZone = app.querySelector('.end-of-canvas-drop');
+  if (endZone) {
+    document.addEventListener('dragstart', () => {
+      endZone.style.borderColor = 'var(--border)';
     });
-  });
+    document.addEventListener('dragend', () => {
+      endZone.style.borderColor = 'transparent';
+      endZone.style.background = 'transparent';
+    });
+    endZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      endZone.style.borderColor = 'var(--indigo)';
+      endZone.style.background = 'var(--pastel-lavender)';
+    });
+    endZone.addEventListener('dragleave', () => {
+      endZone.style.borderColor = 'var(--border)';
+      endZone.style.background = 'transparent';
+    });
+    endZone.addEventListener('drop', (e) => {
+      endZone.style.borderColor = 'transparent';
+      endZone.style.background = 'transparent';
+      handleLibraryOrCanvasDrop(e, parseInt(endZone.dataset.dropIndex), blocks, lesson);
+    });
+  }
 
   // Empty canvas drop
   const emptyDrop = app.querySelector('#empty-canvas-drop');
   if (emptyDrop) {
-    emptyDrop.addEventListener('dragover', (e) => { e.preventDefault(); emptyDrop.classList.add('drag-active'); });
-    emptyDrop.addEventListener('dragleave', () => emptyDrop.classList.remove('drag-active'));
+    emptyDrop.addEventListener('dragover', (e) => { e.preventDefault(); emptyDrop.style.borderColor = 'var(--indigo)'; });
+    emptyDrop.addEventListener('dragleave', () => { emptyDrop.style.borderColor = 'var(--border)'; });
     emptyDrop.addEventListener('drop', (e) => {
       e.preventDefault();
-      emptyDrop.classList.remove('drag-active');
       const data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
       if (data.source === 'library') {
         insertBlockAndFocus(data.blockId, blocks, lesson, blocks.length);

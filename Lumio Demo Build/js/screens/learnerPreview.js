@@ -12,10 +12,6 @@ const LearnerUI = {
   accordionOpen: {},     // "lessonId:blockIndex" -> Set<itemIndex>
   activeTabs: {},        // "lessonId:blockIndex" -> tabIndex
   flipped: {},           // "lessonId:blockIndex" -> Set<cardIndex> | bool
-  carouselIndex: {},     // "lessonId:blockIndex" -> active slide index
-  quoteCarouselIndex: {}, // "lessonId:blockIndex" -> active quote index
-  scenarioAnswers: {},   // "lessonId:blockIndex" -> selected choice index
-  activeHotspot: {},     // "lessonId:blockIndex" -> active hotspot index | null
   previewDevice: 'desktop', // 'desktop' | 'tablet' | 'mobile' — preview-only, not persisted
   fullScreen: false,         // full-screen learner preview — preview-only, not persisted
 };
@@ -312,14 +308,6 @@ function renderLearnerBlock(block, index, ctx) {
     case 'kc_matching': return learnerKcMatching(block, index, ctx);
     case 'kc_ordering': return learnerKcOrdering(block, index, ctx);
     case 'kc_fill_gap': return learnerKcFillGap(block, index, ctx);
-    case 'button': return learnerButtonBlock(block, index, ctx);
-    case 'file': return learnerFileBlock(block, index, ctx);
-    case 'video': return learnerVideoBlock(block, index, ctx);
-    case 'audio': return learnerAudioBlock(block, index, ctx);
-    case 'carousel': return learnerCarouselBlock(block, index, ctx);
-    case 'quote_carousel': return learnerQuoteCarouselBlock(block, index, ctx);
-    case 'scenario': return learnerScenarioBlock(block, index, ctx);
-    case 'labelled_graphic': return learnerLabelledGraphicBlock(block, index, ctx);
     default: return renderBlockContent(block, false);
   }
 }
@@ -328,161 +316,12 @@ function renderLearnerBlock(block, index, ctx) {
 function learnerContinueBlock(block, index, ctx) {
   const d = block.data || {};
   const revealed = (LearnerUI.revealedContinues[ctx.lessonId] || new Set()).has(index);
-  const srOnlyStyle = 'position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;';
   return `
-    <div style="text-align:center; padding:8px 0; position:relative;">
+    <div style="text-align:center; padding:8px 0;">
       ${revealed
         ? `<span class="pill pill-grey">✓ Continued</span>`
         : `<button class="btn btn-secondary lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}">${d.label || 'Continue'} ▾</button>`}
-      <span aria-live="polite" style="${srOnlyStyle}">${revealed ? 'Additional content revealed below.' : ''}</span>
     </div>`;
-}
-
-/* ---- Button ---- */
-function learnerButtonBlock(block, index, ctx) {
-  const d = block.data || {};
-  const label = d.label || 'View Resource →';
-  if (d.url) {
-    return `<div style="text-align:center;"><a class="btn btn-primary" href="${escapeHtml(d.url)}" ${d.newTab ? 'target="_blank" rel="noopener"' : ''}>${escapeHtml(label)}</a></div>`;
-  }
-  return `<div style="text-align:center;"><button class="btn btn-primary" disabled title="No link set for this button">${escapeHtml(label)}</button></div>`;
-}
-
-/* ---- File ---- */
-function learnerFileBlock(block, index, ctx) {
-  const d = block.data || {};
-  const filename = d.filename || 'Employee-Handbook.pdf';
-  const filesize = d.filesize || '2.4 MB';
-  const inner = `<span style="font-size:22px;">📎</span><div><div style="font-weight:600; font-size:13px;">${escapeHtml(filename)}</div><div class="text-sm text-muted">${escapeHtml(filesize)}</div></div>`;
-  if (d.url) {
-    return `<a class="card card-pad flex items-center gap-12" href="${escapeHtml(d.url)}" download target="_blank" rel="noopener" style="border:1px dashed var(--border); text-decoration:none; color:inherit;">${inner}</a>`;
-  }
-  return `<div class="card card-pad flex items-center gap-12" style="border:1px dashed var(--border); opacity:0.7;">${inner}</div>`;
-}
-
-/* ---- Video ---- */
-function learnerVideoBlock(block, index, ctx) {
-  const d = block.data || {};
-  if (d.url) {
-    const yt = d.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-    const vimeo = d.url.match(/vimeo\.com\/(\d+)/);
-    const caption = d.title ? `<p class="text-sm text-muted mt-8">${escapeHtml(d.title)}</p>` : '';
-    if (yt) {
-      return `<div style="position:relative; padding-bottom:56.25%; border-radius:var(--r-md); overflow:hidden;"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allowfullscreen title="${escapeHtml(d.title || 'Video')}"></iframe></div>${caption}`;
-    }
-    if (vimeo) {
-      return `<div style="position:relative; padding-bottom:56.25%; border-radius:var(--r-md); overflow:hidden;"><iframe src="https://player.vimeo.com/video/${vimeo[1]}" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allowfullscreen title="${escapeHtml(d.title || 'Video')}"></iframe></div>${caption}`;
-    }
-    return `<video controls src="${escapeHtml(d.url)}" style="width:100%; border-radius:var(--r-md); display:block;"></video>${caption}`;
-  }
-  return `<div style="background:var(--ink-900); border-radius:var(--r-md); height:200px; display:flex; align-items:center; justify-content:center; color:#fff; position:relative;">
-    <span style="font-size:40px;">▶</span>
-    <span class="text-sm" style="position:absolute; bottom:10px; left:14px; opacity:0.8;">${escapeHtml(d.title || 'Welcome video — 1:32')}</span>
-  </div>`;
-}
-
-/* ---- Audio ---- */
-function learnerAudioBlock(block, index, ctx) {
-  const d = block.data || {};
-  if (d.url) {
-    return `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
-      ${d.title ? `<div style="font-weight:600; font-size:13px; margin-bottom:8px;">${escapeHtml(d.title)}</div>` : ''}
-      <audio controls src="${escapeHtml(d.url)}" style="width:100%;"></audio>
-    </div>`;
-  }
-  return `<div class="card card-pad flex items-center gap-12" style="background:var(--pastel-cyan); border:none;"><span style="font-size:22px;">🔊</span><div style="flex:1;"><div style="font-weight:600; font-size:13px;">${escapeHtml(d.title || 'Welcome message from our CEO')}</div><div style="height:6px; background:#fff; border-radius:99px; margin-top:8px;"><div style="width:35%; height:100%; background:var(--cyan); border-radius:99px;"></div></div></div><span class="text-sm text-muted">2:14</span></div>`;
-}
-
-/* ---- Carousel ---- */
-function learnerCarouselBlock(block, index, ctx) {
-  const d = block.data || {};
-  const slides = (d.items && d.items.length) ? d.items : ['Slide 1', 'Slide 2', 'Slide 3'];
-  const key = ctx.lessonId + ':' + index;
-  const active = ((LearnerUI.carouselIndex[key] || 0) % slides.length + slides.length) % slides.length;
-  return `
-    <div>
-      <div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
-        <span style="font-weight:600; font-size:14px;">${escapeHtml(slides[active])}</span>
-      </div>
-      <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Previous slide">← Prev</button>
-        <div class="flex gap-8" role="group" aria-label="Slide indicators">
-          ${slides.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
-        </div>
-        <button class="btn btn-secondary btn-sm lp-carousel-next" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Next slide">Next →</button>
-      </div>
-    </div>`;
-}
-
-/* ---- Quote Carousel ---- */
-function learnerQuoteCarouselBlock(block, index, ctx) {
-  const d = block.data || {};
-  const quotes = (d.quotes && d.quotes.length) ? d.quotes : [
-    { text: '“Curiosity over certainty.”' },
-    { text: '“Clarity over cleverness.”' },
-    { text: '“People over process.”' },
-  ];
-  const key = ctx.lessonId + ':' + index;
-  const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
-  const q = quotes[active];
-  return `
-    <div>
-      <div class="card card-pad" style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender);">
-        <p class="text-sm">${escapeHtml(q.text || '')}</p>
-        ${q.author ? `<p class="text-sm text-muted mt-8">— ${escapeHtml(q.author)}</p>` : ''}
-      </div>
-      <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Previous quote">← Prev</button>
-        <div class="flex gap-8" role="group" aria-label="Quote indicators">
-          ${quotes.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
-        </div>
-        <button class="btn btn-secondary btn-sm lp-quote-next" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Next quote">Next →</button>
-      </div>
-    </div>`;
-}
-
-/* ---- Scenario ---- */
-function learnerScenarioBlock(block, index, ctx) {
-  const d = block.data || {};
-  const rawChoices = (d.choices && d.choices.length) ? d.choices : ['Apologize and offer a solution', 'Explain that it is not your department', 'Transfer the call immediately'];
-  const choices = rawChoices.map(c => typeof c === 'string' ? { text: c, feedback: '' } : c);
-  const key = ctx.lessonId + ':' + index;
-  const selected = LearnerUI.scenarioAnswers[key];
-  return `
-    <div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
-      <div class="pill pill-cyan mb-8">🌳 Branching Scenario</div>
-      <p style="font-weight:600; font-size:14px;">${escapeHtml(d.prompt || 'A customer calls upset about a delayed shipment. How do you respond?')}</p>
-      <div class="flex-col gap-8 mt-12">
-        ${choices.map((c, i) => `
-          <div class="card card-pad lp-scenario-choice" data-key="${key}" data-i="${i}" role="button" tabindex="0"
-            aria-pressed="${selected===i}"
-            style="background:${selected===i?'var(--pastel-lavender)':'var(--surface-0)'}; font-size:13px; cursor:${selected===undefined?'pointer':'default'};">
-            → ${escapeHtml(c.text)}
-            ${selected===i && c.feedback ? `<div class="text-sm mt-8" style="font-weight:600;">${escapeHtml(c.feedback)}</div>` : ''}
-          </div>
-        `).join('')}
-      </div>
-      ${selected !== undefined ? `<p class="text-sm text-muted mt-12">You chose: "${escapeHtml(choices[selected].text)}"</p>` : ''}
-    </div>`;
-}
-
-/* ---- Labelled Graphic ---- */
-function learnerLabelledGraphicBlock(block, index, ctx) {
-  const d = block.data || {};
-  const key = ctx.lessonId + ':' + index;
-  const hsPositions = [['20%','30%'],['55%','55%'],['75%','25%'],['35%','75%'],['85%','70%'],['10%','65%']];
-  const hotspots = (d.hotspots && d.hotspots.length) ? d.hotspots : [{label:'1',description:''},{label:'2',description:''},{label:'3',description:''}];
-  const active = LearnerUI.activeHotspot[key];
-  return `
-    <div style="${d.imageUrl ? `background-image:url('${escapeHtml(d.imageUrl)}'); background-size:cover; background-position:center;` : 'background:var(--pastel-lavender);'} border-radius:var(--r-md); height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
-      ${!d.imageUrl ? '<span style="font-size:32px;">🗺️</span>' : ''}
-      ${hotspots.map((h, i) => `
-        <button class="lp-hotspot" data-key="${key}" data-i="${i}" aria-pressed="${active===i}" aria-label="${escapeHtml(h.label || `Hotspot ${i+1}`)}"
-          style="position:absolute; left:${hsPositions[i % hsPositions.length][0]}; top:${hsPositions[i % hsPositions.length][1]}; width:26px; height:26px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-soft); border:${active===i?'2px solid #fff':'none'}; cursor:pointer;">${i+1}</button>
-      `).join('')}
-    </div>
-    ${active != null ? `<div class="card card-pad mt-12"><div style="font-weight:600;">${escapeHtml(hotspots[active].label || `Hotspot ${active+1}`)}</div>${hotspots[active].description ? `<div class="text-sm text-muted mt-4">${escapeHtml(hotspots[active].description)}</div>` : ''}</div>` : ''}
-  `;
 }
 
 /* ---- Accordion ---- */
@@ -491,23 +330,16 @@ function learnerAccordionBlock(block, index, ctx) {
   const items = d.items || [{ title: 'Section 1', content: 'Details...' }, { title: 'Section 2', content: 'Details...' }];
   const key = ctx.lessonId + ':' + index;
   const open = LearnerUI.accordionOpen[key] || new Set([0]);
-  const idBase = `lp-accordion-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
   return `
     <h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Accordion'}</h3>
-    ${items.map((item, i) => {
-      const headerId = `${idBase}-header-${i}`;
-      const panelId = `${idBase}-panel-${i}`;
-      return `
-      <div class="card lp-accordion-item" data-key="${key}" data-i="${i}" id="${headerId}"
-        role="button" tabindex="0" aria-expanded="${open.has(i)}" aria-controls="${panelId}"
-        style="margin-bottom:8px; overflow:hidden; cursor:pointer;">
+    ${items.map((item, i) => `
+      <div class="card lp-accordion-item" data-key="${key}" data-i="${i}" style="margin-bottom:8px; overflow:hidden; cursor:pointer;">
         <div class="flex justify-between items-center" style="padding:12px 16px; font-weight:600; font-size:13px; background:${open.has(i) ? 'var(--pastel-lavender)' : 'var(--surface-0)'};">
-          ${item.title} <span aria-hidden="true">${open.has(i) ? '▾' : '▸'}</span>
+          ${item.title} <span>${open.has(i) ? '▾' : '▸'}</span>
         </div>
-        ${open.has(i) ? `<div id="${panelId}" role="region" aria-labelledby="${headerId}" style="padding:12px 16px;" class="text-sm">${item.content}</div>` : ''}
+        ${open.has(i) ? `<div style="padding:12px 16px;" class="text-sm">${item.content}</div>` : ''}
       </div>
-    `;
-    }).join('')}`;
+    `).join('')}`;
 }
 
 /* ---- Tabs ---- */
@@ -516,14 +348,11 @@ function learnerTabsBlock(block, index, ctx) {
   const tabs = d.tabs || ['Overview', 'Details', 'FAQ'];
   const key = ctx.lessonId + ':' + index;
   const active = LearnerUI.activeTabs[key] ?? 0;
-  const idBase = `lp-tabs-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
-  const panelId = `${idBase}-panel`;
   return `
-    <div class="tabs" role="tablist" style="border-bottom:1px solid var(--border);">
-      ${tabs.map((t, i) => `<div class="tab lp-tab ${i === active ? 'active' : ''}" data-key="${key}" data-i="${i}" id="${idBase}-tab-${i}"
-        role="tab" aria-selected="${i === active}" aria-controls="${panelId}" tabindex="0" style="cursor:pointer;">${t}</div>`).join('')}
+    <div class="tabs" style="border-bottom:1px solid var(--border);">
+      ${tabs.map((t, i) => `<div class="tab lp-tab ${i === active ? 'active' : ''}" data-key="${key}" data-i="${i}" style="cursor:pointer;">${t}</div>`).join('')}
     </div>
-    <div class="text-sm mt-12" id="${panelId}" role="tabpanel" aria-labelledby="${idBase}-tab-${active}">${(d.contents && d.contents[active]) || d.content || 'Tab content appears here.'}</div>`;
+    <div class="text-sm mt-12">${(d.contents && d.contents[active]) || d.content || 'Tab content appears here.'}</div>`;
 }
 
 /* ---- Flashcards ---- */
@@ -536,8 +365,6 @@ function learnerFlashcardGrid(block, index, ctx) {
     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
       ${cards.map((c, i) => `
         <div class="card card-pad lp-flip" data-key="${key}" data-i="${i}"
-          role="button" tabindex="0" aria-pressed="${flipped.has(i)}"
-          aria-label="${flipped.has(i) ? `Flashcard back: ${escapeHtml(c)}. Press to flip back to front.` : `Flashcard front: ${escapeHtml(c)}. Press to flip.`}"
           style="text-align:center; cursor:pointer; height:80px; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px;
           ${flipped.has(i) ? 'background:var(--pastel-lavender); color:var(--ink-900);' : 'background:linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%); color:#fff;'}">
           ${flipped.has(i) ? 'Click to flip back' : c}
@@ -553,10 +380,7 @@ function learnerFlashcardStack(block, index, ctx) {
   return `
     <div style="position:relative; height:120px;">
       <div class="card" style="position:absolute; top:8px; left:8px; right:-8px; bottom:-8px; background:var(--pastel-lavender);"></div>
-      <div class="card card-pad lp-flip-stack" data-key="${key}"
-        role="button" tabindex="0" aria-pressed="${flipped}"
-        aria-label="${flipped ? `Showing answer: ${escapeHtml(d.back || 'Human Resources')}. Press to flip back to question.` : `Showing question: ${escapeHtml(d.front || 'What does HR stand for?')}. Press to flip to answer.`}"
-        style="position:relative; height:120px; display:flex; align-items:center; justify-content:center; text-align:center; cursor:pointer;">
+      <div class="card card-pad lp-flip-stack" data-key="${key}" style="position:relative; height:120px; display:flex; align-items:center; justify-content:center; text-align:center; cursor:pointer;">
         <div>
           <div style="font-weight:600;">${flipped ? (d.back || 'Human Resources') : (d.front || 'What does HR stand for?')}</div>
           <div class="text-sm text-muted mt-8">Click to flip ${flipped ? 'back' : ''}</div>
@@ -575,20 +399,18 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const submitted = ans && ans.submitted;
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
-    <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following best reflects one of our core values?'}</legend>
-      <div class="flex-col gap-8 mt-12">
-        ${options.map((o, i) => `
-          <label class="flex items-center gap-8 card card-pad text-sm" style="cursor:${submitted ? 'default' : 'pointer'};
-            ${submitted && i === correct ? 'border-color:var(--teal);' : ''}
-            ${submitted && ans.selected === i && i !== correct ? 'border-color:#E5484D;' : ''}">
-            <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}" ${ans && ans.selected === i ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
-            ${submitted && i === correct ? '<span style="margin-left:auto; color:var(--teal);">✓ Correct</span>' : ''}
-            ${submitted && ans.selected === i && i !== correct ? '<span style="margin-left:auto; color:#E5484D;">✕ Your answer</span>' : ''}
-          </label>
-        `).join('')}
-      </div>
-    </fieldset>
+    <p style="font-weight:600; font-size:14px;">${d.question || 'Which of the following best reflects one of our core values?'}</p>
+    <div class="flex-col gap-8 mt-12">
+      ${options.map((o, i) => `
+        <label class="flex items-center gap-8 card card-pad text-sm" style="cursor:${submitted ? 'default' : 'pointer'};
+          ${submitted && i === correct ? 'border-color:var(--teal);' : ''}
+          ${submitted && ans.selected === i && i !== correct ? 'border-color:#E5484D;' : ''}">
+          <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}" ${ans && ans.selected === i ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
+          ${submitted && i === correct ? '<span style="margin-left:auto; color:var(--teal);">✓ Correct</span>' : ''}
+          ${submitted && ans.selected === i && i !== correct ? '<span style="margin-left:auto; color:#E5484D;">✕ Your answer</span>' : ''}
+        </label>
+      `).join('')}
+    </div>
     ${!submitted
       ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${ans && ans.selected !== undefined ? '' : 'disabled'}>Check Answer</button>`
       : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct!' : '✕ Not quite — the correct answer is highlighted above.'}</div>`}
@@ -604,18 +426,16 @@ function learnerKcMultipleResponse(block, index, ctx) {
   const hasCorrect = Array.isArray(d.correct);
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
-    <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Which of these are core company values? (Select all that apply)'}</legend>
-      <div class="flex-col gap-8 mt-12">
-        ${options.map((o, i) => `
-          <label class="flex items-center gap-8 text-sm card card-pad" style="cursor:${submitted ? 'default' : 'pointer'};
-            ${submitted && hasCorrect && d.correct.includes(i) ? 'border-color:var(--teal);' : ''}">
-            <input type="checkbox" data-kc-key="${key}" data-i="${i}" ${(ans.selected || []).includes(i) ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
-            ${submitted && hasCorrect && d.correct.includes(i) ? '<span style="margin-left:auto; color:var(--teal);">✓</span>' : ''}
-          </label>
-        `).join('')}
-      </div>
-    </fieldset>
+    <p style="font-weight:600;">${d.question || 'Which of these are core company values? (Select all that apply)'}</p>
+    <div class="flex-col gap-8 mt-12">
+      ${options.map((o, i) => `
+        <label class="flex items-center gap-8 text-sm card card-pad" style="cursor:${submitted ? 'default' : 'pointer'};
+          ${submitted && hasCorrect && d.correct.includes(i) ? 'border-color:var(--teal);' : ''}">
+          <input type="checkbox" data-kc-key="${key}" data-i="${i}" ${(ans.selected || []).includes(i) ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
+          ${submitted && hasCorrect && d.correct.includes(i) ? '<span style="margin-left:auto; color:var(--teal);">✓</span>' : ''}
+        </label>
+      `).join('')}
+    </div>
     ${!submitted
       ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
       : (hasCorrect
@@ -637,22 +457,16 @@ function learnerKcMatching(block, index, ctx) {
     <p class="text-sm text-muted mb-8">Tap an item on the left, then its match on the right.</p>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
       <div class="flex-col gap-8">
-        ${left.map((l, i) => {
-          const matchedTo = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
-          const label = matchedTo ? `${l}, matched with ${matchedTo}` : `${l}${ans.selectedLeft === i ? ', selected' : ''}`;
-          return `
+        ${left.map((l, i) => `
           <div class="card card-pad text-sm lp-match-left" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${submitted ? '-1' : '0'}" aria-pressed="${ans.selectedLeft === i}" aria-label="${escapeHtml(label)}"
             style="cursor:${submitted ? 'default' : 'pointer'}; ${ans.selectedLeft === i ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
-            ${l}${matchedTo ? ` → ${matchedTo}` : ''}
+            ${l}${Object.prototype.hasOwnProperty.call(pairs, i) ? ` → ${right[pairs[i]] || ''}` : ''}
           </div>
-        `;
-        }).join('')}
+        `).join('')}
       </div>
       <div class="flex-col gap-8">
         ${right.map((r, i) => `
           <div class="card card-pad text-sm lp-match-right" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${submitted ? '-1' : '0'}" aria-label="${escapeHtml(r)}"
             style="cursor:${submitted ? 'default' : 'pointer'}; background:var(--pastel-lavender); border:none;">${r}</div>
         `).join('')}
       </div>
@@ -707,9 +521,7 @@ function learnerKcFillGap(block, index, ctx) {
     <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..." value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />
     ${!submitted
       ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
-      : (ans.correct === null
-          ? `<div class="text-sm mt-12 text-muted">Response recorded.</div>`
-          : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct!' : `✕ Not quite — accepted answer: ${(d.answer||'').split('|')[0].trim()}`}</div>`)}
+      : `<div class="text-sm mt-12 text-muted">Response recorded.</div>`}
   `;
 }
 
@@ -736,11 +548,6 @@ function submitKc(ctx, key, type, blocks) {
     const left = d.left || [];
     const pairs = ans.pairs || {};
     correct = left.every((_, i) => pairs[i] === i);
-  } else if (type === 'fill_gap') {
-    const accepted = (d.answer || '').split('|').map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (accepted.length) {
-      correct = accepted.includes((ans.response || '').trim().toLowerCase());
-    }
   }
 
   ans.submitted = true;
@@ -765,62 +572,36 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     rerender();
   }));
 
-  // Keydown helper: runs `fn` only for Enter/Space, preventing the page
-  // scroll Space would otherwise trigger and avoiding a duplicate
-  // activation if the browser also synthesizes a click for the keypress.
-  const onActivateKey = (e, fn) => {
-    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
-    e.preventDefault();
-    fn();
-  };
-
   // Accordion
-  const toggleAccordionItem = (key, i) => {
+  app.querySelectorAll('.lp-accordion-item').forEach(itemEl => itemEl.addEventListener('click', () => {
+    const key = itemEl.dataset.key, i = parseInt(itemEl.dataset.i, 10);
     const set = LearnerUI.accordionOpen[key] || new Set();
     if (set.has(i)) set.delete(i); else set.add(i);
     LearnerUI.accordionOpen[key] = set;
     rerender();
-  };
-  app.querySelectorAll('.lp-accordion-item').forEach(itemEl => {
-    const key = itemEl.dataset.key, i = parseInt(itemEl.dataset.i, 10);
-    itemEl.addEventListener('click', () => toggleAccordionItem(key, i));
-    itemEl.addEventListener('keydown', (e) => onActivateKey(e, () => toggleAccordionItem(key, i)));
-  });
+  }));
 
   // Tabs
-  const selectTab = (key, i) => {
-    LearnerUI.activeTabs[key] = i;
+  app.querySelectorAll('.lp-tab').forEach(tabEl => tabEl.addEventListener('click', () => {
+    LearnerUI.activeTabs[tabEl.dataset.key] = parseInt(tabEl.dataset.i, 10);
     rerender();
-  };
-  app.querySelectorAll('.lp-tab').forEach(tabEl => {
-    const key = tabEl.dataset.key, i = parseInt(tabEl.dataset.i, 10);
-    tabEl.addEventListener('click', () => selectTab(key, i));
-    tabEl.addEventListener('keydown', (e) => onActivateKey(e, () => selectTab(key, i)));
-  });
+  }));
 
   // Flashcard grid
-  const flipGridCard = (key, i) => {
+  app.querySelectorAll('.lp-flip').forEach(cardEl => cardEl.addEventListener('click', () => {
+    const key = cardEl.dataset.key, i = parseInt(cardEl.dataset.i, 10);
     const set = LearnerUI.flipped[key] || new Set();
     if (set.has(i)) set.delete(i); else set.add(i);
     LearnerUI.flipped[key] = set;
     rerender();
-  };
-  app.querySelectorAll('.lp-flip').forEach(cardEl => {
-    const key = cardEl.dataset.key, i = parseInt(cardEl.dataset.i, 10);
-    cardEl.addEventListener('click', () => flipGridCard(key, i));
-    cardEl.addEventListener('keydown', (e) => onActivateKey(e, () => flipGridCard(key, i)));
-  });
+  }));
 
   // Flashcard stack
-  const flipStackCard = (key) => {
+  app.querySelectorAll('.lp-flip-stack').forEach(cardEl => cardEl.addEventListener('click', () => {
+    const key = cardEl.dataset.key;
     LearnerUI.flipped[key] = !LearnerUI.flipped[key];
     rerender();
-  };
-  app.querySelectorAll('.lp-flip-stack').forEach(cardEl => {
-    const key = cardEl.dataset.key;
-    cardEl.addEventListener('click', () => flipStackCard(key));
-    cardEl.addEventListener('keydown', (e) => onActivateKey(e, () => flipStackCard(key)));
-  });
+  }));
 
   // KC multiple choice
   app.querySelectorAll('input[type="radio"][data-kc-key]').forEach(input => input.addEventListener('change', () => {
@@ -852,7 +633,10 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     ctx.progress.kcAnswers[key] = { ...(ctx.progress.kcAnswers[key] || {}), response: input.value };
   }));
   app.querySelectorAll('.lp-kc-fillgap-submit').forEach(btn => btn.addEventListener('click', () => {
-    submitKc(ctx, btn.dataset.kcKey, 'fill_gap', blocks);
+    const key = btn.dataset.kcKey;
+    const ans = ctx.progress.kcAnswers[key] || {};
+    ans.submitted = true;
+    ctx.progress.kcAnswers[key] = ans;
     rerender();
   }));
 
@@ -874,7 +658,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   }));
 
   // KC matching
-  const handleMatchClick = (elx) => {
+  app.querySelectorAll('.lp-match-left, .lp-match-right').forEach(elx => elx.addEventListener('click', () => {
     const key = elx.dataset.kcKey, i = parseInt(elx.dataset.i, 10);
     const ans = ctx.progress.kcAnswers[key] || { pairs: {}, selectedLeft: null };
     if (ans.submitted) return;
@@ -887,56 +671,9 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     }
     ctx.progress.kcAnswers[key] = ans;
     rerender();
-  };
-  app.querySelectorAll('.lp-match-left, .lp-match-right').forEach(elx => {
-    elx.addEventListener('click', () => handleMatchClick(elx));
-    elx.addEventListener('keydown', (e) => onActivateKey(e, () => handleMatchClick(elx)));
-  });
+  }));
   app.querySelectorAll('.lp-match-submit').forEach(btn => btn.addEventListener('click', () => {
     submitKc(ctx, btn.dataset.kcKey, 'matching', blocks);
-    rerender();
-  }));
-
-  // Carousel nav
-  app.querySelectorAll('.lp-carousel-prev').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key;
-    LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) - 1;
-    rerender();
-  }));
-  app.querySelectorAll('.lp-carousel-next').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key;
-    LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) + 1;
-    rerender();
-  }));
-
-  // Quote carousel nav
-  app.querySelectorAll('.lp-quote-prev').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key;
-    LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) - 1;
-    rerender();
-  }));
-  app.querySelectorAll('.lp-quote-next').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key;
-    LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) + 1;
-    rerender();
-  }));
-
-  // Scenario choice selection
-  const selectScenarioChoice = (key, i) => {
-    if (LearnerUI.scenarioAnswers[key] !== undefined) return;
-    LearnerUI.scenarioAnswers[key] = i;
-    rerender();
-  };
-  app.querySelectorAll('.lp-scenario-choice').forEach(elx => {
-    const key = elx.dataset.key, i = parseInt(elx.dataset.i, 10);
-    elx.addEventListener('click', () => selectScenarioChoice(key, i));
-    elx.addEventListener('keydown', (e) => onActivateKey(e, () => selectScenarioChoice(key, i)));
-  });
-
-  // Labelled graphic hotspots
-  app.querySelectorAll('.lp-hotspot').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key, i = parseInt(btn.dataset.i, 10);
-    LearnerUI.activeHotspot[key] = LearnerUI.activeHotspot[key] === i ? null : i;
     rerender();
   }));
 }

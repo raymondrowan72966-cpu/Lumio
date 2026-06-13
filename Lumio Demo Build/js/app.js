@@ -262,7 +262,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (restoredHash) location.hash = restoredHash;
   if (!location.hash) location.hash = '#/login';
   render();
-  BlockMigration.validateAllLessons();
 
   // Re-render mutates #app's contents; treat that as a signal that state may
   // have changed and persist it (covers project/lesson/theme/assessment edits
