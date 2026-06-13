@@ -13,6 +13,7 @@ const BuilderUI = {
   rightTab: 'content',
   expanded: {},
   dragIndex: null,
+  insertZoneIndex: null, // drop-index of the active "insertion zone", or null
 };
 
 function getCourseAndLesson(lessonId) {
@@ -162,9 +163,9 @@ function renderBlockLibrary(lesson, course) {
       .block-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 6px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); cursor:grab; font-size:11px; text-align:center; color:var(--ink-700); transition:all .12s; }
       .block-tile:hover { border-color:var(--indigo); background:var(--pastel-lavender); transform:translateY(-1px); }
       .block-tile .tile-icon { font-size:18px; }
-      .editable-text { outline:none; cursor:text; border-radius:4px; transition:box-shadow .12s; }
-      .editable-text:hover { box-shadow:0 0 0 1px var(--border); }
-      .editable-text:focus { box-shadow:0 0 0 2px var(--theme-primary, var(--indigo)); }
+      .editable-text { outline:none; cursor:text; border-radius:4px; transition:background-color .12s; }
+      .editable-text:hover { background:rgba(20,20,30,0.025); }
+      .editable-text:focus { background:rgba(20,20,30,0.035); }
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
 
       /* Document-style insertion points */
@@ -186,6 +187,19 @@ function renderBlockLibrary(lesson, course) {
       #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
       .drop-zone.drag-active .drop-zone-line { background:var(--theme-primary, var(--indigo)); height:3px; }
       #lesson-canvas.dragging-block .drop-zone-add { opacity:0; }
+
+      /* Active insertion zone — lightweight placeholder shown after clicking "+" */
+      .insertion-zone { height:auto; margin:8px 0; }
+      .insertion-zone-box {
+        width:100%; padding:14px 16px; border-radius:var(--r-md);
+        border:1.5px dashed var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+        text-align:center; transition:border-color .12s, background-color .12s;
+      }
+      .insertion-zone.drag-active .insertion-zone-box {
+        border-style:solid; background:var(--pastel-lavender);
+      }
+      .insertion-zone-title { font-size:13px; font-weight:600; color:var(--theme-primary, var(--indigo)); }
+      .insertion-zone-hint { font-size:11px; color:var(--ink-400); margin-top:2px; }
 
       /* Empty-lesson insertion prompt */
       .empty-canvas { position:relative; text-align:center; padding:28px 24px; }
@@ -210,7 +224,21 @@ function blockTile(b) {
 /* Document-style insertion point: a thin line that highlights on hover/drag,
    plus a small centered "+" control for click-to-insert. Always present in
    the DOM (for drag/drop targeting) but visually near-invisible at rest. */
+/* Active insertion zone — replaces a drop-zone's line/"+" affordance with a
+   lightweight placeholder while a "+" click is pending block selection. */
+function insertionZoneHtml(index, extraClass) {
+  return `
+    <div class="drop-zone insertion-zone${extraClass ? ' ' + extraClass : ''}" data-drop-index="${index}">
+      <div class="insertion-zone-box">
+        <div class="insertion-zone-title">Insert Block Here</div>
+        <div class="insertion-zone-hint">Select a block from the library or drag a block here</div>
+      </div>
+    </div>
+  `;
+}
+
 function dropZone(index) {
+  if (BuilderUI.insertZoneIndex === index) return insertionZoneHtml(index);
   return `
     <div class="drop-zone" data-drop-index="${index}">
       <div class="drop-zone-line"></div>
@@ -222,6 +250,7 @@ function dropZone(index) {
 /* Insertion point below the last block — same thin-line/"+" affordance as
    the inter-block drop zones, so the canvas ends without a heavy reserved box. */
 function endOfCanvasDropZone(index) {
+  if (BuilderUI.insertZoneIndex === index) return insertionZoneHtml(index, 'end-of-canvas-drop');
   return `
     <div class="drop-zone end-of-canvas-drop" data-drop-index="${index}">
       <div class="drop-zone-line"></div>
@@ -232,6 +261,16 @@ function endOfCanvasDropZone(index) {
 
 function renderCanvasBlocks(blocks) {
   if (blocks.length === 0) {
+    if (BuilderUI.insertZoneIndex === 0) {
+      return `
+        <div class="empty-canvas fade-in insertion-zone" id="empty-canvas-drop" data-drop-index="0">
+          <div class="insertion-zone-box">
+            <div class="insertion-zone-title">Insert Block Here</div>
+            <div class="insertion-zone-hint">Select a block from the library or drag a block here</div>
+          </div>
+        </div>
+      `;
+    }
     return `
       <div class="empty-canvas fade-in" id="empty-canvas-drop">
         <div class="empty-canvas-line"></div>
@@ -424,9 +463,16 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // 'columns' keeps its fixed 4px margin (does not inherit cardlessFlowMargin's
   // heading/list grouping rules), exactly as before this refactor.
   const cardlessMargin = block.type === 'columns' ? '4px' : cardlessFlowMargin(block, nextBlock);
+  // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
+  // subtle, low-contrast selection indicator so canvas editing feels inline/native
+  // rather than boxed — matching the Rise-style "minimal selection" requirement.
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table'].includes(block.type);
+  const cardlessSelectionStyle = isTextAuthoringBlock
+    ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
+    : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
   const wrapperStyle = treatment === 'cardless'
     ? `position:relative; border-radius:0; margin-bottom:${cardlessMargin};
-       outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;
+       ${cardlessSelectionStyle}
        background:transparent; box-shadow:none;`
     : `position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
        margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
@@ -457,6 +503,224 @@ function escapeHtml(str) {
   return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/* ============================================================
+   INLINE RICH TEXT EDITING (Heading & Paragraph block only)
+   Stores sanitized HTML (bold/italic/underline/color/size) in
+   block.data.heading / block.data.body instead of plain text.
+   ============================================================ */
+
+const RICH_TEXT_ALLOWED_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'BR']);
+
+/* Whitelist-based sanitizer: strips all tags/attributes except the small
+   set of inline formatting elements the toolbar produces. */
+function sanitizeRichHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html == null ? '' : String(html);
+  (function clean(node) {
+    [...node.childNodes].forEach(child => {
+      if (child.nodeType === 1) {
+        if (!RICH_TEXT_ALLOWED_TAGS.has(child.tagName)) {
+          while (child.firstChild) node.insertBefore(child.firstChild, child);
+          node.removeChild(child);
+          return;
+        }
+        [...child.attributes].forEach(attr => {
+          if (child.tagName === 'SPAN' && attr.name === 'style') {
+            const ALLOWED_STYLE_PROPS = new Set(['color', 'font-size', 'font-weight', 'font-style', 'text-decoration']);
+            const kept = attr.value.split(';')
+              .map(decl => decl.split(':').map(s => s.trim()))
+              .filter(([prop, val]) => val && ALLOWED_STYLE_PROPS.has(prop))
+              .map(([prop, val]) => `${prop}:${val}`)
+              .join(';');
+            if (kept) child.setAttribute('style', kept); else child.removeAttribute('style');
+          } else {
+            child.removeAttribute(attr.name);
+          }
+        });
+        clean(child);
+      } else if (child.nodeType !== 3) {
+        node.removeChild(child);
+      }
+    });
+  })(tmp);
+  return tmp.innerHTML;
+}
+
+/* Renders a heading/body field value. Legacy plain-text values pass through
+   sanitizeRichHtml unchanged (no tags to strip); values containing inline
+   formatting markup from the rich-text editor are preserved. */
+function richTextOut(value) {
+  if (value == null || value === '') return '';
+  return sanitizeRichHtml(value);
+}
+
+/* execCommand (with styleWithCSS) can still emit legacy <font> tags for
+   fontSize/foreColor — convert those to sanitizer-safe <span style="..."> */
+function normalizeLegacyFontTags(root, pendingFontSize) {
+  root.querySelectorAll('font').forEach(f => {
+    const span = document.createElement('span');
+    const styles = [];
+    if (f.color) styles.push(`color:${f.color}`);
+    if (f.getAttribute('size') === '7' && pendingFontSize) styles.push(`font-size:${pendingFontSize}`);
+    if (styles.length) span.setAttribute('style', styles.join(';'));
+    while (f.firstChild) span.appendChild(f.firstChild);
+    f.replaceWith(span);
+  });
+}
+
+/* Shared floating formatting toolbar — appears when text is selected inside
+   a heading/body field of a Heading & Paragraph block. */
+const RichTextToolbar = {
+  el: null,
+  activeField: null, // { block, elx }
+  savedRange: null,
+  pendingFontSize: null,
+};
+
+function ensureRichTextToolbar() {
+  if (RichTextToolbar.el) return RichTextToolbar.el;
+
+  const el = document.createElement('div');
+  el.id = 'rt-toolbar';
+  el.className = 'rt-toolbar';
+  el.innerHTML = `
+    <button type="button" class="rt-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+    <button type="button" class="rt-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+    <button type="button" class="rt-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+    <span class="rt-sep"></span>
+    <select class="rt-size" title="Font size">
+      <option value="">Size</option>
+      <option value="12px">12</option>
+      <option value="14px">14</option>
+      <option value="16px">16</option>
+      <option value="18px">18</option>
+      <option value="20px">20</option>
+      <option value="24px">24</option>
+      <option value="28px">28</option>
+      <option value="32px">32</option>
+      <option value="40px">40</option>
+    </select>
+    <input type="color" class="rt-color" title="Font colour" value="#000000" />
+    <span class="rt-sep"></span>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="left" title="Align left">⟸</button>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="center" title="Align centre">≡</button>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="right" title="Align right">⟹</button>
+  `;
+  document.body.appendChild(el);
+  RichTextToolbar.el = el;
+
+  const restoreSelection = () => {
+    const active = RichTextToolbar.activeField;
+    if (!active || !RichTextToolbar.savedRange) return null;
+    active.elx.focus();
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(RichTextToolbar.savedRange);
+    return active;
+  };
+
+  const applyAndSync = (fn) => {
+    const active = restoreSelection();
+    if (!active) return;
+    fn(active);
+    normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
+    RichTextToolbar.pendingFontSize = null;
+    syncRichTextField(active.block, active.elx);
+    const sel = window.getSelection();
+    if (sel.rangeCount) RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
+    positionRichTextToolbar();
+  };
+
+  el.querySelectorAll('.rt-btn[data-cmd]').forEach(btn => btn.addEventListener('click', () => {
+    const cmd = btn.dataset.cmd;
+    if (cmd === 'align') {
+      applyAndSync((active) => {
+        active.elx.style.textAlign = btn.dataset.val;
+        if (active.elx.dataset.field === 'col') {
+          const colAlign = active.block.data.colAlign || (active.block.data.colAlign = []);
+          colAlign[parseInt(active.elx.dataset.col)] = btn.dataset.val;
+        } else if (active.elx.dataset.field === 'cell') {
+          const cellAlign = active.block.data.cellAlign || (active.block.data.cellAlign = []);
+          const r = parseInt(active.elx.dataset.row), c = parseInt(active.elx.dataset.col);
+          cellAlign[r] = cellAlign[r] || [];
+          cellAlign[r][c] = btn.dataset.val;
+        } else {
+          active.block.data[active.elx.dataset.field + 'Align'] = btn.dataset.val;
+        }
+      });
+    } else {
+      applyAndSync(() => document.execCommand(cmd, false, null));
+    }
+  }));
+
+  el.querySelector('.rt-size').addEventListener('change', (e) => {
+    const size = e.target.value;
+    e.target.value = '';
+    if (!size) return;
+    RichTextToolbar.pendingFontSize = size;
+    applyAndSync(() => document.execCommand('fontSize', false, '7'));
+  });
+
+  el.querySelector('.rt-color').addEventListener('input', (e) => {
+    applyAndSync(() => document.execCommand('foreColor', false, e.target.value));
+  });
+
+  // Keep the contenteditable selection alive when interacting with the toolbar.
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'INPUT') e.preventDefault();
+  });
+
+  // The toolbar is anchored to the active block's container, so it must
+  // re-position (without moving the selection) whenever the page scrolls
+  // or resizes while it's visible.
+  const reposition = () => {
+    if (el.style.display === 'flex') positionRichTextToolbar();
+  };
+  document.addEventListener('scroll', reposition, true);
+  window.addEventListener('resize', reposition);
+
+  return el;
+}
+
+function syncRichTextField(block, elx) {
+  block.data = block.data || {};
+  if (elx.dataset.field === 'col') {
+    const cols = block.data.cols || (block.data.cols = DEFAULT_COLUMNS.slice());
+    cols[parseInt(elx.dataset.col)] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'cell') {
+    const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
+    const r = parseInt(elx.dataset.row), c = parseInt(elx.dataset.col);
+    if (rows[r]) rows[r][c] = sanitizeRichHtml(elx.innerHTML);
+  } else {
+    block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
+  }
+}
+
+/* Toolbar position is anchored to the active block's container — fixed below
+   it, horizontally centred — never to the text selection/caret. This keeps
+   the toolbar stable while selecting text anywhere within the block. */
+function positionRichTextToolbar() {
+  const toolbar = RichTextToolbar.el;
+  if (!toolbar) return;
+  const active = RichTextToolbar.activeField;
+  if (!active) { hideRichTextToolbar(); return; }
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hideRichTextToolbar(); return; }
+  RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
+  const blockEl = active.elx.closest('.canvas-block');
+  if (!blockEl) { hideRichTextToolbar(); return; }
+  const rect = blockEl.getBoundingClientRect();
+  toolbar.style.display = 'flex';
+  const left = Math.max(8, rect.left + rect.width / 2 - toolbar.offsetWidth / 2);
+  const top = rect.bottom + 8;
+  toolbar.style.left = `${left}px`;
+  toolbar.style.top = `${top}px`;
+}
+
+function hideRichTextToolbar() {
+  if (RichTextToolbar.el) RichTextToolbar.el.style.display = 'none';
+}
+
 const DEFAULT_COLUMNS = ['Column 1 content...', 'Column 2 content...'];
 const DEFAULT_TABLE_ROWS = [
   ['Step', 'Owner', 'Timeline'],
@@ -470,24 +734,27 @@ function renderBlockContent(block, editable) {
   const ce = editable ? 'contenteditable="true"' : '';
   switch (block.type) {
     case 'heading':
-      return `<h2 class="editable-text" data-role="heading" data-field="heading" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}">${escapeHtml(d.heading)}</h2>`;
+      return `<h2 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}${d.headingAlign ? `text-align:${d.headingAlign};` : ''}">${richTextOut(d.heading)}</h2>`;
     case 'heading_paragraph':
-      return `<h2 class="editable-text" data-role="heading" data-field="heading" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}">${escapeHtml(d.heading)}</h2>
-        <div class="editable-text mt-12" data-role="body" data-field="body" ${ce} data-placeholder="Paragraph text..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}">${escapeHtml(d.body)}</div>`;
+      return `<h2 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}${d.headingAlign ? `text-align:${d.headingAlign};` : ''}">${richTextOut(d.heading)}</h2>
+        <div class="editable-text mt-12" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Paragraph text..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
     case 'paragraph':
-      return `<div class="editable-text" data-role="body" data-field="body" ${ce} data-placeholder="Write your paragraph content here..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}">${escapeHtml(d.body)}</div>`;
+      return `<div class="editable-text" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Write your paragraph content here..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
     case 'columns': {
       const cols = d.cols || DEFAULT_COLUMNS;
+      const colAlign = d.colAlign || [];
       return `<div style="display:grid; grid-template-columns:repeat(${cols.length},1fr); gap:16px;">
-        ${cols.map((c, i) => `<div style="${i > 0 ? 'border-left:1px solid var(--border); padding-left:16px;' : ''}"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}">${escapeHtml(c)}</div></div>`).join('')}
+        ${cols.map((c, i) => `<div style="${i > 0 ? 'border-left:1px solid var(--border); padding-left:16px;' : ''}"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}${colAlign[i] ? `text-align:${colAlign[i]};` : ''}">${richTextOut(c)}</div></div>`).join('')}
       </div>`;
     }
     case 'table': {
       const rows = d.rows || DEFAULT_TABLE_ROWS;
+      const cellAlign = d.cellAlign || [];
       return `<table style="width:100%; border-collapse:collapse; font-size:13px;">
         ${rows.map((row, ri) => `<tr ${ri === 0 ? 'style="background:var(--pastel-lavender);"' : ''}>${row.map((cell, ci) => {
           const tag = ri === 0 ? 'th' : 'td';
-          return `<${tag} style="padding:8px; text-align:left; border:1px solid var(--border);"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" ${ce} style="${textTypographyStyle(ds, 13)}">${escapeHtml(cell)}</div></${tag}>`;
+          const align = (cellAlign[ri] || [])[ci];
+          return `<${tag} style="padding:8px; text-align:left; border:1px solid var(--border);"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" data-richtext="true" ${ce} style="${textTypographyStyle(ds, 13)}${align ? `text-align:${align};` : ''}">${richTextOut(cell)}</div></${tag}>`;
         }).join('')}</tr>`).join('')}
       </table>`;
     }
@@ -1157,10 +1424,7 @@ function renderRightTabContent(block, index, course) {
   // CONTENT TAB
   switch (block.type) {
     case 'heading_paragraph':
-      return contentFields([
-        ['Heading', 'heading', d.heading, 'input'],
-        ['Body text', 'body', d.body, 'textarea'],
-      ]) + aiActions();
+      return `<p class="text-sm text-muted">Click directly into the heading or paragraph on the canvas to edit the text. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
     case 'paragraph':
       return contentFields([['Body text', 'body', d.body, 'textarea']]) + aiActions();
     case 'image_text':
@@ -1381,6 +1645,13 @@ function renderAIPanel(lesson, blocks) {
 function bindBuilderEvents(course, lesson, blocks) {
   const app = document.getElementById('app');
 
+  // Inline rich-text toolbar (Heading & Paragraph block only) — the toolbar
+  // element lives on document.body and persists across re-renders; hide it
+  // here since the contenteditable element it was attached to is stale.
+  ensureRichTextToolbar();
+  hideRichTextToolbar();
+  RichTextToolbar.activeField = null;
+
   // Top bar
   app.querySelector('#builder-logo').addEventListener('click', () => {
     const status = document.getElementById('save-status');
@@ -1402,7 +1673,7 @@ function bindBuilderEvents(course, lesson, blocks) {
       toast('Link this lesson to a course to preview it', '👁️');
       return;
     }
-    openLearnerPreviewFor(course.id, '#/lesson/' + lessonId, lessonId);
+    openLearnerPreviewFor(course.id, '#/lesson/' + lesson.id, lesson.id);
   });
   app.querySelector('#toggle-ai').addEventListener('click', () => {
     BuilderUI.aiOpen = !BuilderUI.aiOpen;
@@ -1454,9 +1725,12 @@ function bindBuilderEvents(course, lesson, blocks) {
     }
   });
 
-  // Click to add: clicking a block tile inserts it at the end of the lesson
+  // Click to add: if an insertion zone is active, the clicked block is
+  // inserted there; otherwise it's appended to the end of the lesson.
   app.querySelectorAll('.block-tile').forEach(tile => tile.addEventListener('click', () => {
-    insertBlockAndFocus(tile.dataset.blockId, blocks, lesson, blocks.length);
+    const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
+    BuilderUI.insertZoneIndex = null;
+    insertBlockAndFocus(tile.dataset.blockId, blocks, lesson, targetIndex);
   }));
 
   // AI draft lesson (empty canvas)
@@ -1467,6 +1741,11 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (e.target.closest('.block-toolbar')) return;
     const idx = parseInt(b.dataset.index);
     const editableTarget = e.target.closest('.editable-text[contenteditable="true"]');
+
+    // Clicking a block while an insertion zone is active cancels the zone.
+    if (BuilderUI.insertZoneIndex !== null) {
+      BuilderUI.insertZoneIndex = null;
+    }
 
     // If the block is already selected/expanded, let a click on its text
     // place the cursor natively — don't re-render and lose focus.
@@ -1497,19 +1776,22 @@ function bindBuilderEvents(course, lesson, blocks) {
   if (canvasWrap) {
     canvasWrap.addEventListener('click', (e) => {
       if (e.target.closest('.canvas-block')) return;
-      if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
+      if (e.target.closest('.insertion-zone')) return;
+      if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0 && BuilderUI.insertZoneIndex === null) return;
       BuilderUI.selected = null;
       BuilderUI.expandedBlocks = new Set();
+      BuilderUI.insertZoneIndex = null;
       renderLessonBuilder(lesson.id);
     });
   }
 
-  // ESC deselects the currently selected block.
+  // ESC deselects the currently selected block and cancels any active insertion zone.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
+    if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0 && BuilderUI.insertZoneIndex === null) return;
     BuilderUI.selected = null;
     BuilderUI.expandedBlocks = new Set();
+    BuilderUI.insertZoneIndex = null;
     renderLessonBuilder(lesson.id);
   });
 
@@ -1648,6 +1930,10 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     block.data = block.data || {};
     const field = elx.dataset.field;
+    if (elx.dataset.richtext === 'true') {
+      syncRichTextField(block, elx);
+      return;
+    }
     const text = elx.innerText.replace(/\n+$/, '');
     if (field === 'col') {
       const cols = block.data.cols || (block.data.cols = DEFAULT_COLUMNS.slice());
@@ -1660,6 +1946,27 @@ function bindBuilderEvents(course, lesson, blocks) {
       block.data[field] = text;
     }
   }));
+
+  // Heading & Paragraph — inline rich-text formatting toolbar.
+  // Each field (heading / body) is independently editable and tracks its
+  // own selection, so formatting applied to one never affects the other.
+  app.querySelectorAll('.editable-text[data-richtext="true"]').forEach(elx => {
+    const idx = parseInt(elx.closest('.canvas-block').dataset.index);
+    const block = blocks[idx];
+    const showToolbar = () => {
+      RichTextToolbar.activeField = { block, elx };
+      positionRichTextToolbar();
+    };
+    elx.addEventListener('mouseup', () => setTimeout(showToolbar, 0));
+    elx.addEventListener('keyup', () => setTimeout(showToolbar, 0));
+    elx.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (document.activeElement !== elx && !RichTextToolbar.el.contains(document.activeElement)) {
+          hideRichTextToolbar();
+        }
+      }, 0);
+    });
+  });
 
   // Text blocks — Typography / Spacing sliders (live preview, no full re-render mid-drag)
   app.querySelectorAll('.design-range').forEach(r => {
@@ -2072,6 +2379,7 @@ function bindDragAndDrop(lesson, blocks) {
     });
     zone.addEventListener('drop', (e) => {
       zone.classList.remove('drag-active');
+      BuilderUI.insertZoneIndex = null;
       handleLibraryOrCanvasDrop(e, parseInt(zone.dataset.dropIndex), blocks, lesson);
     });
   });
@@ -2084,11 +2392,13 @@ function bindDragAndDrop(lesson, blocks) {
     document.addEventListener('dragend', () => canvasEl.classList.remove('dragging-block'));
   }
 
-  // Click "+" on an insertion line to add a paragraph block at that position.
+  // Click "+" on an insertion line to open an insertion zone at that
+  // position — only one zone may be active at a time.
   app.querySelectorAll('.drop-zone-add').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      insertBlockAndFocus('paragraph', blocks, lesson, parseInt(btn.dataset.dropIndex));
+      BuilderUI.insertZoneIndex = parseInt(btn.dataset.dropIndex);
+      renderLessonBuilder(lesson.id);
     });
   });
 

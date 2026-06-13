@@ -44,7 +44,6 @@ const BlockCapabilities = (function () {
     chart_bar: { treatment: 'card' },
     chart_line: { treatment: 'card' },
     chart_pie: { treatment: 'card' },
-    table: { treatment: 'card' },
   }, (defaults) => ({ category: defaults.category }));
 
   // ----------------------------------------------------------

@@ -7,7 +7,12 @@
       "Bash(where py *)",
       "Bash(where node *)",
       "PowerShell(Get-Command node, npx, python, python3, php, dotnet -ErrorAction SilentlyContinue)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(find . -path ./.git -prune -o -iname \"*.json\" -print)",
+      "Bash(find . -path ./.git -prune -o -iname \"*pages*\" -print)",
+      "Bash(head -30 \"Lumio Demo Build/DEMO_GUIDE.md\")",
+      "Bash(head -30 \"Lumio Demo Build/README.md\")",
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\raymo\\\\Desktop\\\\Lumio\\\\Lumio Prototype\\\\css\\\\styles.css' | Measure-Object -Line\\).Lines\")"
     ]
   }
 }

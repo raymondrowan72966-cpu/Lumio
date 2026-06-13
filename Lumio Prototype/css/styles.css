@@ -617,6 +617,64 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* ============================================================
    LANDING PAGE LAYOUTS
    ============================================================ */
+/* ============================================================
+   INLINE RICH TEXT TOOLBAR (Heading & Paragraph block)
+   ============================================================ */
+.rt-toolbar {
+  display: none;
+  position: fixed;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--ink-900);
+  border-radius: var(--r-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.25));
+  z-index: 10000;
+}
+.rt-toolbar .rt-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 13px; cursor: pointer;
+}
+.rt-toolbar .rt-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+.rt-toolbar .rt-sep {
+  width: 1px; height: 20px;
+  background: rgba(255,255,255,0.2);
+  margin: 0 2px;
+}
+.rt-toolbar .rt-size {
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 12px;
+  padding: 0 4px;
+}
+/* Dropdown list (popup) for any toolbar <select> — option text must stay
+   readable as black-on-white regardless of the closed control's dark styling. */
+.rt-toolbar select option {
+  color: #000;
+  background: #fff;
+}
+.rt-toolbar select option:hover,
+.rt-toolbar select option:checked,
+.rt-toolbar select option:focus {
+  color: #000;
+  background: var(--pastel-lavender, #e6e6fa);
+}
+.rt-toolbar .rt-color {
+  width: 28px; height: 28px;
+  border: none; border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+}
+
 .layout-thumb {
   border-radius: var(--r-md);
   border: 2px solid var(--border);

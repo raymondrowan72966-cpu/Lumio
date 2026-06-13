@@ -118,7 +118,7 @@ const LEARNER_DEVICE_FRAMES = {
 function learnerDeviceFrameStyle(device) {
   const frame = LEARNER_DEVICE_FRAMES[device] || LEARNER_DEVICE_FRAMES.desktop;
   if (!frame.width) return 'width:100%; height:100%;';
-  return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); background:var(--theme-bg-style, var(--surface-50));`;
+  return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); background:var(--theme-bg-style, var(--surface-0));`;
 }
 
 function learnerDeviceSwitcherHtml(device) {
@@ -135,9 +135,17 @@ function learnerShell(course, bodyHtml, opts = {}) {
   const frameStyle = learnerDeviceFrameStyle(device);
   const reRender = () => renderLearnerPreview(course.id, opts.activeLessonId || null);
 
+  // Only restore scroll position when re-rendering the same lesson (e.g.
+  // after a Continue click, KC answer, flashcard flip, etc.). Navigating to
+  // a different lesson, or entering/exiting Preview, should reset scroll.
+  const activeLessonId = opts.activeLessonId || null;
+  const sameLesson = activeLessonId !== null && LearnerUI.lastLessonId === activeLessonId;
+  const prevScroll = sameLesson ? (app.querySelector('main')?.scrollTop || 0) : 0;
+  LearnerUI.lastLessonId = activeLessonId;
+
   if (LearnerUI.fullScreen) {
     app.innerHTML = `
-      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-100); ${themeVarStyle(course.themeDesign)}">
+      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
         <div class="flex items-center justify-end" style="padding:10px 16px; flex-shrink:0;">
           <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen Preview</button>
         </div>
@@ -149,6 +157,10 @@ function learnerShell(course, bodyHtml, opts = {}) {
       </div>
     `;
     app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
+    if (sameLesson) {
+      const main = app.querySelector('main');
+      if (main) main.scrollTop = prevScroll;
+    }
     return;
   }
 
@@ -170,7 +182,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       </header>
       <div style="flex:1; display:flex; min-height:0;">
         ${courseNavSidebar(course, progress, opts.activeLessonId || null)}
-        <div style="flex:1; overflow:auto; display:flex; justify-content:center; background:var(--surface-50);">
+        <div style="flex:1; overflow:auto; display:flex; justify-content:center; background:var(--surface-0);">
           <div style="${frameStyle}">
             <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column;">${bodyHtml}</main>
           </div>
@@ -190,6 +202,11 @@ function learnerShell(course, bodyHtml, opts = {}) {
     if (elx.classList.contains('locked')) return;
     elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
   });
+
+  if (sameLesson) {
+    const main = app.querySelector('main');
+    if (main) main.scrollTop = prevScroll;
+  }
 }
 
 /* ---------------- COURSE OVERVIEW ---------------- */
@@ -291,10 +308,20 @@ function renderLearnerBlocks(blocks, ctx) {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const ds = block.design || {};
-    const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
-    html += `<div style="${bgStyle} ${radiusStyle} box-shadow:var(--shadow-soft); margin-bottom:16px; padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}">${renderLearnerBlock(block, i, ctx)}</div>`;
+    const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}`;
+    const { treatment } = DesignSystem.resolveBlockStyle(block);
+    let wrapperStyle;
+    if (treatment === 'cardless') {
+      // Match the Builder canvas: cardless blocks render as flat page
+      // content with no card chrome, only spacing between blocks.
+      wrapperStyle = `background:transparent; box-shadow:none; border-radius:0; margin-bottom:16px; padding:22px; ${extraStyle}`;
+    } else {
+      const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
+      const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
+      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:var(--shadow-soft); margin-bottom:16px; padding:22px; ${extraStyle}`;
+    }
+    html += `<div style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
     if (block.type === 'continue' && !revealed.has(i)) break;
   }
   return html;
