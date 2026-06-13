@@ -6,7 +6,8 @@
       "Bash(where python *)",
       "Bash(where py *)",
       "Bash(where node *)",
-      "PowerShell(Get-Command node, npx, python, python3, php, dotnet -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-Command node, npx, python, python3, php, dotnet -ErrorAction SilentlyContinue)",
+      "Bash(git stash *)"
     ]
   }
 }

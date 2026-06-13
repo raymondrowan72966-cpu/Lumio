@@ -13,10 +13,29 @@ const LumioState = {
   wizard: null,
 
   // courses created (id -> course object)
-  courses: { c1: JSON.parse(JSON.stringify(LumioData.courseTemplate)) },
+  // c1 is the default "scratch" course used by the Course Wizard; p1/p2/p7
+  // are the pre-populated client demonstration courses (see
+  // LumioData.demoCourses) so opening those projects shows full content
+  // instead of a generic clone of courseTemplate.
+  courses: {
+    c1: JSON.parse(JSON.stringify(LumioData.courseTemplate)),
+    p1: JSON.parse(JSON.stringify(LumioData.demoCourses.p1)),
+    p2: JSON.parse(JSON.stringify(LumioData.demoCourses.p2)),
+    p7: JSON.parse(JSON.stringify(LumioData.demoCourses.p7)),
+  },
 
   // lessons content store (lessonId -> blocks array)
-  lessons: { l1: JSON.parse(JSON.stringify(LumioData.sampleLessonBlocks)) },
+  lessons: {
+    l1: JSON.parse(JSON.stringify(LumioData.sampleLessonBlocks)),
+    l2: JSON.parse(JSON.stringify(LumioData.demoLessons.l2)),
+    l3: JSON.parse(JSON.stringify(LumioData.demoLessons.l3)),
+    ws1: JSON.parse(JSON.stringify(LumioData.demoLessons.ws1)),
+    ws2: JSON.parse(JSON.stringify(LumioData.demoLessons.ws2)),
+    ws3: JSON.parse(JSON.stringify(LumioData.demoLessons.ws3)),
+    f1a: JSON.parse(JSON.stringify(LumioData.demoLessons.f1a)),
+    f1b: JSON.parse(JSON.stringify(LumioData.demoLessons.f1b)),
+    f1c: JSON.parse(JSON.stringify(LumioData.demoLessons.f1c)),
+  },
 
   currentCourseId: 'c1',
   currentLessonId: 'l1',

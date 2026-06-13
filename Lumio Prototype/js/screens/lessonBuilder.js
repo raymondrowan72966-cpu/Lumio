@@ -41,8 +41,7 @@ function renderLessonBuilder(lessonId) {
       ${renderBuilderTopbar(course, lesson)}
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
-        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--theme-bg-style, var(--surface-50)); position:relative;" id="lesson-canvas-wrap">
-          ${ambientBlobs([['var(--pastel-lavender)', '300px', '300px', '-80px', '-60px', null, null]])}
+        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--surface-0); position:relative;" id="lesson-canvas-wrap">
           <div style="max-width:720px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1;" id="lesson-canvas">
             ${renderCanvasBlocks(blocks)}
           </div>
@@ -167,6 +166,32 @@ function renderBlockLibrary(lesson, course) {
       .editable-text:hover { box-shadow:0 0 0 1px var(--border); }
       .editable-text:focus { box-shadow:0 0 0 2px var(--theme-primary, var(--indigo)); }
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
+
+      /* Document-style insertion points */
+      .drop-zone { position:relative; height:14px; margin:0; display:flex; align-items:center; justify-content:center; }
+      .drop-zone-line { position:absolute; left:0; right:0; top:50%; height:2px; background:transparent; border-radius:2px; transform:translateY(-50%); transition:background-color .12s, height .12s; }
+      .drop-zone-add {
+        position:relative; z-index:2; width:22px; height:22px; border-radius:50%;
+        border:1px solid var(--border); background:var(--surface-0); color:var(--ink-400);
+        font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
+        cursor:pointer; opacity:0; transition:opacity .12s, color .12s, border-color .12s, background-color .12s;
+      }
+      .drop-zone:hover .drop-zone-add,
+      .drop-zone-add:focus-visible { opacity:1; }
+      .drop-zone:hover .drop-zone-line { background:var(--border); }
+      .drop-zone-add:hover, .drop-zone-add:focus-visible {
+        border-color:var(--theme-primary, var(--indigo)); color:var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+      }
+      /* While a block is being dragged, faintly reveal every insertion line so placement stays obvious */
+      #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
+      .drop-zone.drag-active .drop-zone-line { background:var(--theme-primary, var(--indigo)); height:3px; }
+      #lesson-canvas.dragging-block .drop-zone-add { opacity:0; }
+
+      /* Empty-lesson insertion prompt */
+      .empty-canvas { position:relative; text-align:center; padding:28px 24px; }
+      .empty-canvas-line { position:absolute; left:0; right:0; top:24px; height:0; border-top:1px dashed var(--border); }
+      .empty-canvas-add { position:relative; opacity:1; width:28px; height:28px; font-size:16px; margin:0 auto; }
+      .empty-canvas.drag-active .empty-canvas-line { border-top-style:solid; border-color:var(--theme-primary, var(--indigo)); }
     </style>
   `;
   return html;
@@ -182,34 +207,44 @@ function blockTile(b) {
 /* ============================================================
    CANVAS
    ============================================================ */
+/* Document-style insertion point: a thin line that highlights on hover/drag,
+   plus a small centered "+" control for click-to-insert. Always present in
+   the DOM (for drag/drop targeting) but visually near-invisible at rest. */
 function dropZone(index) {
-  return `<div class="drop-zone" data-drop-index="${index}" style="height:10px; margin:2px 0; border-radius:6px; transition:all .12s;"></div>`;
+  return `
+    <div class="drop-zone" data-drop-index="${index}">
+      <div class="drop-zone-line"></div>
+      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block here">+</button>
+    </div>
+  `;
 }
 
-/* Permanent, always-visible drop target below the last block, so authors
-   can drop a new block at the end of the lesson without having to target
-   the thin inter-block drop zones. */
+/* Insertion point below the last block — same thin-line/"+" affordance as
+   the inter-block drop zones, so the canvas ends without a heavy reserved box. */
 function endOfCanvasDropZone(index) {
-  return `<div class="drop-zone end-of-canvas-drop" data-drop-index="${index}" style="margin-top:16px; min-height:36px; border:2px dashed transparent; border-radius:10px; background:transparent; transition:all .12s;"></div>`;
+  return `
+    <div class="drop-zone end-of-canvas-drop" data-drop-index="${index}">
+      <div class="drop-zone-line"></div>
+      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block at end of lesson">+</button>
+    </div>
+  `;
 }
 
 function renderCanvasBlocks(blocks) {
   if (blocks.length === 0) {
     return `
-      <div class="card card-pad text-center fade-in" style="padding:60px 30px; border:2px dashed var(--border);" id="empty-canvas-drop">
-        <div style="font-size:40px;">🎨</div>
-        <h3 class="mt-16" style="font-size:16px;">Start with a block</h3>
-        <p class="text-sm text-muted mt-8" style="max-width:380px; margin:8px auto 0;">
-          Drag a block from the library, or let Lumio draft a starting point for this lesson.
-        </p>
-        <button class="btn btn-primary mt-24" id="ai-draft-lesson">✨ Draft this lesson with AI</button>
+      <div class="empty-canvas fade-in" id="empty-canvas-drop">
+        <div class="empty-canvas-line"></div>
+        <button class="drop-zone-add empty-canvas-add" data-drop-index="0" title="Insert block" aria-label="Insert your first block">+</button>
+        <p class="text-sm text-muted mt-12">Drag a block from the library, click + to add one, or let Lumio draft a starting point.</p>
+        <button class="btn btn-secondary btn-sm mt-12" id="ai-draft-lesson">✨ Draft this lesson with AI</button>
       </div>
     `;
   }
 
   let html = dropZone(0);
   blocks.forEach((block, i) => {
-    html += renderBlockWrapper(block, i, blocks.length);
+    html += renderBlockWrapper(block, i, blocks.length, blocks[i + 1]);
     html += dropZone(i + 1);
   });
   html += endOfCanvasDropZone(blocks.length);
@@ -332,7 +367,46 @@ function applyLivePreview(block, index) {
   else applyBlockStylesToDom(block, index);
 }
 
-function renderBlockWrapper(block, index, total) {
+/* Block types that render directly on the canvas as page content, without
+   card chrome (background/border-radius/shadow/border). Selection is shown
+   via an outline instead of a permanent border. */
+const CARDLESS_BLOCK_TYPES = new Set([
+  // Headings
+  'heading', 'heading_paragraph',
+  // Paragraphs
+  'paragraph',
+  // Quotes
+  'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel',
+  // Lists
+  'list_numbered', 'list_checkbox', 'list_bullet',
+  // Images
+  'image', 'image_text', 'text_on_image',
+  // Gallery
+  'carousel', 'column_grid',
+  // Dividers
+  'continue', 'numbered_divider', 'line_divider',
+]);
+
+/* Document-flow vertical rhythm for cardless blocks. */
+const FLOW_SPACING = '20px';   // default rhythm between cardless blocks (16-24px range)
+const FLOW_SPACING_TIGHT = '8px'; // tighter spacing for closely-related content
+
+const HEADING_BLOCK_TYPES = new Set(['heading', 'heading_paragraph']);
+const LIST_BLOCK_TYPES = new Set(['list_numbered', 'list_checkbox', 'list_bullet']);
+
+/* Margin-bottom for a cardless block, based on its relationship to the next block:
+   - heading -> paragraph stays visually connected (tight)
+   - a list following heading/paragraph content stays grouped with it (tight)
+   - everything else uses the standard document rhythm */
+function cardlessFlowMargin(block, nextBlock) {
+  if (nextBlock && CARDLESS_BLOCK_TYPES.has(nextBlock.type)) {
+    if (HEADING_BLOCK_TYPES.has(block.type) && nextBlock.type === 'paragraph') return FLOW_SPACING_TIGHT;
+    if (LIST_BLOCK_TYPES.has(nextBlock.type) && (HEADING_BLOCK_TYPES.has(block.type) || block.type === 'paragraph')) return FLOW_SPACING_TIGHT;
+  }
+  return FLOW_SPACING;
+}
+
+function renderBlockWrapper(block, index, total, nextBlock) {
   const isExpanded = BuilderUI.expandedBlocks.has(index);
   const isSelected = BuilderUI.selected === index;
   const ds = block.design || {};
@@ -342,11 +416,20 @@ function renderBlockWrapper(block, index, total) {
   const moveButtons = `
         <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===0?'0.4':'1'};">↑</button>
         <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
+  const isCardless = CARDLESS_BLOCK_TYPES.has(block.type);
+  const wrapperStyle = isCardless
+    ? `position:relative; border-radius:0; margin-bottom:${cardlessFlowMargin(block, nextBlock)};
+       outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;
+       background:transparent; box-shadow:none;`
+    : block.type === 'columns'
+    ? `position:relative; border-radius:0; margin-bottom:4px;
+       outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;
+       background:transparent; box-shadow:none;`
+    : `position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
+       margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
+       box-shadow:${isSelected ? 'var(--shadow-md)' : 'var(--shadow-soft)'};`;
   return `
-    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="
-      position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
-      margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
-      box-shadow:${isSelected ? 'var(--shadow-md)' : 'var(--shadow-soft)'};">
+    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="${wrapperStyle}">
       <div class="block-toolbar" style="position:absolute; top:-14px; left:14px; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:5;">
         <span class="drag-handle" draggable="true" data-index="${index}" title="Drag to reorder"
           style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">⠿ ${blockLabel(block.type)}</span>
@@ -371,7 +454,6 @@ function escapeHtml(str) {
   return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-const COLUMN_BG_LIST = ['var(--pastel-lavender)', 'var(--pastel-cyan)', 'var(--pastel-pink)', 'var(--pastel-peach)'];
 const DEFAULT_COLUMNS = ['Column 1 content...', 'Column 2 content...'];
 const DEFAULT_TABLE_ROWS = [
   ['Step', 'Owner', 'Timeline'],
@@ -394,7 +476,7 @@ function renderBlockContent(block, editable) {
     case 'columns': {
       const cols = d.cols || DEFAULT_COLUMNS;
       return `<div style="display:grid; grid-template-columns:repeat(${cols.length},1fr); gap:16px;">
-        ${cols.map((c, i) => `<div class="card card-pad" style="background:${COLUMN_BG_LIST[i % COLUMN_BG_LIST.length]}; border:none;"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}">${escapeHtml(c)}</div></div>`).join('')}
+        ${cols.map((c, i) => `<div style="${i > 0 ? 'border-left:1px solid var(--border); padding-left:16px;' : ''}"><div class="editable-text text-sm" data-role="body" data-field="col" data-col="${i}" ${ce} data-placeholder="Column ${i + 1} content..." style="${textTypographyStyle(ds, 14)}">${escapeHtml(c)}</div></div>`).join('')}
       </div>`;
     }
     case 'table': {
@@ -1288,6 +1370,27 @@ function bindBuilderEvents(course, lesson, blocks) {
     }
   }));
 
+  // Clicking empty canvas whitespace (not on a block) clears the current selection.
+  const canvasWrap = document.getElementById('lesson-canvas-wrap');
+  if (canvasWrap) {
+    canvasWrap.addEventListener('click', (e) => {
+      if (e.target.closest('.canvas-block')) return;
+      if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
+      BuilderUI.selected = null;
+      BuilderUI.expandedBlocks = new Set();
+      renderLessonBuilder(lesson.id);
+    });
+  }
+
+  // ESC deselects the currently selected block.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0) return;
+    BuilderUI.selected = null;
+    BuilderUI.expandedBlocks = new Set();
+    renderLessonBuilder(lesson.id);
+  });
+
   // Block toolbar actions
   app.querySelectorAll('.del-block-btn').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1792,58 +1895,46 @@ function bindDragAndDrop(lesson, blocks) {
     });
   });
 
-  // Drop zones (between/above/below blocks)
-  app.querySelectorAll('.drop-zone:not(.end-of-canvas-drop)').forEach(zone => {
+  // Drop zones (between/above/below blocks, and end-of-canvas) — thin
+  // insertion lines that highlight on dragover.
+  app.querySelectorAll('.drop-zone').forEach(zone => {
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
-      zone.style.background = 'var(--pastel-lavender)';
-      zone.style.height = '36px';
+      zone.classList.add('drag-active');
     });
     zone.addEventListener('dragleave', () => {
-      zone.style.background = 'transparent';
-      zone.style.height = '10px';
+      zone.classList.remove('drag-active');
     });
     zone.addEventListener('drop', (e) => {
-      zone.style.background = 'transparent';
-      zone.style.height = '10px';
+      zone.classList.remove('drag-active');
       handleLibraryOrCanvasDrop(e, parseInt(zone.dataset.dropIndex), blocks, lesson);
     });
   });
 
-  // End-of-canvas drop zone — hidden by default, only shown while a block
-  // is being dragged, so the canvas ends cleanly after the final block.
-  const endZone = app.querySelector('.end-of-canvas-drop');
-  if (endZone) {
-    document.addEventListener('dragstart', () => {
-      endZone.style.borderColor = 'var(--border)';
-    });
-    document.addEventListener('dragend', () => {
-      endZone.style.borderColor = 'transparent';
-      endZone.style.background = 'transparent';
-    });
-    endZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      endZone.style.borderColor = 'var(--indigo)';
-      endZone.style.background = 'var(--pastel-lavender)';
-    });
-    endZone.addEventListener('dragleave', () => {
-      endZone.style.borderColor = 'var(--border)';
-      endZone.style.background = 'transparent';
-    });
-    endZone.addEventListener('drop', (e) => {
-      endZone.style.borderColor = 'transparent';
-      endZone.style.background = 'transparent';
-      handleLibraryOrCanvasDrop(e, parseInt(endZone.dataset.dropIndex), blocks, lesson);
-    });
+  // While any block is being dragged, faintly reveal every insertion line
+  // so placement options stay obvious without a permanent heavy outline.
+  const canvasEl = app.querySelector('#lesson-canvas');
+  if (canvasEl) {
+    document.addEventListener('dragstart', () => canvasEl.classList.add('dragging-block'));
+    document.addEventListener('dragend', () => canvasEl.classList.remove('dragging-block'));
   }
+
+  // Click "+" on an insertion line to add a paragraph block at that position.
+  app.querySelectorAll('.drop-zone-add').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      insertBlockAndFocus('paragraph', blocks, lesson, parseInt(btn.dataset.dropIndex));
+    });
+  });
 
   // Empty canvas drop
   const emptyDrop = app.querySelector('#empty-canvas-drop');
   if (emptyDrop) {
-    emptyDrop.addEventListener('dragover', (e) => { e.preventDefault(); emptyDrop.style.borderColor = 'var(--indigo)'; });
-    emptyDrop.addEventListener('dragleave', () => { emptyDrop.style.borderColor = 'var(--border)'; });
+    emptyDrop.addEventListener('dragover', (e) => { e.preventDefault(); emptyDrop.classList.add('drag-active'); });
+    emptyDrop.addEventListener('dragleave', () => emptyDrop.classList.remove('drag-active'));
     emptyDrop.addEventListener('drop', (e) => {
       e.preventDefault();
+      emptyDrop.classList.remove('drag-active');
       const data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
       if (data.source === 'library') {
         insertBlockAndFocus(data.blockId, blocks, lesson, blocks.length);

@@ -80,10 +80,10 @@ function renderHub() {
         </div>
 
         <h3 class="mb-16" style="font-size:16px;">Quick Reference — Bloom's Taxonomy</h3>
-        <div class="card card-pad" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px;">
+        <div class="card card-pad" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:20px;">
           ${Object.entries(LumioData.bloomVerbs).map(([level, verbs]) => `
             <div>
-              <div class="pill pill-indigo mb-8">${level}</div>
+              <div class="pill pill-indigo mb-12">${level}</div>
               <p class="text-sm text-muted">${verbs.join(', ')}</p>
             </div>
           `).join('')}

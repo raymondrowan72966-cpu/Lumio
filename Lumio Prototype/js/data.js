@@ -51,6 +51,11 @@ const LumioData = {
       modified: 'Edited 2 weeks ago', status: 'Published', thumb: 1, health: 88,
       lastAccessed: Date.now() - 14 * 24 * 3600 * 1000, deleted: false, deletedAt: null,
     },
+    {
+      id: 'p7', title: 'Formula 1 Fundamentals', type: 'Course', folder: 'f3',
+      modified: 'Edited 3 hours ago', status: 'Draft', thumb: 2, health: 78,
+      lastAccessed: Date.now() - 3 * 3600 * 1000, deleted: false, deletedAt: null,
+    },
   ],
 
   // ============================================================
@@ -410,6 +415,315 @@ const LumioData = {
     ],
     assessments: [
       { id: 'a1', title: 'Onboarding Knowledge Check', type: 'Quiz', objectives: [0,1,2] },
+    ],
+  },
+
+  // ============================================================
+  // CLIENT DEMONSTRATION DATASET
+  // Three fully-populated demo courses (distinct themes, hero
+  // layouts, landing configurations, and lesson structures).
+  // Seeded into LumioState.courses / LumioState.lessons on first
+  // load — see bootstrapDemoCourses() in js/app.js.
+  // ============================================================
+  demoCourses: {
+    // ---- Project p1: New Hire Onboarding (Indigo Focus theme) ----
+    p1: {
+      id: 'p1',
+      title: 'New Hire Onboarding',
+      description: 'A friendly introduction to our company, culture, tools, and your first 30 days — designed to help new team members feel confident and connected from day one.',
+      audience: 'New employees, all departments, no prior company knowledge required',
+      duration: '30-45 min',
+      objectives: [
+        { verb: 'Identify', text: 'the company’s mission, values, and organizational structure' },
+        { verb: 'Explain', text: 'how to use core workplace tools (email, chat, HR portal)' },
+        { verb: 'Demonstrate', text: 'the steps to complete your first-week checklist' },
+      ],
+      learnerOutcomes: [
+        'Understand what we stand for and how teams fit together',
+        'Get comfortable with the tools you’ll use every day',
+        'Know exactly what to do in your first week',
+      ],
+      theme: 't1',
+      themeDesign: {
+        primary: '#4F46E5', secondary: '#06B6D4', accent: '#14B8A6',
+        fontId: 'poppins-inter', fontSizeId: 'md', buttonStyleId: 'pill', radiusId: 'soft', bgStyleId: 'soft-gradient',
+      },
+      landingLayout: 'A',
+      heroImage: { src: null, fileName: null, mimeType: null, displayMode: 'cover', posX: 'center', posY: 'center', scale: 100 },
+      heroSettings: { height: 'medium', overlay: { mode: 'theme', opacity: 0.35 }, roundedCorners: true, titlePosition: 'bottom', textAlign: 'center', textColor: 'auto' },
+      lessons: [
+        { id: 'l1', title: 'Welcome to the Team', objectiveIndex: 0, duration: '8 min' },
+        { id: 'l2', title: 'Your Toolkit: Apps & Access', objectiveIndex: 1, duration: '10 min' },
+        { id: 'l3', title: 'Your First Week Checklist', objectiveIndex: 2, duration: '7 min' },
+      ],
+      assessments: [
+        { id: 'a1', title: 'Onboarding Knowledge Check', type: 'Quiz', objectives: [0,1,2] },
+      ],
+    },
+
+    // ---- Project p2: Workplace Safety Basics (Teal Calm theme) ----
+    p2: {
+      id: 'p2',
+      title: 'Workplace Safety Basics',
+      description: 'A practical introduction to staying safe at work — covering common hazards, personal protective equipment, and what to do in an emergency.',
+      audience: 'All staff working in office, workshop, and warehouse environments',
+      duration: '20-25 min',
+      objectives: [
+        { verb: 'Identify', text: 'common workplace hazards and how to report them' },
+        { verb: 'Explain', text: 'when and how to use personal protective equipment (PPE)' },
+        { verb: 'Demonstrate', text: 'the correct response to common workplace emergencies' },
+      ],
+      learnerOutcomes: [
+        'Recognise hazards before they cause harm',
+        'Know which PPE to wear and when',
+        'Respond confidently if something goes wrong',
+      ],
+      theme: 't3',
+      themeDesign: {
+        primary: '#14B8A6', secondary: '#06B6D4', accent: '#4F46E5',
+        fontId: 'montserrat-nunito', fontSizeId: 'md', buttonStyleId: 'square', radiusId: 'round', bgStyleId: 'light-grey',
+      },
+      landingLayout: 'B',
+      heroImage: { src: null, fileName: null, mimeType: null, displayMode: 'cover', posX: 'center', posY: 'center', scale: 100 },
+      heroSettings: { height: 'small', overlay: { mode: 'light', opacity: 0.3 }, roundedCorners: true, titlePosition: 'top', textAlign: 'left', textColor: 'auto' },
+      lessons: [
+        { id: 'ws1', title: 'Recognising Workplace Hazards', objectiveIndex: 0, duration: '6 min' },
+        { id: 'ws2', title: 'Personal Protective Equipment', objectiveIndex: 1, duration: '8 min' },
+        { id: 'ws3', title: 'Emergency Procedures & Reporting', objectiveIndex: 2, duration: '6 min' },
+      ],
+      assessments: [
+        { id: 'wsa1', title: 'Safety Knowledge Check', type: 'Quiz', objectives: [0,1,2] },
+      ],
+    },
+
+    // ---- Project p7: Formula 1 Fundamentals (Sunset theme) ----
+    p7: {
+      id: 'p7',
+      title: 'Formula 1 Fundamentals',
+      description: 'A fast-paced introduction to Formula 1 — the cars, the teams, how a race weekend works, and the basics of scoring and strategy.',
+      audience: 'New starters and partner staff with little or no prior F1 knowledge',
+      duration: '20-25 min',
+      objectives: [
+        { verb: 'Identify', text: 'the key components of an F1 car and the roles within a race team' },
+        { verb: 'Explain', text: 'the format of a typical race weekend' },
+        { verb: 'Demonstrate', text: 'an understanding of scoring, strategy basics, and paddock etiquette' },
+      ],
+      learnerOutcomes: [
+        'Talk confidently about the cars and the people behind them',
+        'Follow a race weekend from practice to chequered flag',
+        'Understand how points, strategy, and etiquette fit together',
+      ],
+      theme: 't2',
+      themeDesign: {
+        primary: '#F97316', secondary: '#FACC15', accent: '#7C3AED',
+        fontId: 'space-grotesk', fontSizeId: 'lg', buttonStyleId: 'rounded', radiusId: 'sharp', bgStyleId: 'white',
+      },
+      landingLayout: 'C',
+      heroImage: { src: null, fileName: null, mimeType: null, displayMode: 'cover', posX: 'center', posY: 'center', scale: 100 },
+      heroSettings: { height: 'large', overlay: { mode: 'dark', opacity: 0.45 }, roundedCorners: true, titlePosition: 'center', textAlign: 'center', textColor: 'light' },
+      lessons: [
+        { id: 'f1a', title: 'The Cars & The Teams', objectiveIndex: 0, duration: '9 min' },
+        { id: 'f1b', title: 'Race Weekend Format', objectiveIndex: 1, duration: '8 min' },
+        { id: 'f1c', title: 'Scoring, Strategy & Etiquette', objectiveIndex: 2, duration: '7 min' },
+      ],
+      assessments: [
+        { id: 'f1qz', title: 'F1 Fundamentals Quiz', type: 'Quiz', objectives: [0,1,2] },
+      ],
+    },
+  },
+
+  // Lesson content for the demo dataset, keyed by lesson id.
+  // l1 (Welcome to the Team) reuses sampleLessonBlocks below.
+  demoLessons: {
+    l2: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Your Toolkit: Apps & Access',
+        body: 'Here’s a quick tour of the apps and accounts you’ll use every day — most are already set up and waiting for you.'
+      }},
+      { type: 'list_bullet', data: {
+        heading: 'Tools you’ll use every day',
+        items: ['Email & Calendar (Google Workspace)', 'Team Chat (Slack)', 'HR Portal (BambooHR)', 'Project Tracker (Linear)', 'Knowledge Base (Notion)']
+      }},
+      { type: 'stmt_info', data: { text: 'Most accounts are provisioned automatically before your start date. If something is missing, raise a ticket with IT — it’s usually sorted within a few hours.' } },
+      { type: 'table', data: {
+        rows: [
+          ['Tool', 'Purpose', 'Access'],
+          ['Slack', 'Team communication', 'Auto-provisioned on day 1'],
+          ['BambooHR', 'Leave & payroll', 'Auto-provisioned on day 1'],
+          ['Linear', 'Project tracking', 'Request via IT portal'],
+        ]
+      }},
+      { type: 'stmt_warning', data: { text: 'Never share your login credentials with anyone, including colleagues — use shared logins or password managers for shared accounts instead.' } },
+      { type: 'continue', data: { label: 'Continue' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'Where would you go to check your remaining annual leave?',
+        options: ['Slack', 'BambooHR', 'Linear', 'Notion'],
+        correct: 1,
+      }},
+    ],
+    l3: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Your First Week Checklist',
+        body: 'Your first week is about getting set up, meeting people, and finding your feet. Here’s what to focus on.'
+      }},
+      { type: 'list_checkbox', data: {
+        heading: 'Complete these by Friday',
+        items: ['Set up your workstation & accounts', 'Meet your onboarding buddy', 'Complete mandatory compliance training', 'Schedule a 1:1 with your manager', 'Join your team’s weekly stand-up']
+      }},
+      { type: 'accordion', data: {
+        heading: 'Who to contact',
+        items: [
+          { title: 'IT Support', content: 'For account access, hardware issues, or software requests — reach out on the #it-support Slack channel.' },
+          { title: 'HR Team', content: 'For questions about pay, benefits, or leave — email hr@company.com or check BambooHR.' },
+          { title: 'Your Manager', content: 'For anything about your role, priorities, or how you’re settling in — your manager is your first point of contact.' },
+        ]
+      }},
+      { type: 'stmt_success', data: { text: 'You’re all set! Once you’ve worked through this checklist, you’ll be ready to dive into your first projects.' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'Who should you contact first with questions about your role and priorities?',
+        options: ['IT Support', 'HR Team', 'Your Manager', 'Finance'],
+        correct: 2,
+      }},
+    ],
+    ws1: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Recognising Workplace Hazards',
+        body: 'A hazard is anything that could cause harm. Learning to spot them quickly is the first step to keeping yourself and others safe.'
+      }},
+      { type: 'list_bullet', data: {
+        heading: 'Common hazard categories',
+        items: ['Slips, trips, and falls', 'Manual handling injuries', 'Electrical hazards', 'Fire hazards', 'Chemical exposure']
+      }},
+      { type: 'image_text', data: {
+        heading: 'Spot the hazard',
+        body: 'Hazard signage uses consistent colours and shapes — yellow and black for caution, red for prohibition, and green for safe conditions or emergency exits.',
+        imageLabel: 'Hazard signage examples'
+      }},
+      { type: 'stmt_warning', data: { text: 'If you spot a hazard, report it to your supervisor or facilities team immediately — don’t attempt repairs yourself unless trained and authorised.' } },
+      { type: 'continue', data: { label: 'Continue' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'What should you do if you notice a frayed electrical cable?',
+        options: ['Tape it up yourself', 'Ignore it, it’s probably fine', 'Report it to your supervisor or facilities team', 'Unplug it and take it home to fix'],
+        correct: 2,
+      }},
+    ],
+    ws2: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Personal Protective Equipment',
+        body: 'Personal Protective Equipment (PPE) is your last line of defence against workplace hazards. Knowing what to wear, and when, matters.'
+      }},
+      { type: 'table', data: {
+        rows: [
+          ['PPE Item', 'Required In', 'Notes'],
+          ['Safety glasses', 'Workshop & warehouse', 'Must be worn at all times in marked zones'],
+          ['Hi-vis vest', 'Loading bay', 'Required for all staff and visitors'],
+          ['Steel-toe boots', 'Warehouse floor', 'Provided during induction'],
+          ['Hearing protection', 'Machine areas', 'Required near equipment over 85dB'],
+        ]
+      }},
+      { type: 'stmt_tip', data: { text: 'Check your PPE for damage or wear before each use — a cracked lens or worn strap can mean it won’t protect you when it counts.' } },
+      { type: 'stmt_error', data: { text: 'Never operate machinery or enter a marked PPE zone without the required equipment, even for a moment.' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'Which item of PPE is required in the loading bay?',
+        options: ['Hearing protection', 'Hi-vis vest', 'Safety glasses', 'None — PPE isn’t required there'],
+        correct: 1,
+      }},
+    ],
+    ws3: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Emergency Procedures & Reporting',
+        body: 'Knowing what to do — and who to tell — in the first few moments of an emergency can make all the difference.'
+      }},
+      { type: 'accordion', data: {
+        heading: 'In case of…',
+        items: [
+          { title: 'Fire', content: 'Raise the alarm, leave via your nearest marked exit, and assemble at the designated point. Do not use lifts.' },
+          { title: 'Injury', content: 'Call for a qualified first aider and notify your supervisor. Do not move a seriously injured person unless there is immediate danger.' },
+          { title: 'Chemical spill', content: 'Evacuate the immediate area, alert your supervisor, and do not attempt cleanup unless trained for that substance.' },
+        ]
+      }},
+      { type: 'list_numbered', data: {
+        heading: 'If you witness an incident',
+        items: ['Ensure your own safety first', 'Alert nearby colleagues and your supervisor', 'Call emergency services if required', 'Complete an incident report within 24 hours']
+      }},
+      { type: 'stmt_success', data: { text: 'Reporting near-misses — not just incidents — helps us spot patterns and prevent future injuries before they happen.' } },
+      { type: 'continue', data: { label: 'Continue' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'What is the first thing you should do if you witness an incident?',
+        options: ['Complete an incident report', 'Ensure your own safety first', 'Call your manager', 'Take a photo for the report'],
+        correct: 1,
+      }},
+    ],
+    f1a: [
+      { type: 'heading_paragraph', data: {
+        heading: 'The Cars & The Teams',
+        body: 'Every Formula 1 car is a highly tuned machine built by one of ten teams, each fielding two drivers across a 24-race season.'
+      }},
+      { type: 'image_text', data: {
+        heading: 'Anatomy of an F1 car',
+        body: 'From the front wing to the rear diffuser, every surface is designed to manage airflow, generate downforce, and keep the car stable at speeds over 300km/h.',
+        imageLabel: 'F1 car diagram'
+      }},
+      { type: 'list_bullet', data: {
+        heading: 'Key roles in a race team',
+        items: ['Drivers — two per team, racing for points and the championship', 'Race Engineer — works directly with the driver on car setup', 'Strategist — plans pit stops, tyre choices, and race tactics', 'Pit Crew — performs pit stops in under three seconds', 'Team Principal — leads the team’s overall operation']
+      }},
+      { type: 'stmt_info', data: { text: 'There are 10 teams and 20 drivers on the grid each season, competing for both the Drivers’ and Constructors’ Championships.' } },
+      { type: 'continue', data: { label: 'Continue' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'Who is responsible for planning pit stops and tyre strategy?',
+        options: ['The Team Principal', 'The Race Engineer', 'The Strategist', 'The Pit Crew'],
+        correct: 2,
+      }},
+    ],
+    f1b: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Race Weekend Format',
+        body: 'A typical Grand Prix weekend builds from free practice, through qualifying, to the race itself — each session serving a different purpose.'
+      }},
+      { type: 'list_numbered', data: {
+        heading: 'A typical race weekend',
+        items: ['Practice sessions (FP1–FP3) — car setup and tyre testing', 'Qualifying — sets the starting grid for the race', 'Sprint — a short-format race held on selected weekends', 'The Grand Prix — the main, points-paying event']
+      }},
+      { type: 'table', data: {
+        rows: [
+          ['Session', 'Purpose', 'Duration'],
+          ['Practice', 'Car setup & tyre testing', '60 minutes each'],
+          ['Qualifying', 'Determines grid order', 'Approx. 1 hour'],
+          ['Race', 'Points-paying main event', 'Race distance ~305km'],
+        ]
+      }},
+      { type: 'stmt_tip', data: { text: 'Weather can change everything — a sudden rain shower during qualifying or the race often shakes up the order completely.' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'What determines the starting grid order for the race?',
+        options: ['Practice session times', 'Qualifying', 'Championship standings', 'A random draw'],
+        correct: 1,
+      }},
+    ],
+    f1c: [
+      { type: 'heading_paragraph', data: {
+        heading: 'Scoring, Strategy & Etiquette',
+        body: 'Points decide the championship, but strategy decides how teams get there — and a little etiquette goes a long way in the paddock.'
+      }},
+      { type: 'list_bullet', data: {
+        heading: 'Points for the top 10 finishers',
+        items: ['1st: 25 points', '2nd: 18 points', '3rd: 15 points', '4th: 12 points', '5th: 10 points', '6th–10th: 8, 6, 4, 2, 1 points', 'Plus 1 bonus point for the fastest lap (if finishing in the top 10)']
+      }},
+      { type: 'accordion', data: {
+        heading: 'Strategy basics',
+        items: [
+          { title: 'Tyre strategy', content: 'Teams choose between tyre compounds, balancing grip and durability — most races require at least one pit stop for a tyre change.' },
+          { title: 'Pit stops', content: 'A pit stop changes all four tyres in under three seconds, but timing it well relative to rivals is a major part of race strategy.' },
+          { title: 'Safety cars', content: 'When a safety car is deployed, the field bunches up — often creating a strategic opportunity (or risk) for an early pit stop.' },
+        ]
+      }},
+      { type: 'stmt_note', data: { text: 'In the paddock: wear your pass visibly at all times, follow photography restrictions in team areas, and give team personnel space when they’re working.' } },
+      { type: 'continue', data: { label: 'Continue' } },
+      { type: 'kc_multiple_choice', data: {
+        question: 'How many points does a race winner receive?',
+        options: ['10', '18', '25', '30'],
+        correct: 2,
+      }},
     ],
   },
 
