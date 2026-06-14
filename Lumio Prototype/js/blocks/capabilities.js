@@ -50,6 +50,12 @@ const BlockCapabilities = (function () {
     stmt_warning: { treatment: 'cardless' },
     stmt_error: { treatment: 'cardless' },
     stmt_note: { treatment: 'cardless' },
+    // Button renders as a single inline CTA with its own styling — no
+    // outer card chrome. Flashcards render their own per-card "card" faces,
+    // so the outer wrapper stays cardless to avoid a double card frame.
+    button: { treatment: 'cardless' },
+    flashcard_grid: { treatment: 'cardless' },
+    flashcard_stack: { treatment: 'cardless' },
   }, (defaults) => ({ category: defaults.category }));
 
   // ----------------------------------------------------------

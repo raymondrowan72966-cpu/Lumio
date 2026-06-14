@@ -11,7 +11,6 @@ const LearnerUI = {
   revealedContinues: {}, // lessonId -> Set<blockIndex>
   accordionOpen: {},     // "lessonId:blockIndex" -> Set<itemIndex>
   activeTabs: {},        // "lessonId:blockIndex" -> tabIndex
-  flipped: {},           // "lessonId:blockIndex" -> Set<cardIndex> | bool
   carouselIndex: {},     // "lessonId:blockIndex" -> active slide index
   quoteCarouselIndex: {}, // "lessonId:blockIndex" -> active quote index
   listChecked: {},       // "lessonId:blockIndex" -> Set<itemIndex> of checked checkbox-list items
@@ -335,14 +334,11 @@ function renderLearnerBlock(block, index, ctx) {
     case 'continue': return learnerContinueBlock(block, index, ctx);
     case 'accordion': return learnerAccordionBlock(block, index, ctx);
     case 'tabs': return learnerTabsBlock(block, index, ctx);
-    case 'flashcard_grid': return learnerFlashcardGrid(block, index, ctx);
-    case 'flashcard_stack': return learnerFlashcardStack(block, index, ctx);
     case 'kc_multiple_choice': return learnerKcMultipleChoice(block, index, ctx);
     case 'kc_multiple_response': return learnerKcMultipleResponse(block, index, ctx);
     case 'kc_matching': return learnerKcMatching(block, index, ctx);
     case 'kc_ordering': return learnerKcOrdering(block, index, ctx);
     case 'kc_fill_gap': return learnerKcFillGap(block, index, ctx);
-    case 'button': return learnerButtonBlock(block, index, ctx);
     case 'file': return learnerFileBlock(block, index, ctx);
     case 'video': return learnerVideoBlock(block, index, ctx);
     case 'audio': return learnerAudioBlock(block, index, ctx);
@@ -369,17 +365,6 @@ function learnerContinueBlock(block, index, ctx) {
     </div>`;
 }
 
-/* ---- Button ---- */
-function learnerButtonBlock(block, index, ctx) {
-  const d = block.data || {};
-  const label = d.label || 'View Resource →';
-  if (d.url) {
-    return `<div style="text-align:center;"><a class="btn btn-primary" href="${escapeHtml(d.url)}" ${d.newTab ? 'target="_blank" rel="noopener"' : ''}>${escapeHtml(label)}</a></div>`;
-  }
-  return `<div style="text-align:center;"><button class="btn btn-primary" disabled title="No link set for this button">${escapeHtml(label)}</button></div>`;
-}
-
-/* ---- File ---- */
 /* ---- File / Video / Audio ----
    All three use the shared renderBlockContent renderer so Builder and Preview
    stay in parity — Preview is the only mode where autoplay/loop settings apply. */
@@ -549,43 +534,6 @@ function learnerTabsBlock(block, index, ctx) {
 }
 
 /* ---- Flashcards ---- */
-function learnerFlashcardGrid(block, index, ctx) {
-  const d = block.data || {};
-  const cards = d.cards || ['Mission', 'Vision', 'Values'];
-  const key = ctx.lessonId + ':' + index;
-  const flipped = LearnerUI.flipped[key] || new Set();
-  return `
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
-      ${cards.map((c, i) => `
-        <div class="card card-pad lp-flip" data-key="${key}" data-i="${i}"
-          role="button" tabindex="0" aria-pressed="${flipped.has(i)}"
-          aria-label="${flipped.has(i) ? `Flashcard back: ${escapeHtml(c)}. Press to flip back to front.` : `Flashcard front: ${escapeHtml(c)}. Press to flip.`}"
-          style="text-align:center; cursor:pointer; height:80px; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px;
-          ${flipped.has(i) ? 'background:var(--pastel-lavender); color:var(--ink-900);' : 'background:linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%); color:#fff;'}">
-          ${flipped.has(i) ? 'Click to flip back' : c}
-        </div>
-      `).join('')}
-    </div>`;
-}
-
-function learnerFlashcardStack(block, index, ctx) {
-  const d = block.data || {};
-  const key = ctx.lessonId + ':' + index;
-  const flipped = !!LearnerUI.flipped[key];
-  return `
-    <div style="position:relative; height:120px;">
-      <div class="card" style="position:absolute; top:8px; left:8px; right:-8px; bottom:-8px; background:var(--pastel-lavender);"></div>
-      <div class="card card-pad lp-flip-stack" data-key="${key}"
-        role="button" tabindex="0" aria-pressed="${flipped}"
-        aria-label="${flipped ? `Showing answer: ${escapeHtml(d.back || 'Human Resources')}. Press to flip back to question.` : `Showing question: ${escapeHtml(d.front || 'What does HR stand for?')}. Press to flip to answer.`}"
-        style="position:relative; height:120px; display:flex; align-items:center; justify-content:center; text-align:center; cursor:pointer;">
-        <div>
-          <div style="font-weight:600;">${flipped ? (d.back || 'Human Resources') : (d.front || 'What does HR stand for?')}</div>
-          <div class="text-sm text-muted mt-8">Click to flip ${flipped ? 'back' : ''}</div>
-        </div>
-      </div>
-    </div>`;
-}
 
 /* ---- Knowledge Checks ---- */
 function learnerKcMultipleChoice(block, index, ctx) {
@@ -818,30 +766,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const key = tabEl.dataset.key, i = parseInt(tabEl.dataset.i, 10);
     tabEl.addEventListener('click', () => selectTab(key, i));
     tabEl.addEventListener('keydown', (e) => onActivateKey(e, () => selectTab(key, i)));
-  });
-
-  // Flashcard grid
-  const flipGridCard = (key, i) => {
-    const set = LearnerUI.flipped[key] || new Set();
-    if (set.has(i)) set.delete(i); else set.add(i);
-    LearnerUI.flipped[key] = set;
-    rerender();
-  };
-  app.querySelectorAll('.lp-flip').forEach(cardEl => {
-    const key = cardEl.dataset.key, i = parseInt(cardEl.dataset.i, 10);
-    cardEl.addEventListener('click', () => flipGridCard(key, i));
-    cardEl.addEventListener('keydown', (e) => onActivateKey(e, () => flipGridCard(key, i)));
-  });
-
-  // Flashcard stack
-  const flipStackCard = (key) => {
-    LearnerUI.flipped[key] = !LearnerUI.flipped[key];
-    rerender();
-  };
-  app.querySelectorAll('.lp-flip-stack').forEach(cardEl => {
-    const key = cardEl.dataset.key;
-    cardEl.addEventListener('click', () => flipStackCard(key));
-    cardEl.addEventListener('keydown', (e) => onActivateKey(e, () => flipStackCard(key)));
   });
 
   // KC multiple choice

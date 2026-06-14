@@ -338,6 +338,51 @@ function normalizeColumnGridItems(d) {
   return d.items;
 }
 
+/* Lazily migrates Flashcard Grid/Stack items to {front:{text,image}, back:{text,image}} objects, in place. */
+function normalizeFlashcardItems(d) {
+  const source = (d.items && d.items.length) ? d.items : [
+    { front: { text: 'What does HR stand for?' }, back: { text: 'Human Resources' } },
+    { front: { text: 'Front of card' }, back: { text: 'Back of card' } },
+  ];
+  d.items = source.map(it => ({
+    front: Object.assign({ text: '', image: null }, (it && it.front) || {}),
+    back: Object.assign({ text: '', image: null }, (it && it.back) || {}),
+  }));
+  return d.items;
+}
+
+/* Renders one face (front or back) of a flashcard — rich text + optional image,
+   with media controls when editable. Click handlers on inner elements stop
+   propagation so they don't trigger the card's flip. */
+function flashcardFaceContent(face, i, faceName, editable) {
+  const placeholder = faceName === 'front' ? 'Front text' : 'Back text';
+  return `
+    ${face.image ? `<img src="${face.image}" alt="" style="max-width:100%; max-height:70px; object-fit:cover; border-radius:var(--r-sm); margin-bottom:8px;" />` : ''}
+    <div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${editable ? 'contenteditable="true" onclick="event.stopPropagation()"' : ''} data-placeholder="${placeholder}" style="font-weight:600; font-size:14px;">${richTextOut(face.text || '')}</div>
+    ${editable ? `<div class="flex items-center gap-4 mt-8" onclick="event.stopPropagation()">
+      <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${faceName}">${face.image ? '🔄 Image' : '📤 Image'}</button>
+      ${face.image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove" data-findex="${i}" data-face="${faceName}" style="color:#E5484D;">🗑️</button>` : ''}
+    </div>` : ''}
+  `;
+}
+
+/* Flashcard Stack navigation — advances to the previous/next card within the
+   same .flashcard-stack-wrap, toggling visibility and updating the progress
+   label. Self-contained DOM manipulation (no re-render) so it works
+   identically in the Builder canvas and Learner Preview. */
+function lumioFcsNav(btn, delta) {
+  const wrap = btn.closest('.flashcard-stack-wrap');
+  if (!wrap) return;
+  const cards = Array.from(wrap.querySelectorAll('.fcs-card'));
+  const cur = cards.findIndex(c => c.style.display !== 'none');
+  if (cur === -1) return;
+  const next = (cur + delta + cards.length) % cards.length;
+  cards[cur].style.display = 'none';
+  cards[next].style.display = 'flex';
+  const progress = wrap.querySelector('.fcs-progress');
+  if (progress) progress.textContent = `${next + 1} / ${cards.length}`;
+}
+
 /* Full-size image lightbox — a Learner Preview-only interaction, opened by
    clicking any .image-zoom-trigger image (see learnerPreview.js). */
 function openImageLightbox(src, alt) {
@@ -1028,6 +1073,11 @@ function syncRichTextField(block, elx) {
     const items = normalizeColumnGridItems(block.data);
     const i = parseInt(elx.dataset.col);
     items[i][elx.dataset.field === 'gridItemTitle' ? 'title' : 'description'] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'flashcardText') {
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(elx.dataset.col);
+    const face = elx.dataset.face === 'back' ? 'back' : 'front';
+    items[i][face].text = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
   }
@@ -1482,21 +1532,98 @@ function renderBlockContent(block, editable) {
           `).join('')}
         </div>
       </div>`;
-    case 'flashcard_grid':
-      return `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
-        ${(d.cards || ['Mission','Vision','Values']).map(c => `
-          <div class="card card-pad" style="text-align:center; background:var(--gradient-primary); color:#fff; height:80px; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px;">${c}</div>
+    case 'flashcard_grid': {
+      const items = normalizeFlashcardItems(d);
+      const flipHint = ds.flipHint !== false;
+      const sizeMap = { sm: 110, md: 150, lg: 190 };
+      const cardH = sizeMap[ds.cardSize] || sizeMap.md;
+      const cols = ds.cardSize === 'lg' ? 2 : 3;
+      return `<div style="display:grid; grid-template-columns:repeat(${cols},1fr); gap:12px;">
+        ${items.map((item, i) => `
+          <div style="position:relative;">
+            ${editable ? `<div class="flex gap-4 mb-4" style="justify-content:flex-end;">
+              <button class="btn-icon flashcard-move-left" data-findex="${i}" title="Move left" aria-label="Move card left" ${i===0?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i===0?'0.4':'1'};">←</button>
+              <button class="btn-icon flashcard-move-right" data-findex="${i}" title="Move right" aria-label="Move card right" ${i===items.length-1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i===items.length-1?'0.4':'1'};">→</button>
+              <button class="btn-icon flashcard-duplicate" data-findex="${i}" title="Duplicate card" aria-label="Duplicate card" style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px;">⧉</button>
+              <button class="btn-icon flashcard-remove" data-findex="${i}" title="Remove card" aria-label="Remove card" ${items.length<=1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${items.length<=1?'0.4':'1'};">×</button>
+            </div>` : ''}
+            <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card-inner">
+                <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff;">
+                  ${flashcardFaceContent(item.front, i, 'front', editable)}
+                </div>
+                <div class="flip-card-face flip-card-back card" style="background:var(--surface-0);">
+                  ${flashcardFaceContent(item.back, i, 'back', editable)}
+                </div>
+              </div>
+            </div>
+            ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
+          </div>
         `).join('')}
+        ${editable ? `<button class="btn btn-secondary btn-sm flashcard-add" style="grid-column:1/-1;">+ Add Card</button>` : ''}
       </div>`;
-    case 'flashcard_stack':
-      return `<div style="position:relative; height:120px;">
-        <div class="card" style="position:absolute; top:8px; left:8px; right:-8px; bottom:-8px; background:var(--pastel-lavender);"></div>
-        <div class="card card-pad" style="position:relative; height:120px; display:flex; align-items:center; justify-content:center; text-align:center;">
-          <div><div style="font-weight:600;">${d.front || 'What does HR stand for?'}</div><div class="text-sm text-muted mt-8">Click to flip</div></div>
+    }
+    case 'flashcard_stack': {
+      const items = normalizeFlashcardItems(d);
+      const flipHint = ds.flipHint !== false;
+      return `<div class="flashcard-stack-wrap" tabindex="0" style="outline:none;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
+        ${items.map((item, i) => `
+          <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column; position:relative;">
+            ${editable ? `<div class="flex gap-4 mb-4" style="justify-content:flex-end;">
+              <button class="btn-icon flashcard-duplicate" data-findex="${i}" title="Duplicate card" aria-label="Duplicate card" style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px;">⧉</button>
+              <button class="btn-icon flashcard-remove" data-findex="${i}" title="Remove card" aria-label="Remove card" ${items.length<=1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${items.length<=1?'0.4':'1'};">×</button>
+            </div>` : ''}
+            <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:180px; cursor:pointer;">
+              <div class="flip-card-inner">
+                <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff;">
+                  ${flashcardFaceContent(item.front, i, 'front', editable)}
+                </div>
+                <div class="flip-card-face flip-card-back card" style="background:var(--surface-0);">
+                  ${flashcardFaceContent(item.back, i, 'back', editable)}
+                </div>
+              </div>
+            </div>
+            ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
+          </div>
+        `).join('')}
+        <div class="flex items-center justify-between mt-12">
+          <button class="btn btn-secondary btn-sm fcs-prev" onclick="event.stopPropagation(); lumioFcsNav(this,-1)">← Prev</button>
+          <span class="text-sm text-muted fcs-progress">1 / ${items.length}</span>
+          ${editable ? `<button class="btn btn-secondary btn-sm flashcard-add" onclick="event.stopPropagation()">+ Add Card</button>` : '<span></span>'}
+          <button class="btn btn-secondary btn-sm fcs-next" onclick="event.stopPropagation(); lumioFcsNav(this,1)">Next →</button>
         </div>
       </div>`;
-    case 'button':
-      return `<div style="text-align:center;"><button class="btn btn-primary">${d.label || 'View Resource →'}</button>${d.url ? `<div class="text-sm text-muted mt-8">${d.url}</div>` : ''}</div>`;
+    }
+    case 'button': {
+      const align = ds.align || 'center';
+      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      const sizeMap = { sm: { pad: '8px 18px', font: '13px' }, md: { pad: '12px 24px', font: '14px' }, lg: { pad: '16px 32px', font: '16px' } };
+      const sz = sizeMap[ds.btnSize] || sizeMap.md;
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const colorPreset = ds.colorPreset || 'theme';
+      const bg = colorPreset === 'custom' ? (ds.btnBgColor || '#7C3AED') : 'var(--gradient-primary)';
+      const textColor = colorPreset === 'custom' ? (ds.btnTextColor || '#ffffff') : '#ffffff';
+      const shadow = ds.shadow !== false ? 'box-shadow:var(--shadow-soft);' : '';
+      const widthStyle = ds.btnWidth === 'full' ? 'width:100%;' : '';
+      const label = escapeHtml(d.label || 'Button');
+      const icon = d.icon ? `${escapeHtml(d.icon)} ` : '';
+      const btnStyle = `padding:${sz.pad}; font-size:${sz.font}; border-radius:${radius}; ${widthStyle} background:${bg}; color:${textColor}; ${shadow} border:none; font-weight:600; text-decoration:none; cursor:pointer;`;
+      let inner;
+      if (editable) {
+        inner = `<span class="lumio-cta-btn" style="${btnStyle} pointer-events:none;">${icon}${label}</span>`;
+      } else if (d.destType === 'file' && d.file) {
+        inner = `<a href="${d.file}" download="${escapeHtml(d.fileFileName || 'download')}" class="lumio-cta-btn" style="${btnStyle}">${icon}${label}</a>`;
+      } else if (d.destType === 'anchor') {
+        inner = `<a href="#" class="lumio-cta-btn" style="${btnStyle}" onclick="document.querySelector('.canvas-block[data-index=\\"${d.anchorIndex || 0}\\"], [data-lp-index=\\"${d.anchorIndex || 0}\\"]')?.scrollIntoView({behavior:'smooth'}); return false;">${icon}${label}</a>`;
+      } else if (d.destType === 'nextLesson') {
+        inner = `<a href="#" class="lumio-cta-btn" style="${btnStyle}" onclick="document.getElementById('lp-next')?.click(); return false;">${icon}${label}</a>`;
+      } else if (d.url) {
+        inner = `<a href="${escapeHtml(d.url)}" class="lumio-cta-btn" style="${btnStyle}" ${d.newTab ? 'target="_blank" rel="noopener"' : ''}>${icon}${label}</a>`;
+      } else {
+        inner = `<span class="lumio-cta-btn" style="${btnStyle} opacity:0.7;">${icon}${label}</span>`;
+      }
+      return `<div style="display:flex; justify-content:${justifyMap[align] || 'center'};">${inner}</div>`;
+    }
 
     case 'chart_bar':
       return chartPreview('bar', d);
@@ -2300,13 +2427,8 @@ function renderRightTabContent(block, index, course) {
         `<div class="field"><label>Items (one per line, format: Title :: Content)</label><textarea class="textarea content-field" data-field="accordionItems" rows="6">${(d.items||[]).map(it=>`${it.title||''} :: ${it.content||''}`).join('\n')}</textarea></div>` + aiActions();
     case 'tabs':
       return `<div class="field"><label>Tabs (one per line, format: Tab label :: Tab content)</label><textarea class="textarea content-field" data-field="tabsData" rows="6">${(d.tabs||[]).map((t,i)=>`${t} :: ${(d.contents&&d.contents[i])||''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'flashcard_grid':
-      return `<div class="field"><label>Cards (one per line)</label><textarea class="textarea content-field" data-field="cards" rows="5">${(d.cards||[]).join('\n')}</textarea></div>` + aiActions();
-    case 'flashcard_stack':
-      return contentFields([
-        ['Front (question)', 'front', d.front, 'textarea'],
-        ['Back (answer)', 'back', d.back, 'textarea'],
-      ]) + aiActions();
+    case 'flashcard_grid': case 'flashcard_stack':
+      return `<p class="text-sm text-muted">Click directly into a card's front or back text to edit it. Use the 📤 Image button to attach an image to either side. Use the ⧉ / × / ← / → controls to duplicate, remove, or reorder cards, and the + Add Card button to add new ones. Click a card to flip between front and back.</p>` + aiActions();
     case 'kc_multiple_response':
       return contentFields([['Question', 'question', d.question, 'textarea']]) +
         `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
@@ -2324,11 +2446,35 @@ function renderRightTabContent(block, index, course) {
     case 'kc_ordering':
       return `<div class="field"><label>Items, in correct order (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>
         <p class="text-sm text-muted mt-8">Learners will see these in shuffled order and must arrange them to match this order.</p>`;
-    case 'button':
-      return contentFields([
-        ['Button label', 'label', d.label, 'input'],
-        ['Link URL', 'url', d.url, 'input'],
-      ]) + `<div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="content-field" data-field="newTab" ${d.newTab ? 'checked' : ''}/> Open link in new tab</label></div>`;
+    case 'button': {
+      const destType = d.destType || 'url';
+      const lessonBlocks = LumioState.lessons[LumioState.currentLessonId] || [];
+      let destFields = '';
+      if (destType === 'url') {
+        destFields = contentFields([['Link URL', 'url', d.url, 'input']]) +
+          `<div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="content-field" data-field="newTab" ${d.newTab ? 'checked' : ''}/> Open link in new tab</label></div>`;
+      } else if (destType === 'anchor') {
+        destFields = `<div class="field"><label>Jump to block</label>
+          <select class="input content-field" data-field="anchorIndex">
+            ${lessonBlocks.map((b,i) => `<option value="${i}" ${(d.anchorIndex ?? 0) === i ? 'selected' : ''}>${i+1}. ${blockLabel(b.type)}</option>`).join('')}
+          </select></div>`;
+      } else if (destType === 'file') {
+        destFields = mediaPickerFileField(d, 'file', 'Download File', 'Download File');
+      } else if (destType === 'nextLesson') {
+        destFields = `<p class="text-sm text-muted">This button takes the learner to the next lesson in the course.</p>`;
+      }
+      return contentFields([['Button label', 'label', d.label, 'input']]) +
+        `<div class="field"><label>Destination</label>
+          <select class="input content-field" data-field="destType">
+            <option value="url" ${destType==='url'?'selected':''}>External URL</option>
+            <option value="anchor" ${destType==='anchor'?'selected':''}>Jump to Block (this lesson)</option>
+            <option value="file" ${destType==='file'?'selected':''}>File Download</option>
+            <option value="nextLesson" ${destType==='nextLesson'?'selected':''}>Next Lesson</option>
+          </select>
+        </div>` +
+        destFields +
+        contentFields([['Icon (emoji, optional)', 'icon', d.icon, 'input']]);
+    }
     case 'scenario':
       return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
         `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
@@ -2720,6 +2866,8 @@ function blockTypeDesignFields(block, ds) {
         </div>`;
     }
     case 'Interactive':
+      if (block.type === 'button') return buttonDesignFields(ds);
+      if (block.type === 'flashcard_grid' || block.type === 'flashcard_stack') return flashcardDesignFields(block, ds);
       return `
         <div class="prop-section" style="border-bottom:none;">
           <div class="prop-section-title">Animation</div>
@@ -2728,6 +2876,57 @@ function blockTypeDesignFields(block, ds) {
     default:
       return '';
   }
+}
+
+/* Button block — Format (Size/Width) + Style (Color/Shadow) design-tab fields.
+   Alignment and Corner Radius are already covered by the global Design-tab
+   sections rendered above blockTypeDesignFields. */
+function buttonDesignFields(ds) {
+  const colorPreset = ds.colorPreset || 'theme';
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Size</div>
+      ${segControl('design-btnsize', 'btnSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.btnSize || 'md')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Width</div>
+      ${segControl('design-btnwidth', 'btnWidth', [{id:'auto',label:'Auto'},{id:'full',label:'Full Width'}], ds.btnWidth || 'auto')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Color</div>
+      ${segControl('design-colorpreset', 'colorPreset', [{id:'theme',label:'Theme'},{id:'custom',label:'Custom'}], colorPreset)}
+      ${colorPreset === 'custom' ? `
+        <div class="flex items-center gap-12 mt-12">
+          <label class="text-sm" style="min-width:90px;">Background</label>
+          <input type="color" class="design-color-input" data-prop="btnBgColor" value="${ds.btnBgColor || '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        </div>
+        <div class="flex items-center gap-12 mt-8">
+          <label class="text-sm" style="min-width:90px;">Text</label>
+          <input type="color" class="design-color-input" data-prop="btnTextColor" value="${ds.btnTextColor || '#ffffff'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        </div>` : ''}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Shadow</div>
+      <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="shadow" ${ds.shadow !== false ? 'checked' : ''}/> Drop shadow</label>
+    </div>`;
+}
+
+/* Flashcard Grid / Flashcard Stack — Format design-tab fields. */
+function flashcardDesignFields(block, ds) {
+  const flipHintField = `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Flip Hint</div>
+      <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="flipHint" ${ds.flipHint !== false ? 'checked' : ''}/> Show "Click to flip" hint</label>
+    </div>`;
+  if (block.type === 'flashcard_grid') {
+    return `
+      <div class="prop-section">
+        <div class="prop-section-title">Card Size</div>
+        ${segControl('design-cardsize', 'cardSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.cardSize || 'md')}
+      </div>
+      ${flipHintField}`;
+  }
+  return flipHintField;
 }
 
 function contentFields(fields) {
@@ -3051,6 +3250,11 @@ function bindBuilderEvents(course, lesson, blocks) {
         const [title, description] = line.split('::').map(s => s.trim());
         return description ? { title, description } : title;
       });
+    } else if (field === 'destType') {
+      block.data.destType = e.target.value;
+      renderLessonBuilder(lesson.id);
+    } else if (field === 'anchorIndex') {
+      block.data.anchorIndex = parseInt(e.target.value, 10) || 0;
     } else if (field === 'hotspots') {
       block.data.hotspots = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
         const [label, description] = line.split('::').map(s => (s||'').trim());
@@ -3087,6 +3291,26 @@ function bindBuilderEvents(course, lesson, blocks) {
       flashSaveStatus();
     }));
   });
+
+  // Design tab — custom colour pickers (e.g. Button custom background/text colour)
+  app.querySelectorAll('.design-color-input[data-prop]').forEach(inp => inp.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design[inp.dataset.prop] = inp.value;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Design tab — boolean toggles stored on block.design (e.g. Shadow, Flip Hint)
+  app.querySelectorAll('.design-checkbox[data-prop]').forEach(cb => cb.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design[cb.dataset.prop] = cb.checked;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
 
   // Text blocks — Move Up / Move Down
   app.querySelectorAll('.move-up-btn').forEach(btn => btn.addEventListener('click', (e) => {
@@ -3663,6 +3887,93 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = normalizeColumnGridItems(block.data);
     if (items.length <= 1) return;
     items.splice(parseInt(btn.dataset.gindex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Flashcards — per-face image via Media Picker
+  app.querySelectorAll('.flashcard-face-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(btn.dataset.findex);
+    const face = btn.dataset.face === 'back' ? 'back' : 'front';
+    openMediaPicker({
+      title: face === 'front' ? 'Front Image' : 'Back Image',
+      currentSrc: items[i][face].image,
+      onInsert: (result) => {
+        items[i][face].image = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        items[i][face].image = null;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.flashcard-face-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const face = btn.dataset.face === 'back' ? 'back' : 'front';
+    items[parseInt(btn.dataset.findex)][face].image = null;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Flashcards — add / duplicate / remove / reorder cards
+  app.querySelectorAll('.flashcard-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    items.push({ front: { text: '', image: null }, back: { text: '', image: null } });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.flashcard-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(btn.dataset.findex);
+    items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.flashcard-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.findex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.flashcard-move-left').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(btn.dataset.findex);
+    if (i <= 0) return;
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.flashcard-move-right').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(btn.dataset.findex);
+    if (i >= items.length - 1) return;
+    [items[i + 1], items[i]] = [items[i], items[i + 1]];
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
