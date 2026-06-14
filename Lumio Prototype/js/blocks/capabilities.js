@@ -44,6 +44,15 @@ const BlockCapabilities = (function () {
     chart_bar: { treatment: 'card' },
     chart_line: { treatment: 'card' },
     chart_pie: { treatment: 'card' },
+    // Statement (callout) blocks render as flat document content with a
+    // type-coloured surface rather than a separate elevated card —
+    // treatment overridden independently of the 'callout' category.
+    stmt_info: { treatment: 'cardless' },
+    stmt_tip: { treatment: 'cardless' },
+    stmt_success: { treatment: 'cardless' },
+    stmt_warning: { treatment: 'cardless' },
+    stmt_error: { treatment: 'cardless' },
+    stmt_note: { treatment: 'cardless' },
   }, (defaults) => ({ category: defaults.category }));
 
   // ----------------------------------------------------------

@@ -435,6 +435,35 @@ button { font-family: var(--font-body); cursor: pointer; }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Media Picker dropzone */
+.mp-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-50);
+  min-height: 180px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.mp-dropzone:hover {
+  border-color: var(--theme-primary, var(--indigo));
+}
+.mp-dropzone.drag-active {
+  border-color: var(--theme-primary, var(--indigo));
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-50));
+}
+.mp-dropzone-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px; text-align: center;
+}
+.mp-dropzone-icon { font-size: 32px; opacity: 0.6; }
+.mp-preview-img {
+  width: 100%; max-height: 240px;
+  object-fit: contain;
+  display: block;
+}
+
 /* ============================================================
    UTILITIES
    ============================================================ */

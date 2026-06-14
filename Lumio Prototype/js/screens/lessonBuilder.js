@@ -43,7 +43,7 @@ function renderLessonBuilder(lessonId) {
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
         <div style="flex:1; min-width:0; overflow-y:auto; background:var(--surface-0); position:relative;" id="lesson-canvas-wrap">
-          <div style="max-width:720px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1;" id="lesson-canvas">
+          <div style="max-width:720px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1; container-type:inline-size;" id="lesson-canvas">
             ${renderCanvasBlocks(blocks)}
           </div>
         </div>
@@ -51,6 +51,7 @@ function renderLessonBuilder(lessonId) {
       </div>
     </div>
     ${BuilderUI.aiOpen ? renderAIPanel(lesson, blocks) : ''}
+    ${canvasStyles()}
   `;
 
   bindBuilderEvents(course, lesson, blocks);
@@ -151,6 +152,16 @@ function renderBlockLibrary(lesson, course) {
   html += `
       </div>
     </div>
+  `;
+  return html;
+}
+
+/* Canvas + library styling shared across the lesson builder. Rendered once
+   per build (regardless of whether the block library is expanded or
+   collapsed) so canvas affordances like the insertion-point "+" buttons
+   keep their correct hover-only appearance in both states. */
+function canvasStyles() {
+  return `
     <style>
       .cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-400); cursor:pointer; border-radius:var(--r-sm); }
       .cat-header:hover { background:var(--pastel-lavender); }
@@ -196,9 +207,13 @@ function renderBlockLibrary(lesson, course) {
         text-align:center; transition:border-color .12s, background-color .12s;
       }
       .insertion-zone.drag-active .insertion-zone-box {
-        border-style:solid; background:var(--pastel-lavender);
+        border-style:solid; border-width:2px;
+        background:color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, var(--pastel-lavender));
       }
       .insertion-zone-title { font-size:13px; font-weight:600; color:var(--theme-primary, var(--indigo)); }
+      .insertion-zone-title-drop { display:none; }
+      .insertion-zone.drag-active .insertion-zone-title-default { display:none; }
+      .insertion-zone.drag-active .insertion-zone-title-drop { display:inline; }
       .insertion-zone-hint { font-size:11px; color:var(--ink-400); margin-top:2px; }
 
       /* Empty-lesson insertion prompt */
@@ -206,9 +221,18 @@ function renderBlockLibrary(lesson, course) {
       .empty-canvas-line { position:absolute; left:0; right:0; top:24px; height:0; border-top:1px dashed var(--border); }
       .empty-canvas-add { position:relative; opacity:1; width:28px; height:28px; font-size:16px; margin:0 auto; }
       .empty-canvas.drag-active .empty-canvas-line { border-top-style:solid; border-color:var(--theme-primary, var(--indigo)); }
+
+      /* Quote Style 3 & 4 — stack to a centred column on narrow viewports.
+         Uses a container query (against #lesson-canvas / <main>, which have
+         container-type:inline-size) so this responds to the Learner Preview
+         device frame width, not just the browser viewport. */
+      @container (max-width: 480px) {
+        .quote3-layout, .quote4-layout { flex-direction:column; align-items:center; text-align:center; }
+        .quote4-layout { padding:18px; }
+        .quote4-layout > div:last-child { border-left:none; border-top:3px solid var(--theme-primary, var(--indigo)); padding-left:0; padding-top:12px; text-align:center; }
+      }
     </style>
   `;
-  return html;
 }
 
 function blockTile(b) {
@@ -226,13 +250,23 @@ function blockTile(b) {
    the DOM (for drag/drop targeting) but visually near-invisible at rest. */
 /* Active insertion zone — replaces a drop-zone's line/"+" affordance with a
    lightweight placeholder while a "+" click is pending block selection. */
+function insertionZoneBoxHtml(index) {
+  return `
+    <div class="insertion-zone-box">
+      <div class="insertion-zone-title">
+        <span class="insertion-zone-title-default">Insert Block Here</span>
+        <span class="insertion-zone-title-drop">Drop Block Here</span>
+      </div>
+      <div class="insertion-zone-hint">Select a block from the library or drag a block here</div>
+      <button class="btn btn-ghost btn-sm mt-8 insertion-zone-cancel" data-drop-index="${index}">Cancel</button>
+    </div>
+  `;
+}
+
 function insertionZoneHtml(index, extraClass) {
   return `
     <div class="drop-zone insertion-zone${extraClass ? ' ' + extraClass : ''}" data-drop-index="${index}">
-      <div class="insertion-zone-box">
-        <div class="insertion-zone-title">Insert Block Here</div>
-        <div class="insertion-zone-hint">Select a block from the library or drag a block here</div>
-      </div>
+      ${insertionZoneBoxHtml(index)}
     </div>
   `;
 }
@@ -264,10 +298,7 @@ function renderCanvasBlocks(blocks) {
     if (BuilderUI.insertZoneIndex === 0) {
       return `
         <div class="empty-canvas fade-in insertion-zone" id="empty-canvas-drop" data-drop-index="0">
-          <div class="insertion-zone-box">
-            <div class="insertion-zone-title">Insert Block Here</div>
-            <div class="insertion-zone-hint">Select a block from the library or drag a block here</div>
-          </div>
+          ${insertionZoneBoxHtml(0)}
         </div>
       `;
     }
@@ -294,6 +325,7 @@ const RADIUS_MAP = { sharp: '4px', soft: 'var(--r-lg)', round: 'var(--r-xl)' };
 
 const TEXT_BG_MAP = { light: '#ffffff', grey: '#f1f1f4', dark: 'var(--ink-900)' };
 const TEXT_COLOR_MAP = { black: '#1a1a1a', white: '#ffffff', grey: '#8a8a94' };
+const QUOTE_ACCENT_BG_MAP = { lavender: 'var(--pastel-lavender)', cyan: 'var(--pastel-cyan)', pink: 'var(--pastel-pink)', peach: 'var(--pastel-peach)' };
 
 /* Default icon + accent colour per Statement type. Background/border inherit the theme by default. */
 const STATEMENT_DEFAULTS = {
@@ -344,7 +376,16 @@ function statementBlockExtraStyle(block) {
     const bc = ds.borderColor || 'color-mix(in srgb, var(--theme-primary, #7C3AED) 30%, transparent)';
     style += `border:${bw}px solid ${bc};`;
   }
+  style += `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};`;
   return style;
+}
+
+/* Wrapper-level style additions for Quote blocks: top/bottom padding only
+   (left/right padding and content width are inherited from the page layout). */
+function quoteBlockExtraStyle(block) {
+  if (blockCategory(block.type) !== 'Quotes') return '';
+  const ds = block.design || {};
+  return `padding-top:${ds.paddingTop ?? 22}px; padding-bottom:${ds.paddingBottom ?? 22}px;`;
 }
 
 /* Typography style for an individual editable text element within a Text block. */
@@ -390,8 +431,13 @@ function applyStatementStylesToDom(block, index) {
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
     content.style.cssText = `padding:22px; ${alignStyle} ${statementBlockExtraStyle(block)}`;
   }
+  const data = block.data || {};
   wrapper.querySelectorAll('.editable-text').forEach(elx => {
-    elx.style.cssText = `flex:1; line-height:1.6; ${textTypographyStyle(ds, 15)}`;
+    if (elx.dataset.role === 'title') {
+      elx.style.cssText = `font-weight:700; margin-bottom:4px; ${textTypographyStyle(ds, 15)}${data.titleAlign ? `text-align:${data.titleAlign};` : ''}`;
+    } else {
+      elx.style.cssText = `line-height:1.6; ${textTypographyStyle(ds, 15)}${data.textAlign ? `text-align:${data.textAlign};` : ''}`;
+    }
   });
   const iconEl = wrapper.querySelector('.stmt-icon-display');
   if (iconEl) {
@@ -400,9 +446,32 @@ function applyStatementStylesToDom(block, index) {
   }
 }
 
+/* Re-apply Quote block padding directly to the DOM for live preview during slider drags. */
+function applyQuoteStylesToDom(block, index) {
+  const wrapper = document.querySelector(`.canvas-block[data-index="${index}"]`);
+  if (!wrapper) return;
+  const ds = block.design || {};
+  const content = wrapper.querySelector('.block-content-area');
+  if (content) {
+    const alignStyle = ds.align ? `text-align:${ds.align};` : '';
+    content.style.cssText = `padding:22px; ${alignStyle} ${quoteBlockExtraStyle(block)}`;
+  }
+  if (block.type === 'quote_image') {
+    const overlay = wrapper.querySelector('.quote-image-overlay');
+    if (overlay) {
+      const overlayOpacity = ds.overlayOpacity ?? 35;
+      overlay.style.background = `rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)})`;
+    }
+    wrapper.querySelectorAll('.editable-text[data-field="text"], .editable-text[data-field="author"]').forEach(elx => {
+      elx.style.color = TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor || '#fff';
+    });
+  }
+}
+
 /* Dispatch to the right live-preview updater based on block category. */
 function applyLivePreview(block, index) {
   if (blockCategory(block.type) === 'Statements') applyStatementStylesToDom(block, index);
+  else if (blockCategory(block.type) === 'Quotes') applyQuoteStylesToDom(block, index);
   else applyBlockStylesToDom(block, index);
 }
 
@@ -466,7 +535,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel'].includes(block.type);
   const cardlessSelectionStyle = isTextAuthoringBlock
     ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
     : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
@@ -486,7 +555,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
         <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">⧉</button>
         <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✕</button>${moveButtons}
       </div>
-      <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}">
+      <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
       </div>
     </div>
@@ -644,6 +713,11 @@ function ensureRichTextToolbar() {
           const r = parseInt(active.elx.dataset.row), c = parseInt(active.elx.dataset.col);
           cellAlign[r] = cellAlign[r] || [];
           cellAlign[r][c] = btn.dataset.val;
+        } else if (active.elx.dataset.field === 'quoteText' || active.elx.dataset.field === 'quoteAuthor') {
+          const quotes = active.block.data.quotes || (active.block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+          const i = parseInt(active.elx.dataset.col);
+          quotes[i] = quotes[i] || {};
+          quotes[i][active.elx.dataset.field === 'quoteText' ? 'textAlign' : 'authorAlign'] = btn.dataset.val;
         } else {
           active.block.data[active.elx.dataset.field + 'Align'] = btn.dataset.val;
         }
@@ -691,6 +765,11 @@ function syncRichTextField(block, elx) {
     const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
     const r = parseInt(elx.dataset.row), c = parseInt(elx.dataset.col);
     if (rows[r]) rows[r][c] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'quoteText' || elx.dataset.field === 'quoteAuthor') {
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    const i = parseInt(elx.dataset.col);
+    quotes[i] = quotes[i] || {};
+    quotes[i][elx.dataset.field === 'quoteText' ? 'text' : 'author'] = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
   }
@@ -722,6 +801,11 @@ function hideRichTextToolbar() {
 }
 
 const DEFAULT_COLUMNS = ['Column 1 content...', 'Column 2 content...'];
+const DEFAULT_QUOTES = [
+  { text: 'Curiosity over certainty.' },
+  { text: 'Clarity over cleverness.' },
+  { text: 'People over process.' },
+];
 const DEFAULT_TABLE_ROWS = [
   ['Step', 'Owner', 'Timeline'],
   ['Submit form', 'Employee', 'Day 1'],
@@ -766,26 +850,101 @@ function renderBlockContent(block, editable) {
       const iconColor = ds.iconColor || def.iconColor || 'inherit';
       return `<div class="flex gap-12" style="align-items:flex-start;">
         ${icon ? `<span class="stmt-icon-display" style="font-size:${iconSize}px; line-height:1.4; color:${iconColor}; flex-shrink:0;">${escapeHtml(icon)}</span>` : ''}
-        <div class="editable-text" data-role="body" data-field="text" ${ce} data-placeholder="${def.label || 'Statement'} text..." style="flex:1; line-height:1.6; ${textTypographyStyle(ds, 15)}">${escapeHtml(d.text || `${def.label || 'Statement'}: Add your message here.`)}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="editable-text" data-role="title" data-field="title" data-richtext="true" ${ce} data-placeholder="${def.label || 'Statement'}" style="font-weight:700; margin-bottom:4px; ${textTypographyStyle(ds, 15)}${d.titleAlign ? `text-align:${d.titleAlign};` : ''}">${richTextOut(d.title != null ? d.title : (def.label || 'Statement'))}</div>
+          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Add your message here..." style="line-height:1.6; ${textTypographyStyle(ds, 15)}${d.textAlign ? `text-align:${d.textAlign};` : ''}">${richTextOut(d.text || 'Add your message here.')}</div>
+        </div>
       </div>`;
     }
 
-    case 'quote1': case 'quote2': case 'quote3': case 'quote4':
-      return `<blockquote style="border-left:4px solid var(--indigo); padding-left:16px; font-style:italic; color:var(--ink-700);">
-        "${d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.'}"
-        <footer class="text-sm text-muted mt-8" style="font-style:normal;">— ${d.author || 'Lumio Team'}</footer>
-      </blockquote>`;
-    case 'quote_image':
-      return `<div style="background:var(--gradient-primary); border-radius:var(--r-md); padding:40px; text-align:center; color:#fff;">
-        <p style="font-size:18px; font-style:italic;">"${d.text || 'Progress over perfection.'}"</p>
-        <p class="text-sm mt-12">— ${d.author || 'Company Values'}</p>
+    case 'quote1': {
+      // Elegant/simple testimonial — small circular avatar centred above, quote centred, author centred below.
+      const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
+      const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
+      return `<div style="text-align:center;">
+        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 12px; display:block;" />` : ''}
+        <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
+        <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
       </div>`;
+    }
+    case 'quote2': {
+      // Avatar centred above, large quote typography, author highlighted in theme/accent colour.
+      const textStyle = `${textTypographyStyle(ds, 22)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
+      const authorStyle = `${textTypographyStyle(ds, 14)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
+      return `<div style="text-align:center;">
+        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 14px; display:block;" />` : ''}
+        <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-weight:600; line-height:1.4; ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
+        <div class="editable-text mt-12" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="font-weight:600; color:var(--theme-primary, var(--indigo)); ${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
+      </div>`;
+    }
+    case 'quote3': {
+      // Avatar left, quote and author right — horizontal layout, stacks on mobile.
+      const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : ''}`;
+      const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : ''}`;
+      return `<div class="quote3-layout" style="display:flex; gap:16px; align-items:flex-start;">
+        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
+        <div style="flex:1; min-width:0;">
+          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
+          <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
+        </div>
+      </div>`;
+    }
+    case 'quote4': {
+      // Editorial/testimonial style — avatar offset beside quote in an accent-tinted card, distinct hierarchy from quote3.
+      const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
+      const textStyle = `${textTypographyStyle(ds, 17)}${d.textAlign ? `text-align:${d.textAlign};` : ''}`;
+      const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
+      return `<div class="quote4-layout" style="display:flex; gap:20px; align-items:center; background:${accentBg}; border-radius:var(--r-md); padding:24px;">
+        <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:8px; width:80px;">
+          ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:64px; height:64px; border-radius:50%; object-fit:cover;" />` : ''}
+          <div class="editable-text text-sm text-muted" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
+        </div>
+        <div style="flex:1; min-width:0; border-left:3px solid var(--theme-primary, var(--indigo)); padding-left:16px;">
+          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-weight:500; line-height:1.5; ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
+        </div>
+      </div>`;
+    }
+    case 'quote_image': {
+      const bgStyle = d.background ? `background-image:url('${d.background}'); background-size:cover; background-position:center;` : 'background:var(--gradient-primary);';
+      const overlayOpacity = ds.overlayOpacity ?? 35;
+      const overlay = d.background ? `<div class="quote-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)}); border-radius:var(--r-md);"></div>` : '';
+      return `<div style="${bgStyle} border-radius:var(--r-md); padding:40px; text-align:center; color:#fff; position:relative; overflow:hidden;">
+        ${overlay}
+        <div style="position:relative; z-index:1;">
+          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; ${textTypographyStyle(ds, 18)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}">${richTextOut(d.text || 'Progress over perfection.')}</div>
+          <div class="flex items-center gap-8 mt-12" style="justify-content:center;">
+            ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
+            <div class="editable-text text-sm" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : ''}">${richTextOut(d.author || 'Company Values')}</div>
+          </div>
+        </div>
+      </div>`;
+    }
     case 'quote_carousel': {
-      const quotes = (d.quotes && d.quotes.length) ? d.quotes : [{text:'“Curiosity over certainty.”'},{text:'“Clarity over cleverness.”'},{text:'“People over process.”'}];
-      return `<div class="flex gap-12" style="overflow-x:auto;">
-        ${quotes.map(q => `
-          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;"><p class="text-sm">${q.text||''}</p>${q.author?`<p class="text-sm text-muted mt-8">— ${q.author}</p>`:''}</div>
+      const quotes = (d.quotes && d.quotes.length) ? d.quotes : DEFAULT_QUOTES;
+      return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
+        ${quotes.map((q, i) => `
+          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none; position:relative;">
+            ${editable ? `<button class="btn-icon quote-carousel-remove" data-qindex="${i}" title="Remove quote" aria-label="Remove quote" ${quotes.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${quotes.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
+            ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
+            <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
+            <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
+            ${editable ? `<div class="mt-8">
+              <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Avatar</label>
+              <div class="flex items-center gap-8">
+                <div class="media-thumb" style="width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--surface-0); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:14px; opacity:0.5;">🖼️</span>`}
+                </div>
+                <button class="btn btn-secondary btn-sm quote-carousel-avatar-trigger" data-qindex="${i}">${q.avatar ? '🔄 Replace' : '📤 Upload'}</button>
+                ${q.avatar ? `<button class="btn btn-ghost btn-sm quote-carousel-avatar-remove" data-qindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
+              </div>
+            </div>` : ''}
+            ${editable ? `<div class="flex gap-4 mt-8">
+              <button class="btn-icon quote-carousel-move-left" data-qindex="${i}" title="Move left" aria-label="Move quote left" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">←</button>
+              <button class="btn-icon quote-carousel-move-right" data-qindex="${i}" title="Move right" aria-label="Move quote right" ${i === quotes.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === quotes.length - 1 ? '0.4' : '1'};">→</button>
+            </div>` : ''}
+          </div>
         `).join('')}
+        ${editable ? `<button class="btn btn-secondary btn-sm quote-carousel-add" style="min-width:140px; align-self:center;">+ Add Quote</button>` : ''}
       </div>`;
     }
 
@@ -1450,7 +1609,9 @@ function renderRightTabContent(block, index, course) {
     case 'image':
       return contentFields([['Alt text', 'label', d.label, 'input']]) + aiActions(true) + `<button class="btn btn-secondary w-full mt-8">📤 Replace image</button>`;
     case 'quote1': case 'quote2': case 'quote3': case 'quote4': case 'quote_image':
-      return contentFields([['Quote', 'text', d.text, 'textarea'], ['Attribution', 'author', d.author, 'input']]) + aiActions();
+      return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
+    case 'quote_carousel':
+      return `<p class="text-sm text-muted">Click directly on a quote's text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment). Use the + Add Quote button to add a new card, and the arrow / × controls on each card to reorder or remove quotes.</p>` + aiActions();
     case 'list_numbered': case 'list_checkbox': case 'list_bullet':
       return contentFields([['Heading', 'heading', d.heading, 'input']]) +
         `<div class="field"><label>Items (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>` + aiActions();
@@ -1521,8 +1682,6 @@ function renderRightTabContent(block, index, course) {
       ]) + `<p class="text-sm text-muted mt-8">Paste a direct audio file URL (.mp3, .wav).</p>`;
     case 'carousel':
       return `<div class="field"><label>Slides (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>` + aiActions();
-    case 'quote_carousel':
-      return `<div class="field"><label>Quotes (one per line, format: Quote text | Author)</label><textarea class="textarea content-field" data-field="quotes" rows="5">${(d.quotes||[]).map(q=>`${q.text||''}${q.author?` | ${q.author}`:''}`).join('\n')}</textarea></div>` + aiActions();
     case 'scenario':
       return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
         `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
@@ -1537,6 +1696,45 @@ function segControl(id, prop, options, current) {
   </div>`;
 }
 
+/* Avatar + background image upload controls for the Quote on Image block. */
+function quoteImageUploadFields(block) {
+  const d = block.data || {};
+  return `
+    ${mediaPickerAvatarField(d, 'avatar', 'Avatar Image', 'Avatar')}
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Background Image</div>
+      <div class="flex items-center gap-12 mt-8">
+        <div class="media-thumb" style="width:48px; height:36px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ${d.background ? `<img src="${d.background}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+        </div>
+        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="background" data-title="Background Image">${d.background ? '🔄 Replace Background' : '📤 Upload Background'}</button>
+        ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="background" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+      </div>
+    </div>`;
+}
+
+/* Generic avatar field using the shared Media Picker (thumbnail + Upload/Replace + Remove). */
+function mediaPickerAvatarField(d, target, title, label, noBorder) {
+  return `
+    <div class="prop-section" ${noBorder ? 'style="border-bottom:none;"' : ''}>
+      <div class="prop-section-title">${label}</div>
+      <div class="flex items-center gap-12 mt-8">
+        <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ${d[target] ? `<img src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+        </div>
+        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
+        ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+      </div>
+    </div>`;
+}
+
+/* Avatar-only upload section for Quote Style 1-4 (no background image). */
+function quoteAvatarOnlyFields(block) {
+  const d = block.data || {};
+  return `
+    ${mediaPickerAvatarField(d, 'avatar', 'Avatar Image', 'Avatar', true)}`;
+}
+
 function blockTypeDesignFields(block, ds) {
   const cat = blockCategory(block.type);
   switch (cat) {
@@ -1546,12 +1744,54 @@ function blockTypeDesignFields(block, ds) {
           <div class="prop-section-title">Text Size</div>
           ${segControl('design-textsize', 'textSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.textSize || 'md')}
         </div>`;
-    case 'Quotes':
+    case 'Quotes': {
+      const quoteFontColorOptions = [
+        { id: 'theme', label: 'Theme' },
+        { id: 'black', label: 'Black' },
+        { id: 'white', label: 'White' },
+        { id: 'grey', label: 'Grey' },
+      ];
+      const activeQuoteFontColor = (!ds.fontColor || ds.fontColor === 'theme') ? 'theme' : (TEXT_COLOR_MAP[ds.fontColor] ? ds.fontColor : 'custom');
       return `
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Style Variant</div>
           ${segControl('design-variant', 'accent', [{id:'lavender',label:'Lavender'},{id:'cyan',label:'Cyan'},{id:'pink',label:'Pink'},{id:'peach',label:'Peach'}], ds.accent || 'lavender')}
-        </div>`;
+        </div>
+        ${block.type === 'quote_image' ? `
+        <div class="prop-section">
+          <div class="prop-section-title">Text Colour</div>
+          <div class="flex gap-8 items-center">
+            ${quoteFontColorOptions.map(o => `<div class="text-color-swatch ${activeQuoteFontColor === o.id ? 'selected' : ''}" data-color="${o.id}" title="${o.label}"
+              style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+              border:${activeQuoteFontColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
+            <input type="color" class="text-color-custom" title="Custom colour" value="${activeQuoteFontColor === 'custom' ? ds.fontColor : '#000000'}"
+              style="width:26px; height:26px; padding:0; border:${activeQuoteFontColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
+          </div>
+        </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Overlay</div>
+          <p class="text-sm text-muted mb-8">Overlay Darkness</p>
+          <div class="flex items-center gap-8">
+            <input type="range" class="design-range" data-prop="overlayOpacity" data-suffix="%" min="0" max="80" value="${ds.overlayOpacity ?? 35}" style="flex:1;" />
+            <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.overlayOpacity ?? 35}%</span>
+          </div>
+        </div>
+        ` : ''}
+        <div class="prop-section">
+          <div class="prop-section-title">Spacing</div>
+          <p class="text-sm text-muted mb-8">Top Padding</p>
+          <div class="flex items-center gap-8">
+            <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 22}" style="flex:1;" />
+            <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 22}px</span>
+          </div>
+          <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+          <div class="flex items-center gap-8">
+            <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 22}" style="flex:1;" />
+            <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 22}px</span>
+          </div>
+        </div>
+        ${block.type === 'quote_image' ? quoteImageUploadFields(block) : block.type === 'quote_carousel' ? '' : quoteAvatarOnlyFields(block)}`;
+    }
     case 'Images': case 'Gallery':
       return `
         <div class="prop-section" style="border-bottom:none;">
@@ -1795,6 +2035,31 @@ function bindBuilderEvents(course, lesson, blocks) {
     renderLessonBuilder(lesson.id);
   });
 
+  // Explicit Cancel button on an active insertion zone — closes it without inserting a block.
+  app.querySelectorAll('.insertion-zone-cancel').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    BuilderUI.insertZoneIndex = null;
+    renderLessonBuilder(lesson.id);
+  }));
+
+  // Click anywhere outside the active insertion zone (including outside the
+  // canvas, e.g. the block library or right panel) closes it without inserting.
+  if (BuilderUI._insertZoneOutsideHandler) {
+    document.removeEventListener('click', BuilderUI._insertZoneOutsideHandler);
+    BuilderUI._insertZoneOutsideHandler = null;
+  }
+  if (BuilderUI.insertZoneIndex !== null) {
+    BuilderUI._insertZoneOutsideHandler = (e) => {
+      if (BuilderUI.insertZoneIndex === null) return;
+      if (e.target.closest('.insertion-zone')) return;
+      if (e.target.closest('.drop-zone-add')) return;
+      if (e.target.closest('.block-tile')) return;
+      BuilderUI.insertZoneIndex = null;
+      renderLessonBuilder(lesson.id);
+    };
+    document.addEventListener('click', BuilderUI._insertZoneOutsideHandler);
+  }
+
   // Block toolbar actions
   app.querySelectorAll('.del-block-btn').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1968,6 +2233,45 @@ function bindBuilderEvents(course, lesson, blocks) {
     });
   });
 
+  // Quote Carousel — add / remove / reorder quote cards
+  app.querySelectorAll('.quote-carousel-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    if (quotes.length <= 1) return;
+    quotes.splice(parseInt(btn.dataset.qindex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.quote-carousel-move-left').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    const i = parseInt(btn.dataset.qindex);
+    if (i <= 0) return;
+    [quotes[i - 1], quotes[i]] = [quotes[i], quotes[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.quote-carousel-move-right').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    const i = parseInt(btn.dataset.qindex);
+    if (i >= quotes.length - 1) return;
+    [quotes[i + 1], quotes[i]] = [quotes[i], quotes[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.quote-carousel-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    quotes.push({ text: '', author: '' });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
   // Text blocks — Typography / Spacing sliders (live preview, no full re-render mid-drag)
   app.querySelectorAll('.design-range').forEach(r => {
     r.addEventListener('input', () => {
@@ -1976,7 +2280,7 @@ function bindBuilderEvents(course, lesson, blocks) {
       block.design = block.design || {};
       block.design[r.dataset.prop] = parseInt(r.value);
       const out = r.parentElement.querySelector('.range-val');
-      if (out) out.textContent = r.value + 'px';
+      if (out) out.textContent = r.value + (r.dataset.suffix || 'px');
       applyLivePreview(block, BuilderUI.selected);
     });
     r.addEventListener('change', () => flashSaveStatus());
@@ -2057,6 +2361,68 @@ function bindBuilderEvents(course, lesson, blocks) {
     };
     reader.readAsDataURL(file);
   });
+
+  // Media Picker — generic image field triggers (e.g. Quote avatars, Quote on Image background)
+  app.querySelectorAll('.media-picker-trigger').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const target = btn.dataset.target;
+    openMediaPicker({
+      title: btn.dataset.title || 'Image',
+      currentSrc: block.data && block.data[target],
+      onInsert: (result) => {
+        block.data = block.data || {};
+        block.data[target] = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        if (block.data) delete block.data[target];
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.media-picker-remove').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block || !block.data) return;
+    delete block.data[btn.dataset.target];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Quote Carousel — per-quote avatar via Media Picker
+  app.querySelectorAll('.quote-carousel-avatar-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const i = parseInt(btn.dataset.qindex);
+    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
+    quotes[i] = quotes[i] || {};
+    openMediaPicker({
+      title: 'Avatar Image',
+      currentSrc: quotes[i].avatar,
+      onInsert: (result) => {
+        quotes[i].avatar = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete quotes[i].avatar;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.quote-carousel-avatar-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block || !block.data || !block.data.quotes) return;
+    const i = parseInt(btn.dataset.qindex);
+    if (block.data.quotes[i]) delete block.data.quotes[i].avatar;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
 
   // Statement blocks — icon controls
   app.querySelector('.stmt-icon-remove-toggle')?.addEventListener('change', (e) => {
@@ -2368,19 +2734,32 @@ function bindDragAndDrop(lesson, blocks) {
   });
 
   // Drop zones (between/above/below blocks, and end-of-canvas) — thin
-  // insertion lines that highlight on dragover.
+  // insertion lines that highlight on dragover. When an insertion zone is
+  // active, BuilderUI.insertZoneIndex is the SOLE insertion target: every
+  // drop anywhere on the canvas resolves to that index, and only the
+  // insertion zone itself shows drag-over feedback.
   app.querySelectorAll('.drop-zone').forEach(zone => {
+    const isInsertionZone = zone.classList.contains('insertion-zone');
+    let dragDepth = 0;
+    zone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragDepth++;
+      if (isInsertionZone || BuilderUI.insertZoneIndex === null) zone.classList.add('drag-active');
+    });
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
-      zone.classList.add('drag-active');
+      if (isInsertionZone || BuilderUI.insertZoneIndex === null) zone.classList.add('drag-active');
     });
     zone.addEventListener('dragleave', () => {
-      zone.classList.remove('drag-active');
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) zone.classList.remove('drag-active');
     });
     zone.addEventListener('drop', (e) => {
+      dragDepth = 0;
       zone.classList.remove('drag-active');
+      const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : parseInt(zone.dataset.dropIndex);
       BuilderUI.insertZoneIndex = null;
-      handleLibraryOrCanvasDrop(e, parseInt(zone.dataset.dropIndex), blocks, lesson);
+      handleLibraryOrCanvasDrop(e, targetIndex, blocks, lesson);
     });
   });
 
@@ -2405,19 +2784,32 @@ function bindDragAndDrop(lesson, blocks) {
   // Empty canvas drop
   const emptyDrop = app.querySelector('#empty-canvas-drop');
   if (emptyDrop) {
+    let emptyDragDepth = 0;
+    emptyDrop.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      emptyDragDepth++;
+      emptyDrop.classList.add('drag-active');
+    });
     emptyDrop.addEventListener('dragover', (e) => { e.preventDefault(); emptyDrop.classList.add('drag-active'); });
-    emptyDrop.addEventListener('dragleave', () => emptyDrop.classList.remove('drag-active'));
+    emptyDrop.addEventListener('dragleave', () => {
+      emptyDragDepth = Math.max(0, emptyDragDepth - 1);
+      if (emptyDragDepth === 0) emptyDrop.classList.remove('drag-active');
+    });
     emptyDrop.addEventListener('drop', (e) => {
       e.preventDefault();
+      emptyDragDepth = 0;
       emptyDrop.classList.remove('drag-active');
+      const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
+      BuilderUI.insertZoneIndex = null;
       const data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
       if (data.source === 'library') {
-        insertBlockAndFocus(data.blockId, blocks, lesson, blocks.length);
+        insertBlockAndFocus(data.blockId, blocks, lesson, targetIndex);
       }
     });
   }
 
   // Unused canvas space below the last block also resolves to "add to end"
+  // (or to the active insertion zone, if one exists).
   const canvas = app.querySelector('#lesson-canvas');
   if (canvas && blocks.length > 0) {
     canvas.addEventListener('dragover', (e) => {
@@ -2425,7 +2817,9 @@ function bindDragAndDrop(lesson, blocks) {
     });
     canvas.addEventListener('drop', (e) => {
       if (e.target !== canvas) return;
-      handleLibraryOrCanvasDrop(e, blocks.length, blocks, lesson);
+      const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
+      BuilderUI.insertZoneIndex = null;
+      handleLibraryOrCanvasDrop(e, targetIndex, blocks, lesson);
     });
   }
 }

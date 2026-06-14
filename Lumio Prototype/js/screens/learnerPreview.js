@@ -151,10 +151,11 @@ function learnerShell(course, bodyHtml, opts = {}) {
         </div>
         <div style="flex:1; overflow:auto; display:flex; justify-content:center; padding:0 0 24px;">
           <div style="${frameStyle}">
-            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column;">${bodyHtml}</main>
+            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
           </div>
         </div>
       </div>
+      ${canvasStyles()}
     `;
     app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
     if (sameLesson) {
@@ -184,11 +185,12 @@ function learnerShell(course, bodyHtml, opts = {}) {
         ${courseNavSidebar(course, progress, opts.activeLessonId || null)}
         <div style="flex:1; overflow:auto; display:flex; justify-content:center; background:var(--surface-0);">
           <div style="${frameStyle}">
-            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column;">${bodyHtml}</main>
+            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
           </div>
         </div>
       </div>
     </div>
+    ${canvasStyles()}
   `;
   app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
   app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
@@ -309,7 +311,7 @@ function renderLearnerBlocks(blocks, ctx) {
     const block = blocks[i];
     const ds = block.design || {};
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}`;
+    const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}`;
     const { treatment } = DesignSystem.resolveBlockStyle(block);
     let wrapperStyle;
     if (treatment === 'cardless') {
@@ -444,19 +446,16 @@ function learnerCarouselBlock(block, index, ctx) {
 /* ---- Quote Carousel ---- */
 function learnerQuoteCarouselBlock(block, index, ctx) {
   const d = block.data || {};
-  const quotes = (d.quotes && d.quotes.length) ? d.quotes : [
-    { text: '“Curiosity over certainty.”' },
-    { text: '“Clarity over cleverness.”' },
-    { text: '“People over process.”' },
-  ];
+  const quotes = (d.quotes && d.quotes.length) ? d.quotes : DEFAULT_QUOTES;
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
   const q = quotes[active];
   return `
     <div>
       <div class="card card-pad" style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender);">
-        <p class="text-sm">${escapeHtml(q.text || '')}</p>
-        ${q.author ? `<p class="text-sm text-muted mt-8">— ${escapeHtml(q.author)}</p>` : ''}
+        ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
+        <p class="text-sm"${q.textAlign ? ` style="text-align:${q.textAlign};"` : ''}>${richTextOut(q.text || '')}</p>
+        ${q.author ? `<p class="text-sm text-muted mt-8"${q.authorAlign ? ` style="text-align:${q.authorAlign};"` : ''}>${richTextOut(q.author)}</p>` : ''}
       </div>
       <div class="flex items-center justify-between mt-8">
         <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Previous quote">← Prev</button>
