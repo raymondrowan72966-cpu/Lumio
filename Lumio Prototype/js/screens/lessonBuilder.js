@@ -652,7 +652,20 @@ function applyLivePreview(block, index) {
   else if (blockCategory(block.type) === 'Quotes') applyQuoteStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Lists') applyListStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') applyImageStylesToDom(block, index);
+  else if (block.type === 'audio') applyAudioStylesToDom(block, index);
   else applyBlockStylesToDom(block, index);
+}
+
+/* Re-apply Audio block padding directly to the DOM for live preview during slider drags. */
+function applyAudioStylesToDom(block, index) {
+  const wrapper = document.querySelector(`.canvas-block[data-index="${index}"]`);
+  if (!wrapper) return;
+  const ds = block.design || {};
+  const outer = wrapper.querySelector('.block-content-area > div');
+  if (outer) {
+    outer.style.paddingTop = `${ds.paddingTop ?? 22}px`;
+    outer.style.paddingBottom = `${ds.paddingBottom ?? 22}px`;
+  }
 }
 
 /* Re-apply Image/Gallery block overlay opacity directly to the DOM for live preview during slider drags. */
@@ -684,6 +697,8 @@ const CARDLESS_BLOCK_TYPES = new Set([
   'image', 'image_text', 'text_on_image',
   // Gallery
   'carousel', 'column_grid',
+  // Multimedia
+  'audio', 'video', 'file',
   // Dividers
   'continue', 'numbered_divider', 'line_divider',
 ]);
@@ -1301,15 +1316,130 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
 
-    case 'audio':
-      return `<div class="card card-pad flex items-center gap-12" style="background:var(--pastel-cyan); border:none;"><span style="font-size:22px;">🔊</span><div style="flex:1;"><div style="font-weight:600; font-size:13px;">${d.title || 'Welcome message from our CEO'}</div><div style="height:6px; background:#fff; border-radius:99px; margin-top:8px;"><div style="width:35%; height:100%; background:var(--cyan); border-radius:99px;"></div></div></div><span class="text-sm text-muted">2:14</span></div>`;
-    case 'video':
-      return `<div style="background:var(--ink-900); border-radius:var(--r-md); height:200px; display:flex; align-items:center; justify-content:center; color:#fff; position:relative;">
-        <span style="font-size:40px;">▶</span>
-        <span class="text-sm" style="position:absolute; bottom:10px; left:14px; opacity:0.8;">${d.title || 'Welcome video — 1:32'}</span>
+    case 'audio': {
+      const audioSettings = block.settings || {};
+      const widthMap = { small: '320px', medium: '480px', large: '640px', full: '100%' };
+      const audioWidth = widthMap[ds.width] || widthMap.medium;
+      const audioRadius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const paddingTop = ds.paddingTop ?? 22;
+      const paddingBottom = ds.paddingBottom ?? 22;
+      const allowDownload = audioSettings.allowDownload !== false;
+      const showSpeed = audioSettings.showPlaybackSpeed !== false;
+      const loop = !!audioSettings.loop;
+      const autoplay = !editable && !!audioSettings.autoplay;
+      const src = d.src;
+
+      const innerContent = src
+        ? `<audio class="block-audio-el" controls ${loop ? 'loop' : ''} ${autoplay ? 'autoplay' : ''} ${!allowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block;" src="${src}"></audio>
+          ${showSpeed ? `
+            <div class="flex items-center gap-8 mt-8">
+              <span class="text-sm text-muted">Speed</span>
+              <select class="input" style="width:auto; padding:4px 8px; font-size:13px;" onchange="this.closest('.audio-player-wrap').querySelector('.block-audio-el').playbackRate=parseFloat(this.value)">
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+            </div>` : ''}`
+        : `<div class="flex items-center gap-12"><span style="font-size:22px;">🔊</span><div class="text-sm text-muted">${editable ? 'No audio uploaded — use the Content tab to upload an audio file.' : 'Audio unavailable.'}</div></div>`;
+
+      const showCaption = editable || d.caption;
+      const captionHtml = showCaption
+        ? `<div class="editable-text text-sm text-muted mt-8" data-role="caption" data-field="caption" data-richtext="true" ${ce} data-placeholder="Add a caption (optional)" style="text-align:center;">${richTextOut(d.caption || '')}</div>`
+        : '';
+
+      const transcriptHtml = d.transcript
+        ? `<details class="audio-transcript mt-12">
+            <summary style="cursor:pointer; font-weight:600; font-size:13px;">Transcript</summary>
+            <div class="text-sm mt-8" style="white-space:pre-wrap; line-height:1.6;">${escapeHtml(d.transcript)}</div>
+          </details>`
+        : '';
+
+      return `<div style="padding-top:${paddingTop}px; padding-bottom:${paddingBottom}px;">
+        <div style="max-width:${audioWidth}; margin:0 auto;">
+          <div class="audio-player-wrap" style="border-radius:${audioRadius}; overflow:hidden;">
+            ${innerContent}
+          </div>
+          ${captionHtml}
+          ${transcriptHtml}
+        </div>
       </div>`;
-    case 'file':
-      return `<div class="card card-pad flex items-center gap-12" style="border:1px dashed var(--border);"><span style="font-size:22px;">📎</span><div><div style="font-weight:600; font-size:13px;">${d.filename || 'Employee-Handbook.pdf'}</div><div class="text-sm text-muted">${d.filesize || '2.4 MB'}${d.url ? ' · linked' : ''}</div></div></div>`;
+    }
+    case 'video': {
+      const videoSettings = block.settings || {};
+      const videoWidthMap = { small: '320px', medium: '480px', large: '640px', full: '100%' };
+      const videoWidth = videoWidthMap[ds.width] || videoWidthMap.medium;
+      const videoRadius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const videoPaddingTop = ds.paddingTop ?? 22;
+      const videoPaddingBottom = ds.paddingBottom ?? 22;
+      const videoAllowDownload = videoSettings.allowDownload !== false;
+      const videoShowSpeed = videoSettings.showPlaybackSpeed !== false;
+      const videoLoop = !!videoSettings.loop;
+      const videoAutoplay = !editable && !!videoSettings.autoplay;
+      const videoSrc = d.src || d.url;
+
+      const videoInner = videoSrc
+        ? `<video class="block-video-el" controls ${videoLoop ? 'loop' : ''} ${videoAutoplay ? 'autoplay muted' : ''} ${!videoAllowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; background:#000;" src="${videoSrc}"></video>
+          ${videoShowSpeed ? `
+            <div class="flex items-center gap-8 mt-8">
+              <span class="text-sm text-muted">Speed</span>
+              <select class="input" style="width:auto; padding:4px 8px; font-size:13px;" onchange="this.closest('.video-player-wrap').querySelector('.block-video-el').playbackRate=parseFloat(this.value)">
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+            </div>` : ''}`
+        : `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file.' : 'Video unavailable.'}</div></div>`;
+
+      const videoShowCaption = editable || d.caption;
+      const videoCaptionHtml = videoShowCaption
+        ? `<div class="editable-text text-sm text-muted mt-8" data-role="caption" data-field="caption" data-richtext="true" ${ce} data-placeholder="Add a caption (optional)" style="text-align:center;">${richTextOut(d.caption || '')}</div>`
+        : '';
+
+      const videoTranscriptHtml = d.transcript
+        ? `<details class="audio-transcript mt-12">
+            <summary style="cursor:pointer; font-weight:600; font-size:13px;">Transcript</summary>
+            <div class="text-sm mt-8" style="white-space:pre-wrap; line-height:1.6;">${escapeHtml(d.transcript)}</div>
+          </details>`
+        : '';
+
+      return `<div style="padding-top:${videoPaddingTop}px; padding-bottom:${videoPaddingBottom}px;">
+        <div style="max-width:${videoWidth}; margin:0 auto;">
+          <div class="video-player-wrap" style="border-radius:${videoRadius}; overflow:hidden;">
+            ${videoInner}
+          </div>
+          ${videoCaptionHtml}
+          ${videoTranscriptHtml}
+        </div>
+      </div>`;
+    }
+    case 'file': {
+      const fileRadius = RADIUS_MAP[ds.radius] || 'var(--r-md)';
+      const filePaddingTop = ds.paddingTop ?? 8;
+      const filePaddingBottom = ds.paddingBottom ?? 8;
+      const fileSrc = d.src;
+      const fileName = d.srcFileName || d.filename;
+      const fileSize = formatFileSize(d.srcFileSize) || d.filesize || '';
+
+      const fileRow = fileName
+        ? `<div class="flex items-center gap-12" style="padding:12px 16px; border:1px solid var(--border); border-radius:${fileRadius};">
+            <span style="font-size:22px;">📎</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName)}</div>
+              <div class="text-sm text-muted">${escapeHtml(fileSize)}</div>
+            </div>
+            ${fileSrc ? `<a href="${fileSrc}" download="${escapeHtml(fileName)}" class="btn btn-secondary btn-sm">Download</a>` : ''}
+          </div>`
+        : `<div class="flex items-center gap-12" style="padding:12px 16px; border:1px solid var(--border); border-radius:${fileRadius};">
+            <span style="font-size:22px;">📎</span>
+            <div class="text-sm text-muted">${editable ? 'No file uploaded — use the Content tab to upload an attachment.' : 'Attachment unavailable.'}</div>
+          </div>`;
+
+      return `<div style="padding-top:${filePaddingTop}px; padding-bottom:${filePaddingBottom}px;">${fileRow}</div>`;
+    }
 
     case 'accordion':
       return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Accordion'}</h3>
@@ -1947,13 +2077,16 @@ function renderImageFamilyPanel(block, index) {
   if (BuilderUI.rightTab === 'content') {
     switch (block.type) {
       case 'image':
-        return contentFields([['Alt text', 'alt', d.alt || d.label || '', 'input']]) +
+        return mediaPickerImageField(d, 'src', 'Image', 'Image') +
+          contentFields([['Alt text', 'alt', d.alt || d.label || '', 'input']]) +
           `<p class="text-sm text-muted mt-8">Click directly on the caption in the canvas to edit it.</p>` + aiActions(true);
       case 'image_text':
-        return contentFields([['Image alt text', 'alt', d.alt || d.imageLabel || '', 'input']]) +
+        return mediaPickerImageField(d, 'src', 'Image', 'Image') +
+          contentFields([['Image alt text', 'alt', d.alt || d.imageLabel || '', 'input']]) +
           `<p class="text-sm text-muted mt-8">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
       case 'text_on_image':
-        return `<p class="text-sm text-muted">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
+        return mediaPickerImageField(d, 'src', 'Background Image', 'Background Image') +
+          `<p class="text-sm text-muted mt-8">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
       case 'carousel':
         return `<p class="text-sm text-muted">Use the controls on each slide to upload an image and add a caption. Use + Add Slide to add more, and the arrow / × controls to reorder or remove slides.</p>` + aiActions();
       case 'column_grid':
@@ -1967,7 +2100,6 @@ function renderImageFamilyPanel(block, index) {
   switch (block.type) {
     case 'image':
       return `
-        ${mediaPickerImageField(d, 'src', 'Image', 'Image')}
         <div class="prop-section">
           <div class="prop-section-title">Layout</div>
           ${segControl('design-imglayout', 'layout', [{id:'centered',label:'Centered'},{id:'full',label:'Full Width'},{id:'banner',label:'Banner'}], ds.layout || 'centered')}
@@ -1978,7 +2110,6 @@ function renderImageFamilyPanel(block, index) {
         </div>`;
     case 'image_text':
       return `
-        ${mediaPickerImageField(d, 'src', 'Image', 'Image')}
         <div class="prop-section">
           <div class="prop-section-title">Image Position</div>
           ${segControl('design-imgpos', 'imagePosition', [{id:'left',label:'Left'},{id:'right',label:'Right'}], ds.imagePosition || 'left')}
@@ -1991,7 +2122,6 @@ function renderImageFamilyPanel(block, index) {
     case 'text_on_image': {
       const activeTextColor = ds.textColor === 'dark' ? 'dark' : 'light';
       return `
-        ${mediaPickerImageField(d, 'src', 'Background Image', 'Background Image')}
         <div class="prop-section">
           <div class="prop-section-title">Overlay Darkness</div>
           <div class="flex items-center gap-8">
@@ -2036,6 +2166,15 @@ function renderRightTabContent(block, index, course) {
   }
   if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') {
     return renderImageFamilyPanel(block, index);
+  }
+  if (block.type === 'audio') {
+    return renderAudioBlockPanel(block, index);
+  }
+  if (block.type === 'video') {
+    return renderVideoBlockPanel(block, index);
+  }
+  if (block.type === 'file') {
+    return renderFileBlockPanel(block, index);
   }
   if (BuilderUI.rightTab === 'design') {
     block.design = block.design || {};
@@ -2157,22 +2296,6 @@ function renderRightTabContent(block, index, course) {
         ['Button label', 'label', d.label, 'input'],
         ['Link URL', 'url', d.url, 'input'],
       ]) + `<div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="content-field" data-field="newTab" ${d.newTab ? 'checked' : ''}/> Open link in new tab</label></div>`;
-    case 'file':
-      return contentFields([
-        ['File name', 'filename', d.filename, 'input'],
-        ['File size', 'filesize', d.filesize, 'input'],
-        ['File URL', 'url', d.url, 'input'],
-      ]);
-    case 'video':
-      return contentFields([
-        ['Video URL', 'url', d.url, 'input'],
-        ['Caption', 'title', d.title, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">Paste a direct video file URL (.mp4) or a YouTube/Vimeo link.</p>`;
-    case 'audio':
-      return contentFields([
-        ['Audio URL', 'url', d.url, 'input'],
-        ['Title', 'title', d.title, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">Paste a direct audio file URL (.mp3, .wav).</p>`;
     case 'scenario':
       return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
         `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
@@ -2244,6 +2367,259 @@ function mediaPickerImageField(d, target, title, label, noBorder) {
     </div>`;
 }
 
+/* Audio file field using the shared Media Picker — Upload/Replace/Remove. */
+function mediaPickerAudioField(d, target, title, label) {
+  const fileName = d[target + 'FileName'];
+  return `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">${label}</div>
+      <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+        <div class="media-thumb" style="width:48px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <span style="font-size:20px;">🎵</span>
+        </div>
+        <div style="flex:1; min-width:80px;">
+          ${d[target]
+            ? `<div class="text-sm" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName || 'Audio file')}</div>`
+            : `<div class="text-sm text-muted">No audio uploaded</div>`}
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="audio" data-title="${title}">${d[target] ? '🔄 Replace Audio' : '📤 Upload Audio'}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove Audio</button>` : ''}
+        </div>
+      </div>
+      <p class="text-sm text-muted mt-8">Supported formats: MP3, WAV, M4A, OGG · Max size 100MB.</p>
+    </div>`;
+}
+
+/* Video file field using the shared Media Picker — Upload/Replace/Remove. */
+function mediaPickerVideoField(d, target, title, label) {
+  const fileName = d[target + 'FileName'];
+  const fileSize = d[target + 'FileSize'];
+  return `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">${label}</div>
+      <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+        <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ${d[target] ? `<video src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" muted></video>` : `<span style="font-size:20px; opacity:0.5;">🎬</span>`}
+        </div>
+        <div style="flex:1; min-width:80px;">
+          ${d[target]
+            ? `<div class="text-sm" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName || 'Video file')}</div>
+               <div class="text-sm text-muted">${formatFileSize(fileSize)}</div>`
+            : `<div class="text-sm text-muted">No video uploaded</div>`}
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="video" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Video'}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        </div>
+      </div>
+      <p class="text-sm text-muted mt-8">Supported formats: MP4, WEBM, MOV · Max size 500MB.</p>
+    </div>`;
+}
+
+/* File attachment field using the shared Media Picker — Upload/Replace/Remove. */
+function mediaPickerFileField(d, target, title, label) {
+  const fileName = d[target + 'FileName'];
+  const fileSize = d[target + 'FileSize'];
+  return `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">${label}</div>
+      <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+        <div class="media-thumb" style="width:48px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <span style="font-size:20px;">📎</span>
+        </div>
+        <div style="flex:1; min-width:80px;">
+          ${d[target]
+            ? `<div class="text-sm" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName || 'Attachment')}</div>
+               <div class="text-sm text-muted">${formatFileSize(fileSize)}</div>`
+            : `<div class="text-sm text-muted">No file uploaded</div>`}
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="file" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Attachment'}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        </div>
+      </div>
+      <p class="text-sm text-muted mt-8">Supported formats: PDF, DOCX, PPTX, XLSX, CSV, TXT, ZIP · Max size 100MB.</p>
+    </div>`;
+}
+
+/* Audio block — Content / Design / Settings panels. */
+function renderAudioBlockPanel(block, index) {
+  block.design = block.design || {};
+  block.settings = block.settings || {};
+  const ds = block.design;
+  const s = block.settings;
+  const d = block.data || {};
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Playback</div>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="autoplay" ${s.autoplay ? 'checked' : ''}/> Autoplay</label>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="loop" ${s.loop ? 'checked' : ''}/> Loop</label>
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Controls</div>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="allowDownload" ${s.allowDownload === false ? '' : 'checked'}/> Allow Download</label>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="showPlaybackSpeed" ${s.showPlaybackSpeed === false ? '' : 'checked'}/> Show Playback Speed</label>
+        <p class="text-sm text-muted mt-8">When enabled, learners can choose a playback speed: 0.75x, 1x, 1.25x, 1.5x, 2x.</p>
+      </div>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'design') {
+    return `
+      <div class="prop-section">
+        <div class="prop-section-title">Width</div>
+        ${segControl('design-audiowidth', 'width', [{id:'small',label:'Small'},{id:'medium',label:'Medium'},{id:'large',label:'Large'},{id:'full',label:'Full Width'}], ds.width || 'medium')}
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Corner Radius</div>
+        ${segControl('design-audioradius', 'radius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.radius || 'soft')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Spacing</div>
+        <p class="text-sm text-muted mb-8">Top Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 22}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 22}px</span>
+        </div>
+        <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 22}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 22}px</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // CONTENT TAB
+  return `
+    ${mediaPickerAudioField(d, 'src', 'Audio File', 'Audio File')}
+    <p class="text-sm text-muted mt-8">Click directly on the caption below the audio player on the canvas to edit it.</p>
+    <div class="field mt-12">
+      <label>Transcript</label>
+      <textarea class="textarea content-field" data-field="transcript" rows="6" placeholder="Add a plain-text transcript (optional)">${d.transcript || ''}</textarea>
+    </div>
+  `;
+}
+
+/* Video block — Content / Design / Settings panels. */
+function renderVideoBlockPanel(block, index) {
+  block.design = block.design || {};
+  block.settings = block.settings || {};
+  const ds = block.design;
+  const s = block.settings;
+  const d = block.data || {};
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Playback</div>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="autoplay" ${s.autoplay ? 'checked' : ''}/> Autoplay</label>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="loop" ${s.loop ? 'checked' : ''}/> Loop</label>
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Controls</div>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="allowDownload" ${s.allowDownload === false ? '' : 'checked'}/> Allow Download</label>
+        <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="settings-field" data-field="showPlaybackSpeed" ${s.showPlaybackSpeed === false ? '' : 'checked'}/> Show Playback Speed</label>
+        <p class="text-sm text-muted mt-8">When enabled, learners can choose a playback speed: 0.75x, 1x, 1.25x, 1.5x, 2x.</p>
+      </div>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'design') {
+    return `
+      <div class="prop-section">
+        <div class="prop-section-title">Width</div>
+        ${segControl('design-videowidth', 'width', [{id:'small',label:'Small'},{id:'medium',label:'Medium'},{id:'large',label:'Large'},{id:'full',label:'Full Width'}], ds.width || 'medium')}
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Corner Radius</div>
+        ${segControl('design-videoradius', 'radius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.radius || 'soft')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Spacing</div>
+        <p class="text-sm text-muted mb-8">Top Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 22}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 22}px</span>
+        </div>
+        <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 22}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 22}px</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // CONTENT TAB
+  return `
+    ${mediaPickerVideoField(d, 'src', 'Video File', 'Video File')}
+    <p class="text-sm text-muted mt-8">Click directly on the caption below the video player on the canvas to edit it.</p>
+    <div class="field mt-12">
+      <label>Transcript</label>
+      <textarea class="textarea content-field" data-field="transcript" rows="6" placeholder="Add a plain-text transcript (optional)">${d.transcript || ''}</textarea>
+    </div>
+    <div class="prop-section mt-16" style="border-bottom:none; border-top:1px solid var(--border); padding-top:16px;">
+      <div class="prop-section-title">Embed via URL (optional)</div>
+      <p class="text-sm text-muted mb-8">Used only if no video file is uploaded above.</p>
+      <input class="input content-field" data-field="url" value="${d.url || ''}" placeholder="https://example.com/video.mp4" />
+    </div>
+  `;
+}
+
+/* File Attachment block — Content / Design / Settings panels. */
+function renderFileBlockPanel(block, index) {
+  block.design = block.design || {};
+  const ds = block.design;
+  const d = block.data || {};
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <p class="text-sm text-muted">No additional settings for this block.</p>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'design') {
+    return `
+      <div class="prop-section">
+        <div class="prop-section-title">Corner Radius</div>
+        ${segControl('design-fileradius', 'radius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.radius || 'soft')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Spacing</div>
+        <p class="text-sm text-muted mb-8">Top Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 8}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 8}px</span>
+        </div>
+        <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+        <div class="flex items-center gap-8">
+          <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 8}" style="flex:1;" />
+          <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 8}px</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // CONTENT TAB
+  return mediaPickerFileField(d, 'src', 'Attachment File', 'Attachment File');
+}
+
 function blockTypeDesignFields(block, ds) {
   const cat = blockCategory(block.type);
   switch (cat) {
@@ -2301,19 +2677,6 @@ function blockTypeDesignFields(block, ds) {
         </div>
         ${block.type === 'quote_image' ? quoteImageUploadFields(block) : block.type === 'quote_carousel' ? '' : quoteAvatarOnlyFields(block)}`;
     }
-    case 'Multimedia':
-      if (block.type === 'file') {
-        return `
-          <div class="prop-section" style="border-bottom:none;">
-            <div class="prop-section-title">Display Style</div>
-            ${segControl('design-attach', 'attachStyle', [{id:'card',label:'Card'},{id:'inline',label:'Inline Link'}], ds.attachStyle || 'card')}
-          </div>`;
-      }
-      return `
-        <div class="prop-section" style="border-bottom:none;">
-          <div class="prop-section-title">Player Style</div>
-          ${segControl('design-player', 'playerStyle', [{id:'minimal',label:'Minimal'},{id:'card',label:'Card'}], ds.playerStyle || 'card')}
-        </div>`;
     case 'Interactive':
       return `
         <div class="prop-section" style="border-bottom:none;">
@@ -2976,17 +3339,30 @@ function bindBuilderEvents(course, lesson, blocks) {
     const block = blocks[BuilderUI.selected];
     if (!block) return;
     const target = btn.dataset.target;
+    const kind = btn.dataset.kind || 'image';
     openMediaPicker({
       title: btn.dataset.title || 'Image',
+      kind,
       currentSrc: block.data && block.data[target],
+      currentFileName: block.data && block.data[target + 'FileName'],
       onInsert: (result) => {
         block.data = block.data || {};
         block.data[target] = result.src;
+        if (kind === 'audio' || kind === 'video' || kind === 'file') {
+          block.data[target + 'FileName'] = result.fileName;
+          block.data[target + 'MimeType'] = result.mimeType;
+          block.data[target + 'FileSize'] = result.size;
+        }
         renderLessonBuilder(lesson.id);
         flashSaveStatus();
       },
       onRemove: () => {
-        if (block.data) delete block.data[target];
+        if (block.data) {
+          delete block.data[target];
+          delete block.data[target + 'FileName'];
+          delete block.data[target + 'MimeType'];
+          delete block.data[target + 'FileSize'];
+        }
         renderLessonBuilder(lesson.id);
         flashSaveStatus();
       },
@@ -2995,7 +3371,21 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelectorAll('.media-picker-remove').forEach(btn => btn.addEventListener('click', () => {
     const block = blocks[BuilderUI.selected];
     if (!block || !block.data) return;
-    delete block.data[btn.dataset.target];
+    const target = btn.dataset.target;
+    delete block.data[target];
+    delete block.data[target + 'FileName'];
+    delete block.data[target + 'MimeType'];
+    delete block.data[target + 'FileSize'];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Settings tab — boolean toggles stored on block.settings (e.g. Audio Autoplay/Loop/Download/Speed)
+  app.querySelectorAll('.settings-field').forEach(cb => cb.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    block.settings[cb.dataset.field] = cb.checked;
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));

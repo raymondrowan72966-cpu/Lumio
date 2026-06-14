@@ -380,48 +380,19 @@ function learnerButtonBlock(block, index, ctx) {
 }
 
 /* ---- File ---- */
+/* ---- File / Video / Audio ----
+   All three use the shared renderBlockContent renderer so Builder and Preview
+   stay in parity — Preview is the only mode where autoplay/loop settings apply. */
 function learnerFileBlock(block, index, ctx) {
-  const d = block.data || {};
-  const filename = d.filename || 'Employee-Handbook.pdf';
-  const filesize = d.filesize || '2.4 MB';
-  const inner = `<span style="font-size:22px;">📎</span><div><div style="font-weight:600; font-size:13px;">${escapeHtml(filename)}</div><div class="text-sm text-muted">${escapeHtml(filesize)}</div></div>`;
-  if (d.url) {
-    return `<a class="card card-pad flex items-center gap-12" href="${escapeHtml(d.url)}" download target="_blank" rel="noopener" style="border:1px dashed var(--border); text-decoration:none; color:inherit;">${inner}</a>`;
-  }
-  return `<div class="card card-pad flex items-center gap-12" style="border:1px dashed var(--border); opacity:0.7;">${inner}</div>`;
+  return renderBlockContent(block, false);
 }
 
-/* ---- Video ---- */
 function learnerVideoBlock(block, index, ctx) {
-  const d = block.data || {};
-  if (d.url) {
-    const yt = d.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-    const vimeo = d.url.match(/vimeo\.com\/(\d+)/);
-    const caption = d.title ? `<p class="text-sm text-muted mt-8">${escapeHtml(d.title)}</p>` : '';
-    if (yt) {
-      return `<div style="position:relative; padding-bottom:56.25%; border-radius:var(--r-md); overflow:hidden;"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allowfullscreen title="${escapeHtml(d.title || 'Video')}"></iframe></div>${caption}`;
-    }
-    if (vimeo) {
-      return `<div style="position:relative; padding-bottom:56.25%; border-radius:var(--r-md); overflow:hidden;"><iframe src="https://player.vimeo.com/video/${vimeo[1]}" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allowfullscreen title="${escapeHtml(d.title || 'Video')}"></iframe></div>${caption}`;
-    }
-    return `<video controls src="${escapeHtml(d.url)}" style="width:100%; border-radius:var(--r-md); display:block;"></video>${caption}`;
-  }
-  return `<div style="background:var(--ink-900); border-radius:var(--r-md); height:200px; display:flex; align-items:center; justify-content:center; color:#fff; position:relative;">
-    <span style="font-size:40px;">▶</span>
-    <span class="text-sm" style="position:absolute; bottom:10px; left:14px; opacity:0.8;">${escapeHtml(d.title || 'Welcome video — 1:32')}</span>
-  </div>`;
+  return renderBlockContent(block, false);
 }
 
-/* ---- Audio ---- */
 function learnerAudioBlock(block, index, ctx) {
-  const d = block.data || {};
-  if (d.url) {
-    return `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
-      ${d.title ? `<div style="font-weight:600; font-size:13px; margin-bottom:8px;">${escapeHtml(d.title)}</div>` : ''}
-      <audio controls src="${escapeHtml(d.url)}" style="width:100%;"></audio>
-    </div>`;
-  }
-  return `<div class="card card-pad flex items-center gap-12" style="background:var(--pastel-cyan); border:none;"><span style="font-size:22px;">🔊</span><div style="flex:1;"><div style="font-weight:600; font-size:13px;">${escapeHtml(d.title || 'Welcome message from our CEO')}</div><div style="height:6px; background:#fff; border-radius:99px; margin-top:8px;"><div style="width:35%; height:100%; background:var(--cyan); border-radius:99px;"></div></div></div><span class="text-sm text-muted">2:14</span></div>`;
+  return renderBlockContent(block, false);
 }
 
 /* ---- Carousel ---- */

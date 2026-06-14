@@ -38,9 +38,6 @@ const BlockCapabilities = (function () {
     // default 'cardless' treatment. Treatment is overridden independently
     // of category so DesignSystem.resolveBlockStyle can resolve each axis
     // separately without drifting the category assignment.
-    audio: { treatment: 'card' },
-    video: { treatment: 'card' },
-    file: { treatment: 'card' },
     chart_bar: { treatment: 'card' },
     chart_line: { treatment: 'card' },
     chart_pie: { treatment: 'card' },
