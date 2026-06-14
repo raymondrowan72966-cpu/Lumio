@@ -9,13 +9,9 @@
 // flashcards and "Continue" reveals within the learner runtime.
 const LearnerUI = {
   revealedContinues: {}, // lessonId -> Set<blockIndex>
-  accordionOpen: {},     // "lessonId:blockIndex" -> Set<itemIndex>
-  activeTabs: {},        // "lessonId:blockIndex" -> tabIndex
   carouselIndex: {},     // "lessonId:blockIndex" -> active slide index
   quoteCarouselIndex: {}, // "lessonId:blockIndex" -> active quote index
   listChecked: {},       // "lessonId:blockIndex" -> Set<itemIndex> of checked checkbox-list items
-  scenarioAnswers: {},   // "lessonId:blockIndex" -> selected choice index
-  activeHotspot: {},     // "lessonId:blockIndex" -> active hotspot index | null
   previewDevice: 'desktop', // 'desktop' | 'tablet' | 'mobile' — preview-only, not persisted
   fullScreen: false,         // full-screen learner preview — preview-only, not persisted
 };
@@ -332,8 +328,6 @@ function renderLearnerBlocks(blocks, ctx) {
 function renderLearnerBlock(block, index, ctx) {
   switch (block.type) {
     case 'continue': return learnerContinueBlock(block, index, ctx);
-    case 'accordion': return learnerAccordionBlock(block, index, ctx);
-    case 'tabs': return learnerTabsBlock(block, index, ctx);
     case 'kc_multiple_choice': return learnerKcMultipleChoice(block, index, ctx);
     case 'kc_multiple_response': return learnerKcMultipleResponse(block, index, ctx);
     case 'kc_matching': return learnerKcMatching(block, index, ctx);
@@ -344,8 +338,6 @@ function renderLearnerBlock(block, index, ctx) {
     case 'audio': return learnerAudioBlock(block, index, ctx);
     case 'carousel': return learnerCarouselBlock(block, index, ctx);
     case 'quote_carousel': return learnerQuoteCarouselBlock(block, index, ctx);
-    case 'scenario': return learnerScenarioBlock(block, index, ctx);
-    case 'labelled_graphic': return learnerLabelledGraphicBlock(block, index, ctx);
     case 'list_checkbox': return learnerListCheckboxBlock(block, index, ctx);
     default: return renderBlockContent(block, false);
   }
@@ -431,75 +423,6 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
     </div>`;
 }
 
-/* ---- Scenario ---- */
-function learnerScenarioBlock(block, index, ctx) {
-  const d = block.data || {};
-  const rawChoices = (d.choices && d.choices.length) ? d.choices : ['Apologize and offer a solution', 'Explain that it is not your department', 'Transfer the call immediately'];
-  const choices = rawChoices.map(c => typeof c === 'string' ? { text: c, feedback: '' } : c);
-  const key = ctx.lessonId + ':' + index;
-  const selected = LearnerUI.scenarioAnswers[key];
-  return `
-    <div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
-      <div class="pill pill-cyan mb-8">🌳 Branching Scenario</div>
-      <p style="font-weight:600; font-size:14px;">${escapeHtml(d.prompt || 'A customer calls upset about a delayed shipment. How do you respond?')}</p>
-      <div class="flex-col gap-8 mt-12">
-        ${choices.map((c, i) => `
-          <div class="card card-pad lp-scenario-choice" data-key="${key}" data-i="${i}" role="button" tabindex="0"
-            aria-pressed="${selected===i}"
-            style="background:${selected===i?'var(--pastel-lavender)':'var(--surface-0)'}; font-size:13px; cursor:${selected===undefined?'pointer':'default'};">
-            → ${escapeHtml(c.text)}
-            ${selected===i && c.feedback ? `<div class="text-sm mt-8" style="font-weight:600;">${escapeHtml(c.feedback)}</div>` : ''}
-          </div>
-        `).join('')}
-      </div>
-      ${selected !== undefined ? `<p class="text-sm text-muted mt-12">You chose: "${escapeHtml(choices[selected].text)}"</p>` : ''}
-    </div>`;
-}
-
-/* ---- Labelled Graphic ---- */
-function learnerLabelledGraphicBlock(block, index, ctx) {
-  const d = block.data || {};
-  const key = ctx.lessonId + ':' + index;
-  const hsPositions = [['20%','30%'],['55%','55%'],['75%','25%'],['35%','75%'],['85%','70%'],['10%','65%']];
-  const hotspots = (d.hotspots && d.hotspots.length) ? d.hotspots : [{label:'1',description:''},{label:'2',description:''},{label:'3',description:''}];
-  const active = LearnerUI.activeHotspot[key];
-  return `
-    <div style="${d.imageUrl ? `background-image:url('${escapeHtml(d.imageUrl)}'); background-size:cover; background-position:center;` : 'background:var(--pastel-lavender);'} border-radius:var(--r-md); height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
-      ${!d.imageUrl ? '<span style="font-size:32px;">🗺️</span>' : ''}
-      ${hotspots.map((h, i) => `
-        <button class="lp-hotspot" data-key="${key}" data-i="${i}" aria-pressed="${active===i}" aria-label="${escapeHtml(h.label || `Hotspot ${i+1}`)}"
-          style="position:absolute; left:${hsPositions[i % hsPositions.length][0]}; top:${hsPositions[i % hsPositions.length][1]}; width:26px; height:26px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-soft); border:${active===i?'2px solid #fff':'none'}; cursor:pointer;">${i+1}</button>
-      `).join('')}
-    </div>
-    ${active != null ? `<div class="card card-pad mt-12"><div style="font-weight:600;">${escapeHtml(hotspots[active].label || `Hotspot ${active+1}`)}</div>${hotspots[active].description ? `<div class="text-sm text-muted mt-4">${escapeHtml(hotspots[active].description)}</div>` : ''}</div>` : ''}
-  `;
-}
-
-/* ---- Accordion ---- */
-function learnerAccordionBlock(block, index, ctx) {
-  const d = block.data || {};
-  const items = d.items || [{ title: 'Section 1', content: 'Details...' }, { title: 'Section 2', content: 'Details...' }];
-  const key = ctx.lessonId + ':' + index;
-  const open = LearnerUI.accordionOpen[key] || new Set([0]);
-  const idBase = `lp-accordion-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
-  return `
-    <h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Accordion'}</h3>
-    ${items.map((item, i) => {
-      const headerId = `${idBase}-header-${i}`;
-      const panelId = `${idBase}-panel-${i}`;
-      return `
-      <div class="card lp-accordion-item" data-key="${key}" data-i="${i}" id="${headerId}"
-        role="button" tabindex="0" aria-expanded="${open.has(i)}" aria-controls="${panelId}"
-        style="margin-bottom:8px; overflow:hidden; cursor:pointer;">
-        <div class="flex justify-between items-center" style="padding:12px 16px; font-weight:600; font-size:13px; background:${open.has(i) ? 'var(--pastel-lavender)' : 'var(--surface-0)'};">
-          ${item.title} <span aria-hidden="true">${open.has(i) ? '▾' : '▸'}</span>
-        </div>
-        ${open.has(i) ? `<div id="${panelId}" role="region" aria-labelledby="${headerId}" style="padding:12px 16px;" class="text-sm">${item.content}</div>` : ''}
-      </div>
-    `;
-    }).join('')}`;
-}
-
 /* ---- Checkbox list (interactive — learners can tick/untick; state persists for the session) ---- */
 function learnerListCheckboxBlock(block, index, ctx) {
   const d = block.data || {};
@@ -515,22 +438,6 @@ function learnerListCheckboxBlock(block, index, ctx) {
   const itemsHtml = renderListItemsHtml(block, ds, items, false, { checkedSet, key });
   return `<h3 style="font-size:15px; margin-bottom:10px;">${richTextOut(d.heading != null ? d.heading : def.heading)}</h3>
     <div class="list-items-wrap" role="list" style="padding-left:${indent}px;">${itemsHtml}</div>`;
-}
-
-/* ---- Tabs ---- */
-function learnerTabsBlock(block, index, ctx) {
-  const d = block.data || {};
-  const tabs = d.tabs || ['Overview', 'Details', 'FAQ'];
-  const key = ctx.lessonId + ':' + index;
-  const active = LearnerUI.activeTabs[key] ?? 0;
-  const idBase = `lp-tabs-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
-  const panelId = `${idBase}-panel`;
-  return `
-    <div class="tabs" role="tablist" style="border-bottom:1px solid var(--border);">
-      ${tabs.map((t, i) => `<div class="tab lp-tab ${i === active ? 'active' : ''}" data-key="${key}" data-i="${i}" id="${idBase}-tab-${i}"
-        role="tab" aria-selected="${i === active}" aria-controls="${panelId}" tabindex="0" style="cursor:pointer;">${t}</div>`).join('')}
-    </div>
-    <div class="text-sm mt-12" id="${panelId}" role="tabpanel" aria-labelledby="${idBase}-tab-${active}">${(d.contents && d.contents[active]) || d.content || 'Tab content appears here.'}</div>`;
 }
 
 /* ---- Flashcards ---- */
@@ -744,30 +651,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     fn();
   };
 
-  // Accordion
-  const toggleAccordionItem = (key, i) => {
-    const set = LearnerUI.accordionOpen[key] || new Set();
-    if (set.has(i)) set.delete(i); else set.add(i);
-    LearnerUI.accordionOpen[key] = set;
-    rerender();
-  };
-  app.querySelectorAll('.lp-accordion-item').forEach(itemEl => {
-    const key = itemEl.dataset.key, i = parseInt(itemEl.dataset.i, 10);
-    itemEl.addEventListener('click', () => toggleAccordionItem(key, i));
-    itemEl.addEventListener('keydown', (e) => onActivateKey(e, () => toggleAccordionItem(key, i)));
-  });
-
-  // Tabs
-  const selectTab = (key, i) => {
-    LearnerUI.activeTabs[key] = i;
-    rerender();
-  };
-  app.querySelectorAll('.lp-tab').forEach(tabEl => {
-    const key = tabEl.dataset.key, i = parseInt(tabEl.dataset.i, 10);
-    tabEl.addEventListener('click', () => selectTab(key, i));
-    tabEl.addEventListener('keydown', (e) => onActivateKey(e, () => selectTab(key, i)));
-  });
-
   // KC multiple choice
   app.querySelectorAll('input[type="radio"][data-kc-key]').forEach(input => input.addEventListener('change', () => {
     const key = input.dataset.kcKey, i = parseInt(input.dataset.i, 10);
@@ -864,25 +747,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   app.querySelectorAll('.lp-quote-next').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) + 1;
-    rerender();
-  }));
-
-  // Scenario choice selection
-  const selectScenarioChoice = (key, i) => {
-    if (LearnerUI.scenarioAnswers[key] !== undefined) return;
-    LearnerUI.scenarioAnswers[key] = i;
-    rerender();
-  };
-  app.querySelectorAll('.lp-scenario-choice').forEach(elx => {
-    const key = elx.dataset.key, i = parseInt(elx.dataset.i, 10);
-    elx.addEventListener('click', () => selectScenarioChoice(key, i));
-    elx.addEventListener('keydown', (e) => onActivateKey(e, () => selectScenarioChoice(key, i)));
-  });
-
-  // Labelled graphic hotspots
-  app.querySelectorAll('.lp-hotspot').forEach(btn => btn.addEventListener('click', () => {
-    const key = btn.dataset.key, i = parseInt(btn.dataset.i, 10);
-    LearnerUI.activeHotspot[key] = LearnerUI.activeHotspot[key] === i ? null : i;
     rerender();
   }));
 

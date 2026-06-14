@@ -179,14 +179,17 @@ function canvasStyles() {
       .editable-text:focus { background:rgba(20,20,30,0.035); }
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
 
-      /* Document-style insertion points */
-      .drop-zone { position:relative; height:14px; margin:0; display:flex; align-items:center; justify-content:center; }
-      .drop-zone-line { position:absolute; left:0; right:0; top:50%; height:2px; background:transparent; border-radius:2px; transform:translateY(-50%); transition:background-color .12s, height .12s; }
+      /* Document-style insertion points — single reusable component used
+         between blocks, at the end of the lesson, and as the drag/drop
+         target. A generous 40px hit area keeps placement forgiving while
+         the visible line stays a thin 2px rule at rest. */
+      .drop-zone { position:relative; min-height:40px; margin:0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background-color .15s; }
+      .drop-zone-line { position:absolute; left:0; right:0; top:50%; height:2px; background:transparent; border-radius:2px; transform:translateY(-50%); transition:background-color .15s, height .15s, box-shadow .15s; }
       .drop-zone-add {
-        position:relative; z-index:2; width:22px; height:22px; border-radius:50%;
+        position:relative; z-index:2; width:24px; height:24px; border-radius:50%;
         border:1px solid var(--border); background:var(--surface-0); color:var(--ink-400);
-        font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
-        cursor:pointer; opacity:0; transition:opacity .12s, color .12s, border-color .12s, background-color .12s;
+        font-size:15px; line-height:1; display:flex; align-items:center; justify-content:center;
+        cursor:pointer; opacity:0; transition:opacity .15s, color .15s, border-color .15s, background-color .15s, transform .15s;
       }
       .drop-zone:hover .drop-zone-add,
       .drop-zone-add:focus-visible { opacity:1; }
@@ -196,8 +199,19 @@ function canvasStyles() {
       }
       /* While a block is being dragged, faintly reveal every insertion line so placement stays obvious */
       #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
-      .drop-zone.drag-active .drop-zone-line { background:var(--theme-primary, var(--indigo)); height:3px; }
       #lesson-canvas.dragging-block .drop-zone-add { opacity:0; }
+      /* Magnetic highlight — the zone under the dragged item lights up,
+         the line thickens with a soft glow, and the "+" pops in slightly
+         enlarged so the drop target feels alive without needing pixel-perfect aim. */
+      .drop-zone.drag-active { background:color-mix(in srgb, var(--theme-primary, var(--indigo)) 5%, transparent); }
+      .drop-zone.drag-active .drop-zone-line {
+        background:var(--theme-primary, var(--indigo)); height:3px;
+        box-shadow:0 0 0 4px color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, transparent);
+      }
+      .drop-zone.drag-active .drop-zone-add {
+        opacity:1; transform:scale(1.15);
+        border-color:var(--theme-primary, var(--indigo)); color:var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+      }
 
       /* Active insertion zone — lightweight placeholder shown after clicking "+" */
       .insertion-zone { height:auto; margin:8px 0; }
@@ -271,24 +285,16 @@ function insertionZoneHtml(index, extraClass) {
   `;
 }
 
-function dropZone(index) {
+/* The single insertion-target component — used between blocks, at the end
+   of the lesson, and (via dragover) as the drag/drop target. Exactly one of
+   these renders per gap, so there is never more than one insertion line or
+   "+" button at any position, including the end of the lesson. */
+function dropZone(index, ariaLabel) {
   if (BuilderUI.insertZoneIndex === index) return insertionZoneHtml(index);
   return `
     <div class="drop-zone" data-drop-index="${index}">
       <div class="drop-zone-line"></div>
-      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block here">+</button>
-    </div>
-  `;
-}
-
-/* Insertion point below the last block — same thin-line/"+" affordance as
-   the inter-block drop zones, so the canvas ends without a heavy reserved box. */
-function endOfCanvasDropZone(index) {
-  if (BuilderUI.insertZoneIndex === index) return insertionZoneHtml(index, 'end-of-canvas-drop');
-  return `
-    <div class="drop-zone end-of-canvas-drop" data-drop-index="${index}">
-      <div class="drop-zone-line"></div>
-      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="Insert block at end of lesson">+</button>
+      <button class="drop-zone-add" data-drop-index="${index}" title="Insert block" aria-label="${ariaLabel || 'Insert block here'}">+</button>
     </div>
   `;
 }
@@ -315,13 +321,24 @@ function renderCanvasBlocks(blocks) {
   let html = dropZone(0);
   blocks.forEach((block, i) => {
     html += renderBlockWrapper(block, i, blocks.length, blocks[i + 1]);
-    html += dropZone(i + 1);
+    // Only render a between-blocks zone after non-final blocks — the final
+    // gap is rendered once, below, as the single end-of-lesson zone.
+    if (i < blocks.length - 1) html += dropZone(i + 1);
   });
-  html += endOfCanvasDropZone(blocks.length);
+  html += dropZone(blocks.length, 'Insert block at end of lesson');
   return html;
 }
 
 const RADIUS_MAP = { sharp: '4px', soft: 'var(--r-lg)', round: 'var(--r-xl)' };
+
+// Icon glyphs available for Labelled Graphic hotspot markers (Marker Style: Icons).
+const MARKER_ICONS = {
+  'icon-plus': '+', 'icon-check': '✓', 'icon-info': 'i', 'icon-question': '?',
+  'icon-cross': '✕', 'icon-heart': '♥', 'icon-target': '◎',
+  'icon-arrow-left': '←', 'icon-arrow-right': '→', 'icon-arrow-up': '↑', 'icon-arrow-down': '↓',
+  'icon-arrow-upleft': '↖', 'icon-arrow-upright': '↗', 'icon-arrow-downright': '↘', 'icon-arrow-downleft': '↙',
+};
+const MARKER_SIZE_MAP = { sm: 20, md: 28, lg: 38 };
 const IMAGE_RADIUS_MAP = { sharp: '4px', soft: 'var(--r-md)', round: 'var(--r-xl)' };
 
 /* Lazily migrates legacy string[] carousel items to {src, caption} objects, in place. */
@@ -345,24 +362,33 @@ function normalizeFlashcardItems(d) {
     { front: { text: 'Front of card' }, back: { text: 'Back of card' } },
   ];
   d.items = source.map(it => ({
-    front: Object.assign({ text: '', image: null }, (it && it.front) || {}),
-    back: Object.assign({ text: '', image: null }, (it && it.back) || {}),
+    front: Object.assign({ text: '', image: null, imageFit: 'cover' }, (it && it.front) || {}),
+    back: Object.assign({ text: '', image: null, imageFit: 'cover' }, (it && it.back) || {}),
   }));
   return d.items;
 }
 
-/* Renders one face (front or back) of a flashcard — rich text + optional image,
-   with media controls when editable. Click handlers on inner elements stop
-   propagation so they don't trigger the card's flip. */
-function flashcardFaceContent(face, i, faceName, editable) {
-  const placeholder = faceName === 'front' ? 'Front text' : 'Back text';
+/* Renders one face (front or back) of a flashcard — learner-facing content only:
+   optional image (per imageFit), text, and a Flip Icon (top right). No editing
+   chrome is ever rendered on the card surface — card management lives in the
+   Content panel. */
+function flashcardFaceContent(face) {
+  const fit = face.imageFit || 'cover';
+  const hasImage = !!face.image;
+  const flipIcon = `<div class="flip-card-flipicon">↻</div>`;
+  if (hasImage && fit === 'full') {
+    return `
+      <img src="${face.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
+      ${face.text ? `<div style="position:relative; z-index:1; background:rgba(0,0,0,0.35); color:#fff; padding:8px 12px; border-radius:var(--r-sm); font-weight:600; font-size:14px; max-width:90%;">${richTextOut(face.text)}</div>` : ''}
+      ${flipIcon}
+    `;
+  }
+  const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
+  const objectFit = fitMap[fit] || 'cover';
   return `
-    ${face.image ? `<img src="${face.image}" alt="" style="max-width:100%; max-height:70px; object-fit:cover; border-radius:var(--r-sm); margin-bottom:8px;" />` : ''}
-    <div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${editable ? 'contenteditable="true" onclick="event.stopPropagation()"' : ''} data-placeholder="${placeholder}" style="font-weight:600; font-size:14px;">${richTextOut(face.text || '')}</div>
-    ${editable ? `<div class="flex items-center gap-4 mt-8" onclick="event.stopPropagation()">
-      <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${faceName}">${face.image ? '🔄 Image' : '📤 Image'}</button>
-      ${face.image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove" data-findex="${i}" data-face="${faceName}" style="color:#E5484D;">🗑️</button>` : ''}
-    </div>` : ''}
+    ${hasImage ? `<img src="${face.image}" alt="" style="max-width:100%; ${face.text ? 'max-height:70px; margin-bottom:8px;' : 'flex:1; height:100%;'} ${objectFit === 'none' ? 'object-fit:none; object-position:center;' : `object-fit:${objectFit};`} border-radius:var(--r-sm);" />` : ''}
+    ${face.text ? `<div data-role="body" data-richtext="true" style="font-weight:600; font-size:14px;">${richTextOut(face.text)}</div>` : ''}
+    ${flipIcon}
   `;
 }
 
@@ -789,16 +815,19 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
   const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file'].includes(block.type);
+  // Selection is a subtle neutral indicator (Notion/Figma-style focus ring),
+  // not an accent-coloured frame — kept consistent across card and cardless blocks.
+  const SELECTION_OUTLINE_COLOR = 'rgba(20,20,30,0.14)';
   const cardlessSelectionStyle = isTextAuthoringBlock
-    ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
-    : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
+    ? `outline:1px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
+    : `outline:2px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
   const wrapperStyle = treatment === 'cardless'
     ? `position:relative; border-radius:0; margin-bottom:${cardlessMargin};
        ${cardlessSelectionStyle}
        background:transparent; box-shadow:none;`
-    : `position:relative; ${radiusStyle} border:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'};
-       margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:var(--surface-0);'}
-       box-shadow:${isSelected ? 'var(--shadow-md)' : 'var(--shadow-soft)'};`;
+    : `position:relative; ${radiusStyle} border:1px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'};
+       margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:transparent;'}
+       box-shadow:none;`;
   return `
     <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="${wrapperStyle}"${ariaHidden}>
       <div class="block-toolbar" style="position:absolute; top:-14px; left:14px; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:5;">
@@ -1483,114 +1512,247 @@ function renderBlockContent(block, editable) {
       return `<div style="padding-top:${filePaddingTop}px; padding-bottom:${filePaddingBottom}px;">${fileRow}</div>`;
     }
 
-    case 'accordion':
-      return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Accordion'}</h3>
-        ${(d.items || [{title:'Section 1', content:'Details...'},{title:'Section 2', content:'Details...'}]).map((item,i) => `
-          <div class="card" style="margin-bottom:8px; overflow:hidden;">
-            <div class="flex justify-between items-center" style="padding:12px 16px; font-weight:600; font-size:13px; background:${i===0?'var(--pastel-lavender)':'var(--surface-0)'};">
-              ${item.title} <span>${i===0?'▾':'▸'}</span>
+    case 'accordion': {
+      const items = normalizeItemList(d, 'items', () => [
+        { title: 'Section 1', body: 'Details about section 1...' },
+        { title: 'Section 2', body: 'Details about section 2...' },
+      ]);
+      const settings = block.settings || {};
+      const single = settings.openMode !== 'multiple';
+      const expandFirst = settings.expandFirst !== false;
+      const animate = settings.animation !== false;
+      const headingTag = ds.headingLevel || 'h4';
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const rowSpacing = ds.rowSpacing ?? 8;
+      const variant = ds.variant || 'default';
+      const rowBg = surfaceBg(ds);
+      const textColor = surfaceTextColor(ds);
+      const markerStyle = ds.markerStyle || 'none';
+      const rowStyle = variant === 'minimal'
+        ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
+        : variant === 'boxed'
+          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:var(--shadow-soft); border:1px solid var(--border);`
+          : `background:${rowBg}; color:${textColor}; border-radius:${radius};`;
+      return `<div class="lumio-accordion" style="display:flex; flex-direction:column; gap:${rowSpacing}px;">
+        ${items.map((item, i) => {
+          const open = expandFirst && i === 0;
+          return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
+            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
+              <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} style="margin:0; font-size:15px;">${escapeHtml(item.title || '')}</${headingTag}></span>
+              <span class="lumio-accordion-chevron" data-style="${ds.chevronStyle || 'chevron'}"></span>
             </div>
-            ${i===0 ? `<div style="padding:12px 16px;" class="text-sm">${item.content}</div>` : ''}
-          </div>
-        `).join('')}`;
-    case 'tabs':
-      return `<div class="tabs" style="border-bottom:1px solid var(--border);">
-          ${(d.tabs || ['Overview','Details','FAQ']).map((t,i)=>`<div class="tab ${i===0?'active':''}">${t}</div>`).join('')}
-        </div>
-        <div class="text-sm mt-12">${(d.contents && d.contents[0]) || d.content || 'Tab content appears here. Switch tabs to reveal more.'}</div>`;
-    case 'labelled_graphic': {
-      const hsPositions = [['20%','30%'],['55%','55%'],['75%','25%'],['35%','75%'],['85%','70%'],['10%','65%']];
-      const hotspots = (d.hotspots && d.hotspots.length) ? d.hotspots : [{label:'1'},{label:'2'},{label:'3'}];
-      return `<div style="${d.imageUrl ? `background-image:url('${d.imageUrl}'); background-size:cover; background-position:center;` : 'background:var(--pastel-lavender);'} border-radius:var(--r-md); height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
-        ${!d.imageUrl ? '<span style="font-size:32px;">🗺️</span>' : ''}
-        ${hotspots.map((h,i)=>`
-          <span style="position:absolute; left:${hsPositions[i % hsPositions.length][0]}; top:${hsPositions[i % hsPositions.length][1]}; width:24px; height:24px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-soft);">${i+1}</span>
-        `).join('')}
+            <div class="lumio-accordion-body" style="max-height:${open ? 'none' : '0px'};">
+              <div class="lumio-accordion-body-inner">
+                ${itemImageHtml(item, 200)}
+                <div class="text-sm">${richTextOut(item.body)}</div>
+                ${itemMediaExtrasHtml(item)}
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
     }
-    case 'process':
-      return `<h3 style="font-size:15px; margin-bottom:14px;">${d.heading || 'Process'}</h3>
-        <div class="flex items-center gap-8" style="overflow-x:auto;">
-          ${(d.steps || ['Submit Request','Manager Review','HR Approval','Access Granted']).map((s,i,arr)=>{
-            const title = typeof s === 'string' ? s : (s.title || '');
-            const description = typeof s === 'string' ? '' : (s.description || '');
-            return `<div class="card card-pad" style="min-width:130px; text-align:center; background:${i===0?'var(--pastel-lavender)':'var(--surface-0)'};">
-              <div class="pill pill-indigo" style="margin-bottom:6px;">Step ${i+1}</div>
-              <div class="text-sm" style="font-weight:600;">${title}</div>
-              ${description ? `<div class="text-sm text-muted mt-4">${description}</div>` : ''}
-            </div>
-            ${i<arr.length-1 ? '<span style="color:var(--ink-400);">→</span>' : ''}`;
-          }).join('')}
-        </div>`;
-    case 'scenario':
-      return `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
-        <div class="pill pill-cyan mb-8">🌳 Branching Scenario</div>
-        <p style="font-weight:600; font-size:14px;">${d.prompt || 'A customer calls upset about a delayed shipment. How do you respond?'}</p>
-        <div class="flex-col gap-8 mt-12">
-          ${(d.choices && d.choices.length ? d.choices : ['Apologize and offer a solution','Explain that it is not your department','Transfer the call immediately']).map(c => `
-            <div class="card card-pad" style="background:var(--surface-0); font-size:13px; cursor:pointer;">→ ${typeof c === 'string' ? c : c.text}</div>
-          `).join('')}
+    case 'tabs': {
+      const items = normalizeItemList(d, 'items', () => [
+        { title: 'Overview', body: 'Overview content...' },
+        { title: 'Details', body: 'Details content...' },
+        { title: 'FAQ', body: 'FAQ content...' },
+      ]);
+      const settings = block.settings || {};
+      let active = settings.defaultTab || 0;
+      if (active < 0 || active >= items.length) active = 0;
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      const panelBg = surfaceBg(ds);
+      const textColor = surfaceTextColor(ds);
+      const tabStyle = ds.tabStyle || 'underline';
+      const animate = settings.animation !== false;
+      return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}">
+        <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
+          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="lumioTabSwitch(this, ${i})">${escapeHtml(item.title || 'Tab ' + (i + 1))}</button>`).join('')}
+        </div>
+        <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
+          ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
+            ${itemImageHtml(item, 220)}
+            <div class="text-sm">${richTextOut(item.body)}</div>
+            ${itemMediaExtrasHtml(item)}
+          </div>`).join('')}
         </div>
       </div>`;
+    }
+    case 'labelled_graphic': {
+      const hotspots = normalizeItemList(d, 'hotspots', () => [
+        { title: 'Hotspot 1', body: 'Description for hotspot 1', x: 25, y: 30 },
+        { title: 'Hotspot 2', body: 'Description for hotspot 2', x: 60, y: 55 },
+        { title: 'Hotspot 3', body: 'Description for hotspot 3', x: 80, y: 25 },
+      ]);
+      const settings = block.settings || {};
+      const animate = settings.hotspotAnimation !== false;
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const imgWidth = ds.imageWidth ?? 100;
+      const markerColor = ds.markerColor || '#7C3AED';
+      const markerBorderColor = ds.markerBorderColor || '#ffffff';
+      const markerSize = MARKER_SIZE_MAP[ds.markerSize] || MARKER_SIZE_MAP.md;
+      const markerStyle = ds.markerStyle || 'numbers';
+      const markerGlyph = (i) => markerStyle === 'numbers' ? String(i + 1) : (MARKER_ICONS[markerStyle] || String(i + 1));
+      const visitedStyle = ds.visitedStyle || 'filled';
+      const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
+      const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
+      const objectFit = fitMap[ds.imageFit] || 'cover';
+      return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto;">
+        <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; background:${bg}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
+          ${d.image ? `<img src="${d.image}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
+          ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor};" data-hindex="${i}"
+              onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
+              onclick="event.stopPropagation(); lumioHotspotToggle(this, ${i})" aria-label="${escapeHtml(h.title || 'Hotspot ' + (i + 1))}">${markerGlyph(i)}</button>`).join('')}
+          ${hotspots.map((h, i) => `<div class="lumio-hotspot-panel" data-hindex="${i}" style="display:none;" onclick="event.stopPropagation();">
+              <button class="lumio-hotspot-close" onclick="event.stopPropagation(); lumioHotspotToggle(this.parentElement.parentElement.querySelector('.lumio-hotspot[data-hindex=\\'${i}\\']'), ${i})">×</button>
+              <h4 style="margin:0 0 6px;">${escapeHtml(h.title || '')}</h4>
+              ${itemImageHtml(h, 140)}
+              <div class="text-sm">${richTextOut(h.body)}</div>
+              ${itemMediaExtrasHtml(h)}
+              ${hotspots.length > 1 ? `<div class="lumio-hotspot-nav">
+                <button class="btn btn-secondary btn-sm lumio-hotspot-prev" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, -1)">← Prev</button>
+                <span class="lumio-hotspot-counter">${i + 1} of ${hotspots.length}</span>
+                <button class="btn btn-secondary btn-sm lumio-hotspot-next" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, 1)">Next →</button>
+              </div>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }
+    case 'process': {
+      const items = normalizeItemList(d, 'items', () => [
+        { title: 'Step 1', body: 'Description of step 1' },
+        { title: 'Step 2', body: 'Description of step 2' },
+        { title: 'Step 3', body: 'Description of step 3' },
+      ]);
+      const settings = block.settings || {};
+      const showNumbers = settings.showStepNumbers !== false;
+      const headingTag = ds.headingLevel || 'h4';
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const panelBg = surfaceBg(ds);
+      const textColor = surfaceTextColor(ds);
+      const indicatorStyle = ds.indicatorStyle || 'dots';
+      const swipe = settings.enableSwipe !== false;
+      return `<div class="lumio-process" data-current="0" data-swipe="${swipe ? '1' : '0'}" tabindex="0"
+          onkeydown="if(event.key==='ArrowLeft')lumioProcessNav(this,-1); if(event.key==='ArrowRight')lumioProcessNav(this,1);"
+          ontouchstart="lumioProcessTouchStart(event,this)" ontouchend="lumioProcessTouchEnd(event,this)">
+        <div class="lumio-process-panel" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
+          ${items.map((item, i) => `<div class="lumio-process-step ${i === 0 ? 'active' : ''}" data-step="${i}">
+            ${itemImageHtml(item, 200)}
+            ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
+            <${headingTag} style="margin:4px 0 6px;">${escapeHtml(item.title || 'Step ' + (i + 1))}</${headingTag}>
+            <div class="text-sm">${richTextOut(item.body)}</div>
+            ${itemMediaExtrasHtml(item)}
+          </div>`).join('')}
+        </div>
+        <div class="lumio-process-nav flex items-center justify-between mt-12">
+          <button class="btn btn-secondary btn-sm lumio-process-prev" ${items.length <= 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), -1)" disabled>← Back</button>
+          <div class="lumio-process-indicators flex items-center gap-6" data-style="${indicatorStyle}">
+            ${items.map((item, i) => `<span class="lumio-process-dot ${i === 0 ? 'active' : ''}" data-step="${i}" onclick="event.stopPropagation(); lumioProcessGoto(this.closest('.lumio-process'), ${i})">${indicatorStyle === 'numbers' ? (i + 1) : ''}</span>`).join('')}
+          </div>
+          <button class="btn btn-secondary btn-sm lumio-process-next" ${items.length <= 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), 1)">Next →</button>
+        </div>
+      </div>`;
+    }
+    case 'scenario': {
+      const scenes = normalizeItemList(d, 'scenes', () => [
+        {
+          title: 'Scene 1', dialogue: 'A customer calls upset about a delayed shipment. How do you respond?',
+          characterName: '', backgroundImage: null, backgroundVideo: null, backgroundAudio: null, characterImage: null,
+          choices: [
+            { text: 'Apologize and offer a solution', feedback: 'Great choice — this de-escalates the situation.', nextScene: 1, correctPath: true },
+            { text: 'Explain that it is not your department', feedback: 'This may frustrate the customer further. Try again.', nextScene: 0, correctPath: false },
+          ],
+        },
+        { title: 'Scene 2', dialogue: 'The customer feels heard and asks what happens next.', characterName: '', backgroundImage: null, backgroundVideo: null, backgroundAudio: null, characterImage: null, choices: [] },
+      ]);
+      const settings = block.settings || {};
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const overlay = ds.overlayOpacity ?? 40;
+      const charPlacement = ds.characterPlacement || 'left';
+      const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
+      const dialogueStyle = ds.dialoguePanelStyle || 'card';
+      const completionMessage = settings.completionMessage || 'Scenario complete!';
+      return `<div class="lumio-scenario" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="0" style="border-radius:${radius}; overflow:hidden;">
+        ${scenes.map((scene, i) => `<div class="lumio-scenario-scene ${i === 0 ? 'active' : ''}" data-scene="${i}">
+          <div class="lumio-scenario-bg" style="${scene.backgroundImage ? `background-image:url('${scene.backgroundImage}'); background-size:cover; background-position:center;` : `background:${bg};`}">
+            ${scene.backgroundVideo ? `<video class="lumio-scenario-bgvideo" autoplay muted loop playsinline src="${scene.backgroundVideo}"></video>` : ''}
+            <div class="lumio-scenario-overlay" style="background:rgba(0,0,0,${overlay / 100});"></div>
+            ${scene.characterImage && charPlacement !== 'none' ? `<img class="lumio-scenario-character pos-${charPlacement}" src="${scene.characterImage}" alt="${escapeHtml(scene.characterName || '')}" />` : ''}
+            <div class="lumio-scenario-content">
+              ${scene.backgroundAudio ? `<div class="media-frame" style="margin-bottom:8px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${scene.backgroundAudio}"></audio></div>` : ''}
+              <div class="lumio-scenario-dialogue" data-style="${dialogueStyle}">
+                ${scene.characterName ? `<div class="lumio-scenario-character-name">${escapeHtml(scene.characterName)}</div>` : ''}
+                <div class="lumio-scenario-dialogue-text">${richTextOut(scene.dialogue)}</div>
+                ${(scene.choices && scene.choices.length) ? `
+                  <div class="lumio-scenario-choices">
+                    ${scene.choices.map((c) => `<button class="lumio-scenario-choice" data-feedback="${escapeHtml(c.feedback || '')}" data-next="${c.nextScene ?? ''}" data-correct="${c.correctPath ? '1' : '0'}" onclick="event.stopPropagation(); lumioScenarioChoice(this)">${escapeHtml(c.text || '')}</button>`).join('')}
+                  </div>
+                  <div class="lumio-scenario-feedback" style="display:none;"></div>` : `
+                  <div class="lumio-scenario-feedback" style="display:block;"><p class="lumio-scenario-final-msg">${escapeHtml(completionMessage)}</p></div>`}
+              </div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }
     case 'flashcard_grid': {
       const items = normalizeFlashcardItems(d);
       const flipHint = ds.flipHint !== false;
       const sizeMap = { sm: 110, md: 150, lg: 190 };
       const cardH = sizeMap[ds.cardSize] || sizeMap.md;
       const cols = ds.cardSize === 'lg' ? 2 : 3;
-      return `<div style="display:grid; grid-template-columns:repeat(${cols},1fr); gap:12px;">
-        ${items.map((item, i) => `
-          <div style="position:relative;">
-            ${editable ? `<div class="flex gap-4 mb-4" style="justify-content:flex-end;">
-              <button class="btn-icon flashcard-move-left" data-findex="${i}" title="Move left" aria-label="Move card left" ${i===0?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i===0?'0.4':'1'};">←</button>
-              <button class="btn-icon flashcard-move-right" data-findex="${i}" title="Move right" aria-label="Move card right" ${i===items.length-1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i===items.length-1?'0.4':'1'};">→</button>
-              <button class="btn-icon flashcard-duplicate" data-findex="${i}" title="Duplicate card" aria-label="Duplicate card" style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px;">⧉</button>
-              <button class="btn-icon flashcard-remove" data-findex="${i}" title="Remove card" aria-label="Remove card" ${items.length<=1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${items.length<=1?'0.4':'1'};">×</button>
-            </div>` : ''}
-            <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:${cardH}px; cursor:pointer;">
-              <div class="flip-card-inner">
-                <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff;">
-                  ${flashcardFaceContent(item.front, i, 'front', editable)}
-                </div>
-                <div class="flip-card-face flip-card-back card" style="background:var(--surface-0);">
-                  ${flashcardFaceContent(item.back, i, 'back', editable)}
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      const colWidth = Math.round(cardH * 1.3);
+      return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
+        <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; max-width:100%;">
+          ${items.map((item, i) => `
+            <div>
+              <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:${cardH}px; cursor:pointer;">
+                <div class="flip-card-inner">
+                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
+                    ${flashcardFaceContent(item.front)}
+                  </div>
+                  <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
+                    ${flashcardFaceContent(item.back)}
+                  </div>
                 </div>
               </div>
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
             </div>
-            ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
-          </div>
-        `).join('')}
-        ${editable ? `<button class="btn btn-secondary btn-sm flashcard-add" style="grid-column:1/-1;">+ Add Card</button>` : ''}
+          `).join('')}
+        </div>
       </div>`;
     }
     case 'flashcard_stack': {
       const items = normalizeFlashcardItems(d);
       const flipHint = ds.flipHint !== false;
-      return `<div class="flashcard-stack-wrap" tabindex="0" style="outline:none;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
-        ${items.map((item, i) => `
-          <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column; position:relative;">
-            ${editable ? `<div class="flex gap-4 mb-4" style="justify-content:flex-end;">
-              <button class="btn-icon flashcard-duplicate" data-findex="${i}" title="Duplicate card" aria-label="Duplicate card" style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px;">⧉</button>
-              <button class="btn-icon flashcard-remove" data-findex="${i}" title="Remove card" aria-label="Remove card" ${items.length<=1?'disabled':''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${items.length<=1?'0.4':'1'};">×</button>
-            </div>` : ''}
-            <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:180px; cursor:pointer;">
-              <div class="flip-card-inner">
-                <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff;">
-                  ${flashcardFaceContent(item.front, i, 'front', editable)}
-                </div>
-                <div class="flip-card-face flip-card-back card" style="background:var(--surface-0);">
-                  ${flashcardFaceContent(item.back, i, 'back', editable)}
+      const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
+      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
+        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:320px; max-width:100%;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
+          ${items.map((item, i) => `
+            <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
+              <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:180px; cursor:pointer;">
+                <div class="flip-card-inner">
+                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
+                    ${flashcardFaceContent(item.front)}
+                  </div>
+                  <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
+                    ${flashcardFaceContent(item.back)}
+                  </div>
                 </div>
               </div>
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
             </div>
-            ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
+          `).join('')}
+          <div class="flex items-center justify-between mt-12">
+            <button class="btn btn-secondary btn-sm fcs-prev" onclick="event.stopPropagation(); lumioFcsNav(this,-1)">← Prev</button>
+            <span class="text-sm text-muted fcs-progress">1 / ${items.length}</span>
+            <button class="btn btn-secondary btn-sm fcs-next" onclick="event.stopPropagation(); lumioFcsNav(this,1)">Next →</button>
           </div>
-        `).join('')}
-        <div class="flex items-center justify-between mt-12">
-          <button class="btn btn-secondary btn-sm fcs-prev" onclick="event.stopPropagation(); lumioFcsNav(this,-1)">← Prev</button>
-          <span class="text-sm text-muted fcs-progress">1 / ${items.length}</span>
-          ${editable ? `<button class="btn btn-secondary btn-sm flashcard-add" onclick="event.stopPropagation()">+ Add Card</button>` : '<span></span>'}
-          <button class="btn btn-secondary btn-sm fcs-next" onclick="event.stopPropagation(); lumioFcsNav(this,1)">Next →</button>
         </div>
       </div>`;
     }
@@ -2372,7 +2534,44 @@ function renderRightTabContent(block, index, course) {
         <p class="text-sm text-muted">This is an in-lesson, ungraded Knowledge Check. For scored assessments, add an Assessment from the course outline.</p>
       `;
     } else if (block.type === 'accordion') {
-      extra = `<div class="field"><label class="flex items-center gap-8"><input type="checkbox"/> Expand first item by default</label></div>`;
+      const s = block.settings || {};
+      extra = `
+        <div class="field">
+          <label>Open behaviour</label>
+          ${segControlSettings('settings-openmode', 'openMode', [{id:'single',label:'Single Open'},{id:'multiple',label:'Multiple Open'}], s.openMode === 'multiple' ? 'multiple' : 'single')}
+        </div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="expandFirst" ${s.expandFirst !== false ? 'checked' : ''}/> Expand first item by default</label></div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="animation" ${s.animation !== false ? 'checked' : ''}/> Animate expand/collapse</label></div>`;
+    } else if (block.type === 'tabs') {
+      const s = block.settings || {};
+      const items = block.data.items || [];
+      extra = `
+        <div class="field"><label>Default Active Tab</label>
+          <select class="input settings-select" data-field="defaultTab">
+            ${items.map((it,i)=>`<option value="${i}" ${(s.defaultTab||0)===i?'selected':''}>${i+1}. ${escapeHtml(it.title||'Tab '+(i+1))}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="animation" ${s.animation !== false ? 'checked' : ''}/> Animate tab switch</label></div>`;
+    } else if (block.type === 'labelled_graphic') {
+      const s = block.settings || {};
+      extra = `
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="hotspotAnimation" ${s.hotspotAnimation !== false ? 'checked' : ''}/> Animate hotspot markers (pulse)</label></div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="autoClose" ${s.autoClose !== false ? 'checked' : ''}/> Auto-close previous hotspot</label></div>`;
+    } else if (block.type === 'process') {
+      const s = block.settings || {};
+      extra = `
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showStepNumbers" ${s.showStepNumbers !== false ? 'checked' : ''}/> Show step numbers</label></div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="customStepLabels" ${s.customStepLabels ? 'checked' : ''}/> Use custom step titles as labels</label></div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="enableSwipe" ${s.enableSwipe !== false ? 'checked' : ''}/> Enable swipe navigation</label></div>`;
+    } else if (block.type === 'scenario') {
+      const s = block.settings || {};
+      extra = `
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="enableScoring" ${s.enableScoring ? 'checked' : ''}/> Enable scoring</label></div>
+        <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="trackCorrect" ${s.trackCorrect ? 'checked' : ''}/> Track correct choices</label></div>
+        <div class="field"><label>Completion Message</label><input class="input settings-text" data-field="completionMessage" value="${escapeHtml(s.completionMessage || 'Scenario complete!')}" /></div>
+        <div class="field"><label>Completion Behaviour</label>
+          ${segControlSettings('settings-completionbehaviour', 'completionBehaviour', [{id:'message',label:'Show Message'},{id:'restart',label:'Allow Restart'}], s.completionBehaviour || 'message')}
+        </div>`;
     } else if (block.type === 'continue') {
       extra = `<div class="field"><label>Button label</label><input class="input content-field" data-field="label" value="${d.label || 'Continue'}" /></div>`;
     } else {
@@ -2394,11 +2593,9 @@ function renderRightTabContent(block, index, course) {
     case 'paragraph':
       return contentFields([['Body text', 'body', d.body, 'textarea']]) + aiActions();
     case 'process':
-      return contentFields([['Process title', 'heading', d.heading, 'input']]) +
-        `<div class="field"><label>Steps (one per line, format: Step :: Description)</label><textarea class="textarea content-field" data-field="processSteps" rows="6">${(d.steps||[]).map(s=> typeof s === 'string' ? s : `${s.title||''}${s.description?` :: ${s.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
+      return processContentPanel(block, d);
     case 'labelled_graphic':
-      return contentFields([['Image URL', 'imageUrl', d.imageUrl, 'input']]) +
-        `<div class="field"><label>Hotspots (one per line, format: Label :: Description)</label><textarea class="textarea content-field" data-field="hotspots" rows="6">${(d.hotspots||[]).map(h=>`${h.label||''}${h.description?` :: ${h.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
+      return labelledGraphicContentPanel(block, d);
     case 'quote1': case 'quote2': case 'quote3': case 'quote4':
       return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` +
         quoteAvatarOnlyFields(block) + aiActions();
@@ -2423,12 +2620,11 @@ function renderRightTabContent(block, index, course) {
         ['Label (optional)', 'label', d.label, 'input'],
       ]);
     case 'accordion':
-      return contentFields([['Heading', 'heading', d.heading, 'input']]) +
-        `<div class="field"><label>Items (one per line, format: Title :: Content)</label><textarea class="textarea content-field" data-field="accordionItems" rows="6">${(d.items||[]).map(it=>`${it.title||''} :: ${it.content||''}`).join('\n')}</textarea></div>` + aiActions();
+      return accordionContentPanel(block, d);
     case 'tabs':
-      return `<div class="field"><label>Tabs (one per line, format: Tab label :: Tab content)</label><textarea class="textarea content-field" data-field="tabsData" rows="6">${(d.tabs||[]).map((t,i)=>`${t} :: ${(d.contents&&d.contents[i])||''}`).join('\n')}</textarea></div>` + aiActions();
+      return tabsContentPanel(block, d);
     case 'flashcard_grid': case 'flashcard_stack':
-      return `<p class="text-sm text-muted">Click directly into a card's front or back text to edit it. Use the 📤 Image button to attach an image to either side. Use the ⧉ / × / ← / → controls to duplicate, remove, or reorder cards, and the + Add Card button to add new ones. Click a card to flip between front and back.</p>` + aiActions();
+      return flashcardContentPanel(block, d);
     case 'kc_multiple_response':
       return contentFields([['Question', 'question', d.question, 'textarea']]) +
         `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
@@ -2476,8 +2672,7 @@ function renderRightTabContent(block, index, course) {
         contentFields([['Icon (emoji, optional)', 'icon', d.icon, 'input']]);
     }
     case 'scenario':
-      return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
-        `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
+      return scenarioContentPanel(block, d);
     default:
       return `<p class="text-sm text-muted">Edit the ${blockLabel(block.type)} block's content directly on the canvas, or use AI to generate a draft.</p>` + aiActions();
   }
@@ -2485,6 +2680,14 @@ function renderRightTabContent(block, index, course) {
 
 function segControl(id, prop, options, current) {
   return `<div class="seg-control" data-prop="${prop}" id="${id}">
+    ${options.map(o => `<button data-val="${o.id}" class="${current===o.id?'active':''}">${o.label}</button>`).join('')}
+  </div>`;
+}
+
+/* Segmented control bound to block.settings (Settings tab) rather than
+   block.design — e.g. Accordion's Single/Multiple Open. */
+function segControlSettings(id, prop, options, current) {
+  return `<div class="seg-control" data-sprop="${prop}" id="${id}">
     ${options.map(o => `<button data-val="${o.id}" class="${current===o.id?'active':''}">${o.label}</button>`).join('')}
   </div>`;
 }
@@ -2868,6 +3071,11 @@ function blockTypeDesignFields(block, ds) {
     case 'Interactive':
       if (block.type === 'button') return buttonDesignFields(ds);
       if (block.type === 'flashcard_grid' || block.type === 'flashcard_stack') return flashcardDesignFields(block, ds);
+      if (block.type === 'accordion') return accordionDesignFields(block, ds);
+      if (block.type === 'tabs') return tabsDesignFields(block, ds);
+      if (block.type === 'labelled_graphic') return labelledGraphicDesignFields(block, ds);
+      if (block.type === 'process') return processDesignFields(block, ds);
+      if (block.type === 'scenario') return scenarioDesignFields(block, ds);
       return `
         <div class="prop-section" style="border-bottom:none;">
           <div class="prop-section-title">Animation</div>
@@ -2911,6 +3119,52 @@ function buttonDesignFields(ds) {
     </div>`;
 }
 
+/* Flashcard Grid / Flashcard Stack — Content tab: per-card management
+   (add/duplicate/delete/reorder) and per-face text, image, and image-fit
+   controls. This is the only place card content can be edited — the card
+   surface itself stays clean (Rise philosophy), matching Accordion/Tabs/
+   Process item management. */
+function flashcardContentPanel(block, d) {
+  const items = normalizeFlashcardItems(d);
+  const fitOptions = [
+    { id: 'cover', label: 'Cover' },
+    { id: 'contain', label: 'Contain' },
+    { id: 'stretch', label: 'Stretch' },
+    { id: 'center', label: 'Center' },
+    { id: 'full', label: 'Full Card' },
+  ];
+  const iconBtn = (cls, findex, title, disabled, label) =>
+    `<button class="btn-icon ${cls}" data-findex="${findex}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+  return items.map((item, i) => `
+    <div class="prop-section">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">Card ${i + 1}</div>
+        <div class="flex gap-4">
+          ${iconBtn('flashcard-move-up', i, 'Move up', i === 0, '↑')}
+          ${iconBtn('flashcard-move-down', i, 'Move down', i === items.length - 1, '↓')}
+          ${iconBtn('flashcard-duplicate', i, 'Duplicate card', false, '⧉')}
+          ${iconBtn('flashcard-remove', i, 'Delete card', items.length <= 1, '×')}
+        </div>
+      </div>
+      ${['front', 'back'].map(face => `
+        <div class="field">
+          <label>${face === 'front' ? 'Front' : 'Back'}</label>
+          <textarea class="textarea flashcard-face-text" data-findex="${i}" data-face="${face}" rows="2" placeholder="${face === 'front' ? 'Front text' : 'Back text'}">${item[face].text || ''}</textarea>
+          <div class="flex items-center gap-8 mt-4">
+            <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? '🔄 Change Image' : '📤 Add Image'}</button>
+            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove" data-findex="${i}" data-face="${face}" style="color:#E5484D;">Remove image</button>` : ''}
+          </div>
+          ${item[face].image ? `
+            <p class="text-sm text-muted mb-4 mt-8">Image layout</p>
+            <div class="seg-control flashcard-fit-control" data-findex="${i}" data-face="${face}">
+              ${fitOptions.map(o => `<button data-val="${o.id}" class="${(item[face].imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}
+            </div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 flashcard-add">+ Add Card</button>` + aiActions();
+}
+
 /* Flashcard Grid / Flashcard Stack — Format design-tab fields. */
 function flashcardDesignFields(block, ds) {
   const flipHintField = `
@@ -2927,6 +3181,633 @@ function flashcardDesignFields(block, ds) {
       ${flipHintField}`;
   }
   return flipHintField;
+}
+
+/* ============================================================
+   SHARED ITEM-LIST INFRASTRUCTURE — used by Accordion, Tabs,
+   Process, Labelled Graphic (hotspots) and Scenario (scenes/
+   choices). Items are plain objects on block.data[<listKey>].
+   All media reuses the existing Media Picker / playback systems
+   (Golden Rule 9); image rendering supports Full Area / Cover /
+   Contain / Stretch / Center (Golden Rule 10).
+   ============================================================ */
+
+const ITEM_FIT_OPTIONS = [
+  { id: 'cover', label: 'Cover' },
+  { id: 'contain', label: 'Contain' },
+  { id: 'stretch', label: 'Stretch' },
+  { id: 'center', label: 'Center' },
+  { id: 'full', label: 'Full Area' },
+];
+
+const SURFACE_BG_MAP = {
+  light: 'var(--surface-0)',
+  gray: 'var(--surface-50)',
+  theme: 'var(--pastel-lavender)',
+  tint: 'var(--pastel-cyan)',
+  dark: '#1F1B3A',
+  black: '#000000',
+};
+function surfaceBg(ds) { return SURFACE_BG_MAP[ds && ds.bgStyle] || 'var(--surface-0)'; }
+function surfaceTextColor(ds) { return (ds && (ds.bgStyle === 'dark' || ds.bgStyle === 'black')) ? '#ffffff' : 'var(--ink-900)'; }
+
+function normalizeItemList(d, key, factory) {
+  if (!d[key] || !d[key].length) d[key] = factory();
+  return d[key];
+}
+
+/* Default shape for a brand-new item appended to a given list. */
+function defaultListItem(blockType, listKey) {
+  if (blockType === 'labelled_graphic' && listKey === 'hotspots') {
+    return { title: 'New Hotspot', body: '', x: 50, y: 50 };
+  }
+  if (blockType === 'scenario' && listKey === 'scenes') {
+    return { title: 'New Scene', dialogue: '', characterName: '', choices: [] };
+  }
+  return { title: '', body: '' };
+}
+
+/* Renders an item's image per its imageFit setting — Full Area fills the
+   given height as a cropped backdrop; Cover/Contain/Stretch/Center map to
+   object-fit. Used on the learner-facing canvas (Builder + Preview alike). */
+function itemImageHtml(item, h) {
+  if (!item.image) return '';
+  const fit = item.imageFit || 'cover';
+  if (fit === 'full') {
+    return `<div style="position:relative; width:100%; height:${h}px; border-radius:var(--r-md); overflow:hidden; margin-bottom:10px;"><img src="${item.image}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+  }
+  const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
+  const of = fitMap[fit] || 'cover';
+  return `<img src="${item.image}" alt="" style="width:100%; height:${h}px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; margin-bottom:10px;" />`;
+}
+
+/* Renders an item's video/audio/attachment using the same controls/markup
+   conventions as the Audio/Video/File blocks (playback speed, transcript,
+   download) — no new media systems (Golden Rule 9). */
+function itemMediaExtrasHtml(item) {
+  let html = '';
+  if (item.video) {
+    const embed = parseVideoEmbedUrl(item.video);
+    if (!embed || embed.type === 'mp4') {
+      html += `<div class="media-frame" style="margin-bottom:10px;"><video class="block-video-el" controls playsinline style="width:100%; border-radius:var(--r-md); background:#000; display:block;" src="${item.video}"></video>${playbackSpeedSelector('block-video-el')}</div>`;
+    } else {
+      html += `<div class="media-frame" style="margin-bottom:10px;"><iframe src="${embed.embedUrl}" style="width:100%; aspect-ratio:16/9; border:0; border-radius:var(--r-md);" allowfullscreen></iframe></div>`;
+    }
+  }
+  if (item.audio) {
+    html += `<div class="media-frame" style="margin-bottom:10px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${item.audio}"></audio>${playbackSpeedSelector('block-audio-el')}${item.audioTranscript ? `<details class="mt-8"><summary class="text-sm text-muted" style="cursor:pointer;">Transcript</summary><div class="text-sm mt-4">${escapeHtml(item.audioTranscript)}</div></details>` : ''}</div>`;
+  }
+  if (item.file) {
+    html += `<div class="flex items-center gap-12" style="margin-bottom:10px; padding:10px 12px; background:var(--surface-50); border-radius:var(--r-md);"><span style="font-size:20px;">📎</span><div style="flex:1; min-width:0; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.fileFileName || 'Attachment')}</div><a href="${item.file}" download="${escapeHtml(item.fileFileName || 'download')}" class="btn btn-secondary btn-sm">Download</a></div>`;
+  }
+  return html;
+}
+
+/* Content-panel media controls for a list item — Add/Change/Remove for
+   Image/Video/Audio/Attachment via the existing Media Picker, plus an
+   image-fit selector and an audio transcript field. */
+function itemMediaContentFields(item, listKey, i) {
+  return `
+    <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="image" data-kind="image" data-title="Image">${item.image ? '🔄 Change Image' : '📤 Add Image'}</button>
+      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="image" style="color:#E5484D;">Remove image</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="video" data-kind="video" data-title="Video">${item.video ? '🔄 Change Video' : '📤 Add Video'}</button>
+      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="video" style="color:#E5484D;">Remove video</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="audio" data-kind="audio" data-title="Audio">${item.audio ? '🔄 Change Audio' : '📤 Add Audio'}</button>
+      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="audio" style="color:#E5484D;">Remove audio</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="file" data-kind="file" data-title="Attachment">${item.file ? '🔄 Change File' : '📤 Add Attachment'}</button>
+      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="file" style="color:#E5484D;">Remove file</button>` : ''}
+    </div>
+    ${item.audio ? `<div class="field mt-8"><label>Audio Transcript</label><textarea class="textarea lumio-item-text" rows="2" data-list="${listKey}" data-iindex="${i}" data-field="audioTranscript">${escapeHtml(item.audioTranscript || '')}</textarea></div>` : ''}
+    ${item.image ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="${listKey}" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
+  `;
+}
+
+/* Move-up/move-down/duplicate/delete toolbar for a list item. */
+function itemManageToolbar(listKey, i, count) {
+  const iconBtn = (cls, title, disabled, label) =>
+    `<button class="btn-icon ${cls}" data-list="${listKey}" data-iindex="${i}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+  return `<div class="flex gap-4">
+    ${iconBtn('lumio-item-move-up', 'Move up', i === 0, '↑')}
+    ${iconBtn('lumio-item-move-down', 'Move down', i === count - 1, '↓')}
+    ${iconBtn('lumio-item-duplicate', 'Duplicate', false, '⧉')}
+    ${iconBtn('lumio-item-remove', 'Delete', count <= 1, '×')}
+  </div>`;
+}
+
+/* Generic Content-panel list editor — Title + rich body + media, with
+   Add/Duplicate/Delete/Reorder. Used by Accordion, Tabs, Process and the
+   Labelled Graphic hotspot list. */
+function itemListContentPanel(block, d, listKey, itemLabel, factory, opts) {
+  opts = opts || {};
+  const items = normalizeItemList(d, listKey, factory);
+  return items.map((item, i) => `
+    <div class="prop-section">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">${itemLabel} ${i + 1}</div>
+        ${itemManageToolbar(listKey, i, items.length)}
+      </div>
+      <div class="field"><label>Title</label><input class="input lumio-item-text" data-list="${listKey}" data-iindex="${i}" data-field="title" value="${escapeHtml(item.title || '')}" /></div>
+      <div class="field"><label>${opts.bodyLabel || 'Content'}</label><textarea class="textarea lumio-item-text" rows="3" data-list="${listKey}" data-iindex="${i}" data-field="body">${escapeHtml(item.body || '')}</textarea></div>
+      ${itemMediaContentFields(item, listKey, i)}
+    </div>
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="${listKey}">+ Add ${itemLabel}</button>` + aiActions();
+}
+
+/* ============================================================
+   ACCORDION
+   ============================================================ */
+
+function accordionContentPanel(block, d) {
+  return itemListContentPanel(block, d, 'items', 'Item', () => [
+    { title: 'Section 1', body: 'Details about section 1...' },
+    { title: 'Section 2', body: 'Details about section 2...' },
+  ], { bodyLabel: 'Body' });
+}
+
+function accordionDesignFields(block, ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Heading Level</div>
+      ${segControl('design-headinglevel', 'headingLevel', [{id:'h3',label:'H3'},{id:'h4',label:'H4'},{id:'h5',label:'H5'}], ds.headingLevel || 'h4')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Theme Variant</div>
+      ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker Style</div>
+      ${segControl('design-markerstyle', 'markerStyle', [{id:'none',label:'None'},{id:'number',label:'Numbered'}], ds.markerStyle || 'none')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Chevron Style</div>
+      ${segControl('design-chevronstyle', 'chevronStyle', [{id:'chevron',label:'Chevron'},{id:'plusminus',label:'+ / −'},{id:'arrow',label:'Arrow'}], ds.chevronStyle || 'chevron')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Row Spacing</div>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="rowSpacing" min="0" max="24" value="${ds.rowSpacing ?? 8}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.rowSpacing ?? 8}px</span>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+
+function tabsContentPanel(block, d) {
+  return itemListContentPanel(block, d, 'items', 'Tab', () => [
+    { title: 'Overview', body: 'Overview content...' },
+    { title: 'Details', body: 'Details content...' },
+    { title: 'FAQ', body: 'FAQ content...' },
+  ], { bodyLabel: 'Body' });
+}
+
+function tabsDesignFields(block, ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Theme Variant</div>
+      ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Tab Style</div>
+      ${segControl('design-tabstyle', 'tabStyle', [{id:'underline',label:'Underline'},{id:'pill',label:'Pill'},{id:'boxed',label:'Boxed'}], ds.tabStyle || 'underline')}
+    </div>`;
+}
+
+/* ============================================================
+   PROCESS
+   ============================================================ */
+
+function processContentPanel(block, d) {
+  return itemListContentPanel(block, d, 'items', 'Step', () => [
+    { title: 'Step 1', body: 'Description of step 1' },
+    { title: 'Step 2', body: 'Description of step 2' },
+    { title: 'Step 3', body: 'Description of step 3' },
+  ], { bodyLabel: 'Description' });
+}
+
+function processDesignFields(block, ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Heading Level</div>
+      ${segControl('design-headinglevel', 'headingLevel', [{id:'h3',label:'H3'},{id:'h4',label:'H4'},{id:'h5',label:'H5'}], ds.headingLevel || 'h4')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Theme Variant</div>
+      ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Indicator Style</div>
+      ${segControl('design-indicatorstyle', 'indicatorStyle', [{id:'dots',label:'Dots'},{id:'numbers',label:'Numbers'}], ds.indicatorStyle || 'dots')}
+    </div>`;
+}
+
+/* ============================================================
+   LABELLED GRAPHIC
+   ============================================================ */
+
+function labelledGraphicContentPanel(block, d) {
+  const imageField = `
+    <div class="prop-section">
+      <div class="prop-section-title">Primary Image</div>
+      <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm lumio-lg-image-trigger">${d.image ? '🔄 Change Image' : '📤 Add Image'}</button>
+        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove" style="color:#E5484D;">Remove image</button>` : ''}
+      </div>
+      <p class="text-sm text-muted mt-8">Drag the numbered markers directly on the canvas to position each hotspot.</p>
+    </div>`;
+  return imageField + itemListContentPanel(block, d, 'hotspots', 'Hotspot', () => [
+    { title: 'Hotspot 1', body: 'Description for hotspot 1', x: 25, y: 30 },
+    { title: 'Hotspot 2', body: 'Description for hotspot 2', x: 60, y: 55 },
+    { title: 'Hotspot 3', body: 'Description for hotspot 3', x: 80, y: 25 },
+  ], { bodyLabel: 'Body' });
+}
+
+function labelledGraphicDesignFields(block, ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Image Width</div>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="imageWidth" data-suffix="%" min="40" max="100" value="${ds.imageWidth ?? 100}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.imageWidth ?? 100}%</span>
+      </div>
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Image Fit</div>
+      ${segControl('design-imagefit', 'imageFit', [{id:'cover',label:'Cover'},{id:'contain',label:'Contain'},{id:'stretch',label:'Stretch'},{id:'center',label:'Center'}], ds.imageFit || 'cover')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'tint',label:'Theme Tint'}], ds.bgStyle || 'theme')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker Style</div>
+      <select class="input design-select" data-prop="markerStyle">
+        <option value="numbers" ${(ds.markerStyle || 'numbers') === 'numbers' ? 'selected' : ''}>Numbers (1, 2, 3…)</option>
+        <optgroup label="Icons">
+          ${Object.entries(MARKER_ICONS).map(([id, glyph]) => `<option value="${id}" ${ds.markerStyle === id ? 'selected' : ''}>${glyph}</option>`).join('')}
+        </optgroup>
+      </select>
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker Color</div>
+      <input type="color" class="design-color-input" data-prop="markerColor" value="${ds.markerColor || '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker Border Color</div>
+      <input type="color" class="design-color-input" data-prop="markerBorderColor" value="${ds.markerBorderColor || '#ffffff'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker Size</div>
+      ${segControl('design-markersize', 'markerSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.markerSize || 'md')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Visited State Style</div>
+      ${segControl('design-visitedstyle', 'visitedStyle', [{id:'filled',label:'Filled'},{id:'checkmark',label:'Checkmark'},{id:'theme',label:'Theme Fill'}], ds.visitedStyle || 'filled')}
+    </div>`;
+}
+
+/* ============================================================
+   SCENARIO
+   ============================================================ */
+
+function scenarioContentPanel(block, d) {
+  const scenes = normalizeItemList(d, 'scenes', () => [
+    {
+      title: 'Scene 1', dialogue: 'A customer calls upset about a delayed shipment. How do you respond?',
+      characterName: '', backgroundImage: null, backgroundVideo: null, backgroundAudio: null, characterImage: null,
+      choices: [
+        { text: 'Apologize and offer a solution', feedback: 'Great choice — this de-escalates the situation.', nextScene: 1, correctPath: true },
+        { text: 'Explain that it is not your department', feedback: 'This may frustrate the customer further. Try again.', nextScene: 0, correctPath: false },
+      ],
+    },
+    { title: 'Scene 2', dialogue: 'The customer feels heard and asks what happens next.', characterName: '', backgroundImage: null, backgroundVideo: null, backgroundAudio: null, characterImage: null, choices: [] },
+  ]);
+  const iconBtn = (cls, sindex, title, disabled, label, cindex) =>
+    `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+  const mediaBtn = (sindex, field, kind, title, current) => `
+    <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `🔄 Change ${title}` : `📤 Add ${title}`}</button>
+    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove" data-sindex="${sindex}" data-field="${field}" style="color:#E5484D;">Remove</button>` : ''}`;
+  return scenes.map((scene, i) => `
+    <div class="prop-section">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">Scene ${i + 1}</div>
+        <div class="flex gap-4">
+          ${iconBtn('lumio-scene-move-up', i, 'Move up', i === 0, '↑')}
+          ${iconBtn('lumio-scene-move-down', i, 'Move down', i === scenes.length - 1, '↓')}
+          ${iconBtn('lumio-scene-duplicate', i, 'Duplicate', false, '⧉')}
+          ${iconBtn('lumio-scene-remove', i, 'Delete', scenes.length <= 1, '×')}
+        </div>
+      </div>
+      <div class="field"><label>Scene Title (internal)</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="title" value="${escapeHtml(scene.title || '')}" /></div>
+      <div class="field"><label>Character Name</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="characterName" value="${escapeHtml(scene.characterName || '')}" /></div>
+      <div class="field"><label>Dialogue Text</label><textarea class="textarea lumio-scene-text" rows="3" data-sindex="${i}" data-field="dialogue">${escapeHtml(scene.dialogue || '')}</textarea></div>
+      <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
+        ${mediaBtn(i, 'backgroundImage', 'image', 'Background Image', scene.backgroundImage)}
+        ${mediaBtn(i, 'backgroundVideo', 'video', 'Background Video', scene.backgroundVideo)}
+        ${mediaBtn(i, 'backgroundAudio', 'audio', 'Background Audio', scene.backgroundAudio)}
+        ${mediaBtn(i, 'characterImage', 'image', 'Character Image', scene.characterImage)}
+      </div>
+      <div class="mt-12" style="border-top:1px solid var(--border); padding-top:10px;">
+        <div class="flex items-center justify-between mb-8"><strong class="text-sm">Choices</strong>
+          <button class="btn btn-secondary btn-sm lumio-choice-add" data-sindex="${i}">+ Add Choice</button>
+        </div>
+        ${(scene.choices || []).map((c, ci) => `
+          <div class="mb-8" style="padding:8px; background:var(--surface-50); border-radius:8px;">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm text-muted">Choice ${ci + 1}</span>
+              <div class="flex gap-4">
+                ${iconBtn('lumio-choice-move-up', i, 'Move up', ci === 0, '↑', ci)}
+                ${iconBtn('lumio-choice-move-down', i, 'Move down', ci === scene.choices.length - 1, '↓', ci)}
+                ${iconBtn('lumio-choice-remove', i, 'Delete', false, '×', ci)}
+              </div>
+            </div>
+            <div class="field"><label>Choice Text</label><input class="input lumio-choice-text" data-sindex="${i}" data-cindex="${ci}" data-field="text" value="${escapeHtml(c.text || '')}" /></div>
+            <div class="field"><label>Feedback Text</label><textarea class="textarea lumio-choice-text" rows="2" data-sindex="${i}" data-cindex="${ci}" data-field="feedback">${escapeHtml(c.feedback || '')}</textarea></div>
+            <div class="field"><label>Next Scene</label>
+              <select class="input lumio-choice-select" data-sindex="${i}" data-cindex="${ci}" data-field="nextScene">
+                <option value="">End scenario</option>
+                ${scenes.map((s2, si) => `<option value="${si}" ${c.nextScene === si ? 'selected' : ''}>${si + 1}. ${escapeHtml(s2.title || 'Scene ' + (si + 1))}</option>`).join('')}
+              </select>
+            </div>
+            <label class="flex items-center gap-8"><input type="checkbox" class="lumio-choice-checkbox" data-sindex="${i}" data-cindex="${ci}" data-field="correctPath" ${c.correctPath ? 'checked' : ''}/> Correct path</label>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-scene-add">+ Add Scene</button>` + aiActions();
+}
+
+function scenarioDesignFields(block, ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Theme Variant</div>
+      ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', [{id:'theme',label:'Theme'},{id:'tint',label:'Theme Tint'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'theme')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Overlay Opacity</div>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="overlayOpacity" data-suffix="%" min="0" max="80" value="${ds.overlayOpacity ?? 40}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.overlayOpacity ?? 40}%</span>
+      </div>
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Dialogue Panel Style</div>
+      ${segControl('design-dialoguestyle', 'dialoguePanelStyle', [{id:'card',label:'Card'},{id:'banner',label:'Banner'},{id:'minimal',label:'Minimal'}], ds.dialoguePanelStyle || 'card')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Character Placement</div>
+      ${segControl('design-charplacement', 'characterPlacement', [{id:'left',label:'Left'},{id:'right',label:'Right'},{id:'center',label:'Center'},{id:'none',label:'None'}], ds.characterPlacement || 'left')}
+    </div>`;
+}
+
+/* ============================================================
+   INTERACTION RUNTIME — Accordion/Tabs/Process/Labelled Graphic/
+   Scenario all use plain DOM manipulation for their learner-facing
+   interactions (no re-render), so Builder and Preview behave
+   identically and editor state is never disturbed.
+   ============================================================ */
+
+/* Accordion — expand/collapse a row, honouring Single/Multiple-open mode
+   and the Animation toggle. */
+function lumioAccordionToggle(header, single, animate) {
+  const row = header.parentElement;
+  const wrap = row.closest('.lumio-accordion');
+  const body = row.querySelector('.lumio-accordion-body');
+  const willOpen = !row.classList.contains('open');
+  if (single && willOpen) {
+    wrap.querySelectorAll('.lumio-accordion-row.open').forEach(r => {
+      if (r === row) return;
+      r.classList.remove('open');
+      r.querySelector('.lumio-accordion-header').setAttribute('aria-expanded', 'false');
+      const b = r.querySelector('.lumio-accordion-body');
+      if (animate) {
+        b.style.maxHeight = b.scrollHeight + 'px';
+        requestAnimationFrame(() => { b.style.maxHeight = '0px'; });
+      } else {
+        b.style.maxHeight = '0px';
+      }
+    });
+  }
+  if (willOpen) {
+    row.classList.add('open');
+    header.setAttribute('aria-expanded', 'true');
+    body.style.maxHeight = animate ? (body.scrollHeight + 'px') : 'none';
+  } else {
+    row.classList.remove('open');
+    header.setAttribute('aria-expanded', 'false');
+    if (animate) {
+      body.style.maxHeight = body.scrollHeight + 'px';
+      requestAnimationFrame(() => { body.style.maxHeight = '0px'; });
+    } else {
+      body.style.maxHeight = '0px';
+    }
+  }
+}
+
+/* Tabs — switch the active tab + panel. */
+function lumioTabSwitch(btn, i) {
+  const wrap = btn.closest('.lumio-tabs');
+  wrap.querySelectorAll('.lumio-tab-btn').forEach((b, idx) => {
+    b.classList.toggle('active', idx === i);
+    b.setAttribute('aria-selected', idx === i ? 'true' : 'false');
+  });
+  wrap.querySelectorAll('.lumio-tab-panel').forEach((p, idx) => p.classList.toggle('active', idx === i));
+}
+
+/* Process — jump to / step through a given step, updating indicators and
+   enabling/disabling the Back/Next buttons at the ends. */
+function lumioProcessGoto(wrap, idx) {
+  const steps = wrap.querySelectorAll('.lumio-process-step');
+  const dots = wrap.querySelectorAll('.lumio-process-dot');
+  if (idx < 0 || idx >= steps.length) return;
+  steps.forEach((s, i) => s.classList.toggle('active', i === idx));
+  dots.forEach((dd, i) => dd.classList.toggle('active', i === idx));
+  wrap.dataset.current = String(idx);
+  const prev = wrap.querySelector('.lumio-process-prev');
+  const next = wrap.querySelector('.lumio-process-next');
+  if (prev) prev.disabled = idx === 0;
+  if (next) next.disabled = idx === steps.length - 1;
+}
+function lumioProcessNav(wrap, dir) {
+  const current = parseInt(wrap.dataset.current || '0', 10);
+  lumioProcessGoto(wrap, current + dir);
+}
+function lumioProcessTouchStart(e, wrap) {
+  wrap._touchX = (e.touches ? e.touches[0].clientX : e.clientX);
+}
+function lumioProcessTouchEnd(e, wrap) {
+  if (wrap.dataset.swipe === '0') return;
+  const endX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
+  const dx = endX - (wrap._touchX == null ? endX : wrap._touchX);
+  if (Math.abs(dx) > 40) lumioProcessNav(wrap, dx < 0 ? 1 : -1);
+}
+
+/* Labelled Graphic — open a hotspot's info panel, honouring "Auto Close
+   Previous". */
+// Mark a hotspot marker as visited: stop its pulse animation and, for the
+// "Checkmark" visited style, swap its glyph for a permanent checkmark.
+function lumioHotspotMarkVisited(marker) {
+  if (marker.classList.contains('visited')) return;
+  marker.classList.add('visited', 'pulse-off');
+  const wrap = marker.closest('.lumio-labelled-graphic');
+  if (wrap && wrap.dataset.visitedstyle === 'checkmark') marker.textContent = '✓';
+}
+
+function lumioHotspotOpen(wrap, i) {
+  const panel = wrap.querySelector(`.lumio-hotspot-panel[data-hindex="${i}"]`);
+  const marker = wrap.querySelector(`.lumio-hotspot[data-hindex="${i}"]`);
+  if (!panel || !marker) return;
+  const autoClose = wrap.dataset.autoclose !== '0';
+  if (autoClose) {
+    wrap.querySelectorAll('.lumio-hotspot-panel').forEach(p => { if (p !== panel) p.style.display = 'none'; });
+    wrap.querySelectorAll('.lumio-hotspot').forEach(b => { if (b !== marker) b.classList.remove('active'); });
+  }
+  panel.style.display = 'block';
+  marker.classList.add('active');
+  lumioHotspotMarkVisited(marker);
+}
+
+function lumioHotspotClose(wrap, i) {
+  const panel = wrap.querySelector(`.lumio-hotspot-panel[data-hindex="${i}"]`);
+  const marker = wrap.querySelector(`.lumio-hotspot[data-hindex="${i}"]`);
+  if (panel) panel.style.display = 'none';
+  if (marker) marker.classList.remove('active');
+}
+
+function lumioHotspotToggle(btn, i) {
+  if (btn._suppressClick) { btn._suppressClick = false; return; }
+  const wrap = btn.closest('.lumio-labelled-graphic');
+  const panel = wrap.querySelector(`.lumio-hotspot-panel[data-hindex="${i}"]`);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) lumioHotspotClose(wrap, i);
+  else lumioHotspotOpen(wrap, i);
+}
+
+// Hotspot panel Prev/Next — move to the adjacent hotspot in Content-panel order.
+function lumioHotspotPanelNav(btn, dir) {
+  const panel = btn.closest('.lumio-hotspot-panel');
+  const wrap = btn.closest('.lumio-labelled-graphic');
+  if (!panel || !wrap) return;
+  const total = wrap.querySelectorAll('.lumio-hotspot-panel').length;
+  const current = parseInt(panel.dataset.hindex, 10);
+  const next = (current + dir + total) % total;
+  lumioHotspotClose(wrap, current);
+  lumioHotspotOpen(wrap, next);
+}
+
+/* Labelled Graphic (Builder only) — drag a hotspot marker to reposition it.
+   Coordinates are stored as percentages of the image wrapper so positioning
+   stays correct as the image scales (responsive). Persists into
+   block.data.hotspots[i].x/y on drop, then re-renders + autosaves. */
+function lumioHotspotDragStart(ev, hindex) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  const marker = ev.currentTarget;
+  const wrap = marker.closest('.lumio-lg-imagewrap');
+  const canvasBlock = marker.closest('.canvas-block');
+  if (!wrap || !canvasBlock) return;
+  const blockIndex = parseInt(canvasBlock.dataset.index, 10);
+  const rect = wrap.getBoundingClientRect();
+  const startX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  const startY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+  let moved = false;
+  function move(e) {
+    const point = e.touches ? e.touches[0] : e;
+    if (Math.abs(point.clientX - startX) > 3 || Math.abs(point.clientY - startY) > 3) moved = true;
+    let x = ((point.clientX - rect.left) / rect.width) * 100;
+    let y = ((point.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(0, Math.min(100, x));
+    y = Math.max(0, Math.min(100, y));
+    marker.style.left = x + '%';
+    marker.style.top = y + '%';
+    marker.dataset.pendingX = String(x);
+    marker.dataset.pendingY = String(y);
+  }
+  function up() {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+    document.removeEventListener('touchmove', move);
+    document.removeEventListener('touchend', up);
+    if (!moved) {
+      marker._suppressClick = false;
+      lumioHotspotToggle(marker, hindex);
+      return;
+    }
+    marker._suppressClick = true;
+    const x = parseFloat(marker.dataset.pendingX);
+    const y = parseFloat(marker.dataset.pendingY);
+    if (!isNaN(x) && !isNaN(y)) {
+      const blocksArr = LumioState.lessons[LumioState.currentLessonId];
+      const block = blocksArr && blocksArr[blockIndex];
+      const hs = block && block.data.hotspots && block.data.hotspots[hindex];
+      if (hs) {
+        hs.x = Math.round(x * 10) / 10;
+        hs.y = Math.round(y * 10) / 10;
+        renderLessonBuilder(LumioState.currentLessonId);
+        flashSaveStatus();
+      }
+    }
+  }
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+  document.addEventListener('touchmove', move, { passive: false });
+  document.addEventListener('touchend', up);
+}
+
+/* Scenario — handle a choice click: show feedback, optionally track
+   scoring, then advance to the linked next scene (or show the completion
+   message if this is a terminal choice). */
+function lumioScenarioChoice(btn) {
+  const sceneEl = btn.closest('.lumio-scenario-scene');
+  const wrap = btn.closest('.lumio-scenario');
+  const choicesWrap = sceneEl.querySelector('.lumio-scenario-choices');
+  const feedbackEl = sceneEl.querySelector('.lumio-scenario-feedback');
+  if (wrap.dataset.scoring === '1') {
+    wrap.dataset.total = String((parseInt(wrap.dataset.total || '0', 10)) + 1);
+    if (btn.dataset.correct === '1') wrap.dataset.correct = String((parseInt(wrap.dataset.correct || '0', 10)) + 1);
+  }
+  const feedback = btn.dataset.feedback || '';
+  const next = btn.dataset.next;
+  let html = feedback ? `<p>${escapeHtml(feedback)}</p>` : '';
+  if (next !== '' && next != null) {
+    html += `<button class="btn btn-primary btn-sm lumio-scenario-continue">Continue</button>`;
+  } else {
+    html += `<p class="lumio-scenario-final-msg">${escapeHtml(wrap.dataset.completion || 'Scenario complete!')}</p>`;
+  }
+  feedbackEl.innerHTML = html;
+  feedbackEl.style.display = 'block';
+  choicesWrap.style.display = 'none';
+  const cont = feedbackEl.querySelector('.lumio-scenario-continue');
+  if (cont) cont.addEventListener('click', (e) => {
+    e.stopPropagation();
+    lumioScenarioGoto(wrap, parseInt(next, 10));
+  });
+}
+function lumioScenarioGoto(wrap, idx) {
+  const scenes = wrap.querySelectorAll('.lumio-scenario-scene');
+  if (idx < 0 || idx >= scenes.length) return;
+  scenes.forEach((s, i) => s.classList.toggle('active', i === idx));
+  wrap.dataset.current = String(idx);
 }
 
 function contentFields(fields) {
@@ -3298,6 +4179,16 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     block.design = block.design || {};
     block.design[inp.dataset.prop] = inp.value;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Design tab — dropdowns stored on block.design (e.g. Marker Style)
+  app.querySelectorAll('.design-select[data-prop]').forEach(sel => sel.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design[sel.dataset.prop] = sel.value;
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
@@ -3686,6 +4577,383 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
+  // Settings tab — select inputs stored on block.settings (e.g. Tabs Default Active Tab)
+  app.querySelectorAll('.settings-select').forEach(sel => sel.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    block.settings[sel.dataset.field] = parseInt(sel.value, 10) || 0;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Settings tab — text inputs stored on block.settings (e.g. Scenario Completion Message)
+  app.querySelectorAll('.settings-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    block.settings[inp.dataset.field] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Settings tab — segmented controls stored on block.settings (e.g. Accordion Open Mode)
+  app.querySelectorAll('.seg-control[data-sprop]').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.settings = block.settings || {};
+      block.settings[seg.dataset.sprop] = btn.dataset.val;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    }));
+  });
+
+  /* ============================================================
+     SHARED ITEM-LIST HANDLERS — Accordion / Tabs / Process /
+     Labelled Graphic hotspots. Resolve the active block via
+     BuilderUI.selected and the item list via data-list.
+     ============================================================ */
+
+  // Item text fields (title / body / audio transcript)
+  app.querySelectorAll('.lumio-item-text').forEach(el => el.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[el.dataset.list] || [];
+    const item = items[parseInt(el.dataset.iindex, 10)];
+    if (!item) return;
+    item[el.dataset.field] = e.target.value;
+    flashSaveStatus();
+  }));
+
+  // Item media — add/replace via Media Picker
+  app.querySelectorAll('.lumio-item-media-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    const item = items[parseInt(btn.dataset.iindex, 10)];
+    if (!item) return;
+    const field = btn.dataset.field;
+    const kind = btn.dataset.kind;
+    openMediaPicker({
+      title: btn.dataset.title,
+      kind,
+      currentSrc: item[field],
+      currentFileName: item[field + 'FileName'],
+      onInsert: (result) => {
+        item[field] = result.src;
+        if (kind !== 'image') {
+          item[field + 'FileName'] = result.fileName;
+          item[field + 'MimeType'] = result.mimeType;
+          item[field + 'FileSize'] = result.size;
+        }
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete item[field];
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+
+  // Item media — remove
+  app.querySelectorAll('.lumio-item-media-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    const item = items[parseInt(btn.dataset.iindex, 10)];
+    if (!item) return;
+    const field = btn.dataset.field;
+    delete item[field];
+    delete item[field + 'FileName'];
+    delete item[field + 'MimeType'];
+    delete item[field + 'FileSize'];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Item image — layout / fit selector
+  app.querySelectorAll('.lumio-item-fit-control').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      const items = block.data[seg.dataset.list] || [];
+      const item = items[parseInt(seg.dataset.iindex, 10)];
+      if (!item) return;
+      item.imageFit = btn.dataset.val;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    }));
+  });
+
+  // Item list — add / duplicate / remove / reorder
+  app.querySelectorAll('.lumio-item-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const listKey = btn.dataset.list;
+    const items = block.data[listKey] || (block.data[listKey] = []);
+    items.push(defaultListItem(block.type, listKey));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-item-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    const i = parseInt(btn.dataset.iindex, 10);
+    items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-item-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.iindex, 10), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-item-move-up').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    const i = parseInt(btn.dataset.iindex, 10);
+    if (i <= 0) return;
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-item-move-down').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = block.data[btn.dataset.list] || [];
+    const i = parseInt(btn.dataset.iindex, 10);
+    if (i >= items.length - 1) return;
+    [items[i + 1], items[i]] = [items[i], items[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Labelled Graphic — primary image via Media Picker
+  app.querySelectorAll('.lumio-lg-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    openMediaPicker({
+      title: 'Primary Image',
+      kind: 'image',
+      currentSrc: block.data.image,
+      onInsert: (result) => {
+        block.data.image = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete block.data.image;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.lumio-lg-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    delete block.data.image;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  /* ============================================================
+     SCENARIO HANDLERS — scenes and per-scene choices
+     ============================================================ */
+
+  app.querySelectorAll('.lumio-scene-text').forEach(el => el.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const scene = scenes[parseInt(el.dataset.sindex, 10)];
+    if (!scene) return;
+    scene[el.dataset.field] = e.target.value;
+    flashSaveStatus();
+  }));
+
+  app.querySelectorAll('.lumio-scene-media-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const scene = scenes[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    const field = btn.dataset.field;
+    openMediaPicker({
+      title: btn.dataset.title,
+      kind: btn.dataset.kind,
+      currentSrc: scene[field],
+      onInsert: (result) => {
+        scene[field] = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete scene[field];
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.lumio-scene-media-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const scene = scenes[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    delete scene[btn.dataset.field];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  app.querySelectorAll('.lumio-scene-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || (block.data.scenes = []);
+    scenes.push(defaultListItem('scenario', 'scenes'));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-scene-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const i = parseInt(btn.dataset.sindex, 10);
+    scenes.splice(i + 1, 0, JSON.parse(JSON.stringify(scenes[i])));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-scene-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    if (scenes.length <= 1) return;
+    scenes.splice(parseInt(btn.dataset.sindex, 10), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-scene-move-up').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const i = parseInt(btn.dataset.sindex, 10);
+    if (i <= 0) return;
+    [scenes[i - 1], scenes[i]] = [scenes[i], scenes[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-scene-move-down').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scenes = block.data.scenes || [];
+    const i = parseInt(btn.dataset.sindex, 10);
+    if (i >= scenes.length - 1) return;
+    [scenes[i + 1], scenes[i]] = [scenes[i], scenes[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Choices — text/select/checkbox fields
+  app.querySelectorAll('.lumio-choice-text').forEach(el => el.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(el.dataset.sindex, 10)];
+    if (!scene) return;
+    const choice = (scene.choices || [])[parseInt(el.dataset.cindex, 10)];
+    if (!choice) return;
+    choice[el.dataset.field] = e.target.value;
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-select').forEach(el => el.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(el.dataset.sindex, 10)];
+    if (!scene) return;
+    const choice = (scene.choices || [])[parseInt(el.dataset.cindex, 10)];
+    if (!choice) return;
+    choice[el.dataset.field] = e.target.value === '' ? null : parseInt(e.target.value, 10);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-checkbox').forEach(el => el.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(el.dataset.sindex, 10)];
+    if (!scene) return;
+    const choice = (scene.choices || [])[parseInt(el.dataset.cindex, 10)];
+    if (!choice) return;
+    choice[el.dataset.field] = e.target.checked;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    scene.choices = scene.choices || [];
+    scene.choices.push({ text: 'New choice', feedback: '', nextScene: null, correctPath: false });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    scene.choices.splice(parseInt(btn.dataset.cindex, 10), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-move-up').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    const ci = parseInt(btn.dataset.cindex, 10);
+    if (ci <= 0) return;
+    [scene.choices[ci - 1], scene.choices[ci]] = [scene.choices[ci], scene.choices[ci - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.lumio-choice-move-down').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const scene = (block.data.scenes || [])[parseInt(btn.dataset.sindex, 10)];
+    if (!scene) return;
+    const ci = parseInt(btn.dataset.cindex, 10);
+    if (ci >= scene.choices.length - 1) return;
+    [scene.choices[ci + 1], scene.choices[ci]] = [scene.choices[ci], scene.choices[ci + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
   // Quote Carousel — per-quote avatar via Media Picker
   app.querySelectorAll('.quote-carousel-avatar-trigger').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -3891,10 +5159,21 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Flashcards — per-face image via Media Picker
+  // Flashcards — Content panel: per-face text
+  app.querySelectorAll('.flashcard-face-text').forEach(ta => ta.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeFlashcardItems(block.data);
+    const i = parseInt(ta.dataset.findex);
+    const face = ta.dataset.face === 'back' ? 'back' : 'front';
+    items[i][face].text = e.target.value;
+    flashSaveStatus();
+  }));
+
+  // Flashcards — Content panel: per-face image via Media Picker
   app.querySelectorAll('.flashcard-face-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     const i = parseInt(btn.dataset.findex);
@@ -3916,7 +5195,7 @@ function bindBuilderEvents(course, lesson, blocks) {
   }));
   app.querySelectorAll('.flashcard-face-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     const face = btn.dataset.face === 'back' ? 'back' : 'front';
@@ -3925,19 +5204,33 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Flashcards — add / duplicate / remove / reorder cards
+  // Flashcards — Content panel: per-face image layout (fit) selector
+  app.querySelectorAll('.flashcard-fit-control').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      const items = normalizeFlashcardItems(block.data);
+      const i = parseInt(seg.dataset.findex);
+      const face = seg.dataset.face === 'back' ? 'back' : 'front';
+      items[i][face].imageFit = btn.dataset.val;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    }));
+  });
+
+  // Flashcards — Content panel: add / duplicate / remove / reorder cards
   app.querySelectorAll('.flashcard-add').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
-    items.push({ front: { text: '', image: null }, back: { text: '', image: null } });
+    items.push({ front: { text: '', image: null, imageFit: 'cover' }, back: { text: '', image: null, imageFit: 'cover' } });
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
   app.querySelectorAll('.flashcard-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     const i = parseInt(btn.dataset.findex);
@@ -3947,7 +5240,7 @@ function bindBuilderEvents(course, lesson, blocks) {
   }));
   app.querySelectorAll('.flashcard-remove').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     if (items.length <= 1) return;
@@ -3955,9 +5248,9 @@ function bindBuilderEvents(course, lesson, blocks) {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
-  app.querySelectorAll('.flashcard-move-left').forEach(btn => btn.addEventListener('click', (e) => {
+  app.querySelectorAll('.flashcard-move-up').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     const i = parseInt(btn.dataset.findex);
@@ -3966,9 +5259,9 @@ function bindBuilderEvents(course, lesson, blocks) {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
-  app.querySelectorAll('.flashcard-move-right').forEach(btn => btn.addEventListener('click', (e) => {
+  app.querySelectorAll('.flashcard-move-down').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const block = blocks[BuilderUI.selected];
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     const i = parseInt(btn.dataset.findex);
@@ -4309,6 +5602,7 @@ function bindDragAndDrop(lesson, blocks) {
       if (dragDepth === 0) zone.classList.remove('drag-active');
     });
     zone.addEventListener('drop', (e) => {
+      e.stopPropagation();
       dragDepth = 0;
       zone.classList.remove('drag-active');
       const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : parseInt(zone.dataset.dropIndex);
@@ -4351,6 +5645,7 @@ function bindDragAndDrop(lesson, blocks) {
     });
     emptyDrop.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       emptyDragDepth = 0;
       emptyDrop.classList.remove('drag-active');
       const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
@@ -4362,15 +5657,15 @@ function bindDragAndDrop(lesson, blocks) {
     });
   }
 
-  // Unused canvas space below the last block also resolves to "add to end"
-  // (or to the active insertion zone, if one exists).
+  // Catch-all: a block dragged anywhere over the canvas — not just onto a
+  // drop-zone — can be dropped. Drop-zones call stopPropagation() when they
+  // handle a drop themselves, so this only fires for drops elsewhere on the
+  // canvas (over a block, in the margins, etc.) and appends to the end of
+  // the lesson (or to the active insertion zone, if one exists).
   const canvas = app.querySelector('#lesson-canvas');
-  if (canvas && blocks.length > 0) {
-    canvas.addEventListener('dragover', (e) => {
-      if (e.target === canvas) e.preventDefault();
-    });
+  if (canvas) {
+    canvas.addEventListener('dragover', (e) => e.preventDefault());
     canvas.addEventListener('drop', (e) => {
-      if (e.target !== canvas) return;
       const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
       BuilderUI.insertZoneIndex = null;
       handleLibraryOrCanvasDrop(e, targetIndex, blocks, lesson);
