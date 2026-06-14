@@ -322,6 +322,37 @@ function renderCanvasBlocks(blocks) {
 }
 
 const RADIUS_MAP = { sharp: '4px', soft: 'var(--r-lg)', round: 'var(--r-xl)' };
+const IMAGE_RADIUS_MAP = { sharp: '4px', soft: 'var(--r-md)', round: 'var(--r-xl)' };
+
+/* Lazily migrates legacy string[] carousel items to {src, caption} objects, in place. */
+function normalizeCarouselItems(d) {
+  const source = (d.items && d.items.length) ? d.items : ['Slide 1', 'Slide 2', 'Slide 3'];
+  d.items = source.map(it => typeof it === 'string' ? { src: null, caption: it } : { src: (it && it.src) || null, caption: (it && it.caption) || '' });
+  return d.items;
+}
+
+/* Lazily migrates column_grid items to {title, description, imageUrl} objects, in place. */
+function normalizeColumnGridItems(d) {
+  const source = (d.items && d.items.length) ? d.items : [{ title: 'Item 1' }, { title: 'Item 2' }, { title: 'Item 3' }];
+  d.items = source.map(it => it || {});
+  return d.items;
+}
+
+/* Full-size image lightbox — a Learner Preview-only interaction, opened by
+   clicking any .image-zoom-trigger image (see learnerPreview.js). */
+function openImageLightbox(src, alt) {
+  if (!src) return;
+  const overlay = el('<div class="overlay"></div>');
+  overlay.innerHTML = `
+    <div class="modal" style="background:transparent; box-shadow:none; padding:0; max-width:90vw; max-height:90vh;">
+      <img src="${src}" alt="${escapeHtml(alt || '')}" style="display:block; max-width:90vw; max-height:90vh; border-radius:var(--r-md); box-shadow:var(--shadow-md);" />
+    </div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.addEventListener('keydown', function onKeydown(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKeydown); }
+  });
+  document.body.appendChild(overlay);
+}
 
 const TEXT_BG_MAP = { light: '#ffffff', grey: '#f1f1f4', dark: 'var(--ink-900)' };
 const TEXT_COLOR_MAP = { black: '#1a1a1a', white: '#ffffff', grey: '#8a8a94' };
@@ -620,7 +651,21 @@ function applyLivePreview(block, index) {
   if (blockCategory(block.type) === 'Statements') applyStatementStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Quotes') applyQuoteStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Lists') applyListStylesToDom(block, index);
+  else if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') applyImageStylesToDom(block, index);
   else applyBlockStylesToDom(block, index);
+}
+
+/* Re-apply Image/Gallery block overlay opacity directly to the DOM for live preview during slider drags. */
+function applyImageStylesToDom(block, index) {
+  if (block.type !== 'text_on_image') return;
+  const wrapper = document.querySelector(`.canvas-block[data-index="${index}"]`);
+  if (!wrapper) return;
+  const ds = block.design || {};
+  const overlay = wrapper.querySelector('.text-on-image-overlay');
+  if (overlay) {
+    const overlayOpacity = ds.overlayOpacity ?? 40;
+    overlay.style.background = `rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)})`;
+  }
 }
 
 /* Block types that render directly on the canvas as page content, without
@@ -683,7 +728,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid'].includes(block.type);
   const cardlessSelectionStyle = isTextAuthoringBlock
     ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
     : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
@@ -906,6 +951,38 @@ function ensureRichTextToolbar() {
   document.addEventListener('scroll', reposition, true);
   window.addEventListener('resize', reposition);
 
+  // Drive the toolbar's visibility from the selection itself rather than
+  // mouseup/keyup landing inside a specific element. This is what makes
+  // "select 100% of the text" work: a full selection's mouseup commonly
+  // lands just outside the .editable-text element's box, so mouseup/keyup
+  // handlers on that element never fire — but selectionchange always does.
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const anchor = sel.anchorNode;
+    const container = anchor && anchor.nodeType === 3 ? anchor.parentElement : anchor;
+    const elx = container && container.closest ? container.closest('.editable-text[data-richtext="true"]') : null;
+
+    if (!elx || sel.isCollapsed) {
+      // Don't hide while the user is interacting with the toolbar itself
+      // (e.g. the colour picker or size dropdown can shift focus/selection).
+      if (!(RichTextToolbar.el && RichTextToolbar.el.contains(document.activeElement))) {
+        hideRichTextToolbar();
+      }
+      return;
+    }
+
+    const blockEl = elx.closest('.canvas-block');
+    const blocks = LumioState.lessons[LumioState.currentLessonId];
+    const idx = blockEl ? parseInt(blockEl.dataset.index) : NaN;
+    const block = blocks && !isNaN(idx) ? blocks[idx] : null;
+    if (!block) return;
+
+    RichTextToolbar.activeField = { block, elx };
+    positionRichTextToolbar();
+  });
+
   return el;
 }
 
@@ -928,6 +1005,14 @@ function syncRichTextField(block, elx) {
     const i = parseInt(elx.dataset.col);
     items[i] = items[i] || {};
     items[i].text = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'carouselCaption') {
+    const items = normalizeCarouselItems(block.data);
+    const i = parseInt(elx.dataset.col);
+    items[i].caption = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'gridItemTitle' || elx.dataset.field === 'gridItemDesc') {
+    const items = normalizeColumnGridItems(block.data);
+    const i = parseInt(elx.dataset.col);
+    items[i][elx.dataset.field === 'gridItemTitle' ? 'title' : 'description'] = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
   }
@@ -1116,29 +1201,105 @@ function renderBlockContent(block, editable) {
         ${editable ? `<button class="btn btn-secondary btn-sm list-item-add mt-8" style="margin-left:${indent}px;">+ Add Item</button>` : ''}`;
     }
 
-    case 'image':
-      return imagePlaceholder(d.label || 'Image placeholder', 160);
-    case 'image_text':
-      return `<div style="display:grid; grid-template-columns:1fr 1.2fr; gap:20px; align-items:center;">
-        ${imagePlaceholder(d.imageLabel || 'Image placeholder', 140)}
-        <div><h3 style="font-size:16px;">${d.heading || 'Heading'}</h3><p class="text-sm mt-8" style="line-height:1.7;">${d.body || 'Supporting paragraph text goes here.'}</p></div>
+    case 'image': {
+      const layout = ds.layout || 'centered';
+      const radius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
+      const src = d.src;
+      const alt = d.alt || d.label || '';
+      let imgStyle;
+      if (layout === 'full') imgStyle = 'width:100%; height:auto;';
+      else if (layout === 'banner') imgStyle = 'width:100%; height:260px; object-fit:cover;';
+      else imgStyle = 'max-width:480px; width:100%; height:auto; margin:0 auto;';
+      imgStyle += ` display:block; border-radius:${radius};`;
+      const imgHtml = src
+        ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="${imgStyle} cursor:${editable ? 'pointer' : 'zoom-in'};" />`
+        : `<div style="${layout === 'centered' ? 'max-width:480px; margin:0 auto;' : ''}">${imagePlaceholder(d.label || 'Image placeholder', layout === 'banner' ? 200 : 160)}</div>`;
+      const showCaption = editable || d.caption;
+      const captionHtml = showCaption
+        ? `<div class="editable-text text-sm text-muted mt-8" data-role="caption" data-field="caption" data-richtext="true" ${ce} data-placeholder="Add a caption (optional)" style="text-align:center;">${richTextOut(d.caption || '')}</div>`
+        : '';
+      return `<div>${imgHtml}${captionHtml}</div>`;
+    }
+    case 'image_text': {
+      const pos = ds.imagePosition || 'left';
+      const sizeMap = { sm: ['0.8fr', '1.6fr'], md: ['1fr', '1.2fr'], lg: ['1.4fr', '1fr'] };
+      const cols = sizeMap[ds.imageSize || 'md'];
+      const gridCols = pos === 'right' ? `${cols[1]} ${cols[0]}` : `${cols[0]} ${cols[1]}`;
+      const src = d.src;
+      const alt = d.alt || d.imageLabel || '';
+      const imageBlock = src
+        ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="width:100%; height:100%; min-height:140px; object-fit:cover; border-radius:var(--r-md); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
+        : imagePlaceholder(alt || 'Image placeholder', 140);
+      const textBlock = `<div>
+        <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 16)}">${richTextOut(d.heading || '')}</h3>
+        <div class="editable-text text-sm mt-8" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Supporting paragraph text goes here." style="line-height:1.7; ${textTypographyStyle(ds, 14)}">${richTextOut(d.body || '')}</div>
       </div>`;
-    case 'text_on_image':
-      return `<div style="${d.imageUrl ? `background-image:url('${d.imageUrl}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);'} border-radius:var(--r-md); padding:40px; color:#fff; text-align:center;">
-        <h3 style="font-size:18px; color:#fff;">${d.heading || 'Bold headline on image'}</h3>
-        <p class="text-sm mt-8">${d.body || 'Supporting text overlaid on a background image.'}</p>
+      return `<div class="image-text-layout" style="display:grid; grid-template-columns:${gridCols}; gap:20px; align-items:center;">
+        ${pos === 'right' ? `${textBlock}${imageBlock}` : `${imageBlock}${textBlock}`}
       </div>`;
-
-    case 'carousel':
-      return `<div class="flex gap-12" style="overflow-x:auto;">${((d.items && d.items.length) ? d.items : ['Slide 1','Slide 2','Slide 3']).map(s=>imagePlaceholder(s, 120, 180)).join('')}</div>`;
-    case 'column_grid':
-      return `<div style="display:grid; grid-template-columns:repeat(${Math.min(((d.items&&d.items.length)||3), 3)},1fr); gap:12px;">${((d.items&&d.items.length) ? d.items : [{title:'Item 1'},{title:'Item 2'},{title:'Item 3'}]).map(item=>`
-        <div class="card card-pad text-center">
-          ${item.imageUrl ? `<img src="${item.imageUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:var(--r-sm);"/>` : imagePlaceholder(item.title||'Item', 80)}
-          <div style="font-weight:600; font-size:13px; margin-top:8px;">${item.title||''}</div>
-          ${item.description ? `<div class="text-sm text-muted mt-4">${item.description}</div>` : ''}
+    }
+    case 'text_on_image': {
+      const src = d.src || d.imageUrl;
+      const overlayOpacity = ds.overlayOpacity ?? 40;
+      const textColor = ds.textColor === 'dark' ? '#1a1a1a' : '#ffffff';
+      const position = ds.textPosition || 'center';
+      const justifyMap = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
+      const bgStyle = src ? `background-image:url('${src}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);';
+      return `<div style="${bgStyle} border-radius:var(--r-md); min-height:240px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
+        ${src ? `<div class="text-on-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)});"></div>` : ''}
+        <div style="position:relative; z-index:1; padding:32px; text-align:center; max-width:520px;">
+          <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Bold headline on image" style="color:${textColor}; ${textTypographyStyle(ds, 20)}">${richTextOut(d.heading || '')}</h3>
+          <div class="editable-text mt-8" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Supporting text overlaid on a background image." style="color:${textColor}; ${textTypographyStyle(ds, 15)}">${richTextOut(d.body || '')}</div>
         </div>
-      `).join('')}</div>`;
+      </div>`;
+    }
+
+    case 'carousel': {
+      const items = normalizeCarouselItems(d);
+      return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
+        ${items.map((item, i) => `
+          <div class="card card-pad" style="min-width:180px; max-width:220px; position:relative;">
+            ${editable ? `<button class="btn-icon carousel-slide-remove" data-cindex="${i}" title="Remove slide" aria-label="Remove slide" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
+            ${item.src
+              ? `<img src="${item.src}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" data-cindex="${i}" style="width:100%; height:120px; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
+              : imagePlaceholder(item.caption || `Slide ${i + 1}`, 120)}
+            ${editable
+              ? `<div class="editable-text text-sm mt-8" data-role="body" data-field="carouselCaption" data-col="${i}" data-richtext="true" contenteditable="true" data-placeholder="Caption (optional)">${richTextOut(item.caption || '')}</div>
+                 <div class="flex items-center gap-8 mt-8">
+                   <button class="btn btn-secondary btn-sm carousel-slide-image-trigger" data-cindex="${i}">${item.src ? '🔄 Replace' : '📤 Upload'}</button>
+                   ${item.src ? `<button class="btn btn-ghost btn-sm carousel-slide-image-remove" data-cindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
+                 </div>
+                 <div class="flex gap-4 mt-8">
+                   <button class="btn-icon carousel-slide-move-left" data-cindex="${i}" title="Move left" aria-label="Move slide left" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">←</button>
+                   <button class="btn-icon carousel-slide-move-right" data-cindex="${i}" title="Move right" aria-label="Move slide right" ${i === items.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === items.length - 1 ? '0.4' : '1'};">→</button>
+                 </div>`
+              : (item.caption ? `<div class="text-sm mt-8" style="text-align:center;">${richTextOut(item.caption)}</div>` : '')}
+          </div>
+        `).join('')}
+        ${editable ? `<button class="btn btn-secondary btn-sm carousel-slide-add" style="min-width:140px; align-self:center;">+ Add Slide</button>` : ''}
+      </div>`;
+    }
+    case 'column_grid': {
+      const items = normalizeColumnGridItems(d);
+      const columns = Math.max(2, Math.min(6, ds.columns || 3));
+      return `<div style="display:grid; grid-template-columns:repeat(${columns},1fr); gap:12px;">
+        ${items.map((item, i) => `
+          <div class="card card-pad text-center" style="position:relative;">
+            ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
+            ${item.imageUrl
+              ? `<img src="${item.imageUrl}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.imageUrl}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; height:80px; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
+              : imagePlaceholder(item.title || 'Item', 80)}
+            <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
+            <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
+            ${editable ? `<div class="flex items-center justify-center gap-8 mt-8">
+              <button class="btn btn-secondary btn-sm grid-item-image-trigger" data-gindex="${i}">${item.imageUrl ? '🔄 Replace' : '📤 Upload'}</button>
+              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove" data-gindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
+            </div>` : ''}
+          </div>
+        `).join('')}
+        ${editable ? `<button class="btn btn-secondary btn-sm grid-item-add" style="grid-column:1/-1;">+ Add Item</button>` : ''}
+      </div>`;
+    }
 
     case 'audio':
       return `<div class="card card-pad flex items-center gap-12" style="background:var(--pastel-cyan); border:none;"><span style="font-size:22px;">🔊</span><div style="flex:1;"><div style="font-weight:600; font-size:13px;">${d.title || 'Welcome message from our CEO'}</div><div style="height:6px; background:#fff; border-radius:99px; margin-top:8px;"><div style="width:35%; height:100%; background:var(--cyan); border-radius:99px;"></div></div></div><span class="text-sm text-muted">2:14</span></div>`;
@@ -1764,6 +1925,104 @@ function renderListBlockPanel(block, index) {
   `;
 }
 
+/* ============================================================
+   IMAGE & GALLERY BLOCK SETTINGS PANEL (Image, Image & Text,
+   Text on Image, Carousel, Column Grid)
+   ============================================================ */
+function renderImageFamilyPanel(block, index) {
+  block.design = block.design || {};
+  const ds = block.design;
+  const d = block.data || {};
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <p class="text-sm text-muted">No additional settings for this block.</p>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'content') {
+    switch (block.type) {
+      case 'image':
+        return contentFields([['Alt text', 'alt', d.alt || d.label || '', 'input']]) +
+          `<p class="text-sm text-muted mt-8">Click directly on the caption in the canvas to edit it.</p>` + aiActions(true);
+      case 'image_text':
+        return contentFields([['Image alt text', 'alt', d.alt || d.imageLabel || '', 'input']]) +
+          `<p class="text-sm text-muted mt-8">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
+      case 'text_on_image':
+        return `<p class="text-sm text-muted">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
+      case 'carousel':
+        return `<p class="text-sm text-muted">Use the controls on each slide to upload an image and add a caption. Use + Add Slide to add more, and the arrow / × controls to reorder or remove slides.</p>` + aiActions();
+      case 'column_grid':
+        return `<p class="text-sm text-muted">Use the controls on each item to upload an image and edit its title/description. Use + Add Item to add more.</p>` + aiActions();
+      default:
+        return `<p class="text-sm text-muted">Edit the ${blockLabel(block.type)} block's content directly on the canvas.</p>` + aiActions();
+    }
+  }
+
+  // DESIGN TAB
+  switch (block.type) {
+    case 'image':
+      return `
+        ${mediaPickerImageField(d, 'src', 'Image', 'Image')}
+        <div class="prop-section">
+          <div class="prop-section-title">Layout</div>
+          ${segControl('design-imglayout', 'layout', [{id:'centered',label:'Centered'},{id:'full',label:'Full Width'},{id:'banner',label:'Banner'}], ds.layout || 'centered')}
+        </div>
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Corner Radius</div>
+          ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
+        </div>`;
+    case 'image_text':
+      return `
+        ${mediaPickerImageField(d, 'src', 'Image', 'Image')}
+        <div class="prop-section">
+          <div class="prop-section-title">Image Position</div>
+          ${segControl('design-imgpos', 'imagePosition', [{id:'left',label:'Left'},{id:'right',label:'Right'}], ds.imagePosition || 'left')}
+        </div>
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Image Size</div>
+          ${segControl('design-imgsize', 'imageSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.imageSize || 'md')}
+        </div>
+        <p class="text-sm text-muted mt-16">On narrow screens, the image and text stack vertically.</p>`;
+    case 'text_on_image': {
+      const activeTextColor = ds.textColor === 'dark' ? 'dark' : 'light';
+      return `
+        ${mediaPickerImageField(d, 'src', 'Background Image', 'Background Image')}
+        <div class="prop-section">
+          <div class="prop-section-title">Overlay Darkness</div>
+          <div class="flex items-center gap-8">
+            <input type="range" class="design-range" data-prop="overlayOpacity" data-suffix="%" min="0" max="80" value="${ds.overlayOpacity ?? 40}" style="flex:1;" />
+            <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.overlayOpacity ?? 40}%</span>
+          </div>
+        </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Text Colour</div>
+          ${segControl('design-textcolor', 'textColor', [{id:'light',label:'Light'},{id:'dark',label:'Dark'}], activeTextColor)}
+        </div>
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Text Position</div>
+          ${segControl('design-textpos', 'textPosition', [{id:'top',label:'Top'},{id:'center',label:'Center'},{id:'bottom',label:'Bottom'}], ds.textPosition || 'center')}
+        </div>
+        <p class="text-sm text-muted mt-16">Increase overlay darkness or switch to dark text to keep content readable over bright images.</p>`;
+    }
+    case 'carousel':
+      return `<p class="text-sm text-muted">Manage slides directly on the canvas — upload images, edit captions, and reorder using the controls on each slide.</p>`;
+    case 'column_grid':
+      return `
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Columns</div>
+          ${segControl('design-gridcols', 'columns', [2,3,4,5,6].map(n => ({id:String(n), label:String(n)})), String(ds.columns || 3))}
+        </div>
+        <p class="text-sm text-muted mt-16">Manage items directly on the canvas — upload images and edit titles/descriptions using the controls on each item.</p>`;
+    default:
+      return '';
+  }
+}
+
 function renderRightTabContent(block, index, course) {
   const d = block.data || {};
   if (blockCategory(block.type) === 'Text') {
@@ -1774,6 +2033,9 @@ function renderRightTabContent(block, index, course) {
   }
   if (blockCategory(block.type) === 'Lists') {
     return renderListBlockPanel(block, index);
+  }
+  if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') {
+    return renderImageFamilyPanel(block, index);
   }
   if (BuilderUI.rightTab === 'design') {
     block.design = block.design || {};
@@ -1836,28 +2098,12 @@ function renderRightTabContent(block, index, course) {
       return `<p class="text-sm text-muted">Click directly into the heading or paragraph on the canvas to edit the text. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
     case 'paragraph':
       return contentFields([['Body text', 'body', d.body, 'textarea']]) + aiActions();
-    case 'image_text':
-      return contentFields([
-        ['Image alt text', 'imageLabel', d.imageLabel, 'input'],
-        ['Heading', 'heading', d.heading, 'input'],
-        ['Body text', 'body', d.body, 'textarea'],
-      ]) + aiActions(true);
-    case 'text_on_image':
-      return contentFields([
-        ['Heading', 'heading', d.heading, 'input'],
-        ['Body text', 'body', d.body, 'textarea'],
-        ['Image URL', 'imageUrl', d.imageUrl, 'input'],
-      ]) + aiActions(true);
-    case 'column_grid':
-      return `<div class="field"><label>Items (one per line, format: Title :: Description :: Image URL)</label><textarea class="textarea content-field" data-field="columnItems" rows="6">${(d.items||[]).map(it=>`${it.title||''} :: ${it.description||''} :: ${it.imageUrl||''}`).join('\n')}</textarea></div>` + aiActions();
     case 'process':
       return contentFields([['Process title', 'heading', d.heading, 'input']]) +
         `<div class="field"><label>Steps (one per line, format: Step :: Description)</label><textarea class="textarea content-field" data-field="processSteps" rows="6">${(d.steps||[]).map(s=> typeof s === 'string' ? s : `${s.title||''}${s.description?` :: ${s.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
     case 'labelled_graphic':
       return contentFields([['Image URL', 'imageUrl', d.imageUrl, 'input']]) +
         `<div class="field"><label>Hotspots (one per line, format: Label :: Description)</label><textarea class="textarea content-field" data-field="hotspots" rows="6">${(d.hotspots||[]).map(h=>`${h.label||''}${h.description?` :: ${h.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'image':
-      return contentFields([['Alt text', 'label', d.label, 'input']]) + aiActions(true) + `<button class="btn btn-secondary w-full mt-8">📤 Replace image</button>`;
     case 'quote1': case 'quote2': case 'quote3': case 'quote4': case 'quote_image':
       return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
     case 'quote_carousel':
@@ -1927,8 +2173,6 @@ function renderRightTabContent(block, index, course) {
         ['Audio URL', 'url', d.url, 'input'],
         ['Title', 'title', d.title, 'input'],
       ]) + `<p class="text-sm text-muted mt-8">Paste a direct audio file URL (.mp3, .wav).</p>`;
-    case 'carousel':
-      return `<div class="field"><label>Slides (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>` + aiActions();
     case 'scenario':
       return contentFields([['Prompt', 'prompt', d.prompt, 'textarea']]) +
         `<div class="field"><label>Choices (one per line, format: Choice text :: Feedback text)</label><textarea class="textarea content-field" data-field="choices" rows="5">${(d.choices||[]).map(c => typeof c === 'string' ? c : `${c.text||''}${c.feedback?` :: ${c.feedback}`:''}`).join('\n')}</textarea></div>` + aiActions();
@@ -1980,6 +2224,24 @@ function quoteAvatarOnlyFields(block) {
   const d = block.data || {};
   return `
     ${mediaPickerAvatarField(d, 'avatar', 'Avatar Image', 'Avatar', true)}`;
+}
+
+/* Generic rectangular image field using the shared Media Picker — for
+   Image, Image & Text, and Text on Image blocks. */
+function mediaPickerImageField(d, target, title, label, noBorder) {
+  return `
+    <div class="prop-section" ${noBorder ? 'style="border-bottom:none;"' : ''}>
+      <div class="prop-section-title">${label}</div>
+      <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+        <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ${d[target] ? `<img src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
 function blockTypeDesignFields(block, ds) {
@@ -2039,12 +2301,6 @@ function blockTypeDesignFields(block, ds) {
         </div>
         ${block.type === 'quote_image' ? quoteImageUploadFields(block) : block.type === 'quote_carousel' ? '' : quoteAvatarOnlyFields(block)}`;
     }
-    case 'Images': case 'Gallery':
-      return `
-        <div class="prop-section" style="border-bottom:none;">
-          <div class="prop-section-title">Image Fit</div>
-          ${segControl('design-fit', 'imageFit', [{id:'cover',label:'Cover'},{id:'contain',label:'Contain'}], ds.imageFit || 'cover')}
-        </div>`;
     case 'Multimedia':
       if (block.type === 'file') {
         return `
@@ -2226,6 +2482,19 @@ function bindBuilderEvents(course, lesson, blocks) {
   // Block selection / expansion
   app.querySelectorAll('.canvas-block').forEach(b => b.addEventListener('click', (e) => {
     if (e.target.closest('.block-toolbar')) return;
+
+    // Selecting 100% of a text field's content often releases the mouse just
+    // outside the .editable-text element (in the surrounding padding), so
+    // e.target won't be inside it even though a real selection was made.
+    // Re-rendering the block here would wipe that live selection before the
+    // Rich Text Toolbar can appear — bail out and let the selection stand.
+    const activeSelection = window.getSelection();
+    if (activeSelection && !activeSelection.isCollapsed
+        && activeSelection.anchorNode && b.contains(activeSelection.anchorNode)
+        && activeSelection.focusNode && b.contains(activeSelection.focusNode)) {
+      return;
+    }
+
     const idx = parseInt(b.dataset.index);
     const editableTarget = e.target.closest('.editable-text[contenteditable="true"]');
 
@@ -2760,6 +3029,178 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block || !block.data || !block.data.quotes) return;
     const i = parseInt(btn.dataset.qindex);
     if (block.data.quotes[i]) delete block.data.quotes[i].avatar;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Builder image interaction — image lightbox is a Preview-only feature.
+  // First click selects the block (handled by the .canvas-block handler below);
+  // a second click while already selected jumps to the Design tab; double-click
+  // opens the Replace Image picker.
+  app.querySelectorAll('.block-image').forEach(img => img.addEventListener('click', (e) => {
+    const blockEl = img.closest('.canvas-block');
+    const idx = parseInt(blockEl.dataset.index);
+    if (BuilderUI.selected === idx && BuilderUI.expandedBlocks.has(idx)) {
+      e.stopPropagation();
+      if (BuilderUI.rightTab !== 'design') {
+        BuilderUI.rightTab = 'design';
+        renderLessonBuilder(lesson.id);
+      }
+    }
+  }));
+  app.querySelectorAll('.block-image').forEach(img => img.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const blockEl = img.closest('.canvas-block');
+    const idx = parseInt(blockEl.dataset.index);
+    const block = blocks[idx];
+    if (!block) return;
+    block.data = block.data || {};
+    let currentSrc, onInsert, onRemove;
+    if (img.dataset.cindex != null) {
+      const items = normalizeCarouselItems(block.data);
+      const i = parseInt(img.dataset.cindex);
+      currentSrc = items[i].src;
+      onInsert = (result) => { items[i].src = result.src; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+      onRemove = () => { items[i].src = null; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+    } else if (img.dataset.gindex != null) {
+      const items = normalizeColumnGridItems(block.data);
+      const i = parseInt(img.dataset.gindex);
+      currentSrc = items[i].imageUrl;
+      onInsert = (result) => { items[i].imageUrl = result.src; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+      onRemove = () => { delete items[i].imageUrl; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+    } else {
+      currentSrc = block.data.src;
+      onInsert = (result) => { block.data.src = result.src; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+      onRemove = () => { delete block.data.src; renderLessonBuilder(lesson.id); flashSaveStatus(); };
+    }
+    openMediaPicker({ title: 'Replace Image', currentSrc, onInsert, onRemove });
+  }));
+
+  // Carousel — per-slide image via Media Picker
+  app.querySelectorAll('.carousel-slide-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    const i = parseInt(btn.dataset.cindex);
+    openMediaPicker({
+      title: 'Slide Image',
+      currentSrc: items[i].src,
+      onInsert: (result) => {
+        items[i].src = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        items[i].src = null;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.carousel-slide-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    items[parseInt(btn.dataset.cindex)].src = null;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Carousel — add / remove / reorder slides
+  app.querySelectorAll('.carousel-slide-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    items.push({ src: null, caption: '' });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.carousel-slide-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.cindex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.carousel-slide-move-left').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    const i = parseInt(btn.dataset.cindex);
+    if (i <= 0) return;
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.carousel-slide-move-right').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeCarouselItems(block.data);
+    const i = parseInt(btn.dataset.cindex);
+    if (i >= items.length - 1) return;
+    [items[i + 1], items[i]] = [items[i], items[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Column Grid — per-item image via Media Picker
+  app.querySelectorAll('.grid-item-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeColumnGridItems(block.data);
+    const i = parseInt(btn.dataset.gindex);
+    openMediaPicker({
+      title: 'Item Image',
+      currentSrc: items[i].imageUrl,
+      onInsert: (result) => {
+        items[i].imageUrl = result.src;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete items[i].imageUrl;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  }));
+  app.querySelectorAll('.grid-item-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeColumnGridItems(block.data);
+    delete items[parseInt(btn.dataset.gindex)].imageUrl;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Column Grid — add / remove items
+  app.querySelectorAll('.grid-item-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeColumnGridItems(block.data);
+    items.push({ title: '', description: '' });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.grid-item-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    if (!block) return;
+    const items = normalizeColumnGridItems(block.data);
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.gindex), 1);
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));

@@ -427,14 +427,20 @@ function learnerAudioBlock(block, index, ctx) {
 /* ---- Carousel ---- */
 function learnerCarouselBlock(block, index, ctx) {
   const d = block.data || {};
-  const slides = (d.items && d.items.length) ? d.items : ['Slide 1', 'Slide 2', 'Slide 3'];
+  const slides = normalizeCarouselItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.carouselIndex[key] || 0) % slides.length + slides.length) % slides.length;
+  const slide = slides[active];
+  const slideHtml = slide.src
+    ? `<img src="${slide.src}" alt="" class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="width:100%; height:200px; object-fit:cover; border-radius:var(--r-md); display:block; cursor:zoom-in;" />`
+    : `<div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
+        <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.caption || `Slide ${active + 1}`)}</span>
+      </div>`;
+  const captionHtml = (slide.src && slide.caption) ? `<div class="text-sm mt-8" style="text-align:center;">${richTextOut(slide.caption)}</div>` : '';
   return `
     <div>
-      <div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
-        <span style="font-weight:600; font-size:14px;">${escapeHtml(slides[active])}</span>
-      </div>
+      ${slideHtml}
+      ${captionHtml}
       <div class="flex items-center justify-between mt-8">
         <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Previous slide">← Prev</button>
         <div class="flex gap-8" role="group" aria-label="Slide indicators">
@@ -998,4 +1004,9 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     marker.addEventListener('click', () => toggleListChecked(key, i));
     marker.addEventListener('keydown', (e) => onActivateKey(e, () => toggleListChecked(key, i)));
   });
+
+  app.querySelectorAll('.image-zoom-trigger').forEach(img => img.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openImageLightbox(img.dataset.zoomSrc, img.dataset.zoomAlt);
+  }));
 }

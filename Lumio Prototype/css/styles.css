@@ -745,15 +745,16 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .prop-row { display: flex; gap: 8px; }
 .seg-control {
-  display: flex; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; flex: 1;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; flex: 1;
 }
 .seg-control button {
-  flex: 1; border: none; background: var(--surface-0); padding: 8px 6px; font-size: 12px;
-  font-weight: 600; color: var(--ink-700); cursor: pointer; transition: all .12s;
-  border-right: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex: 1 1 auto; min-width: max-content; height: 34px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-0);
+  font-size: 12px; font-weight: 600; color: var(--ink-700); white-space: nowrap;
+  cursor: pointer; transition: all .12s;
 }
-.seg-control button:last-child { border-right: none; }
-.seg-control button.active { background: var(--gradient-primary); color: #fff; }
+.seg-control button.active { background: var(--gradient-primary); color: #fff; border-color: transparent; }
 
 /* toast */
 .toast {
@@ -771,4 +772,10 @@ button { font-family: var(--font-body); cursor: pointer; }
   z-index: 200;
   display: flex; align-items: center; gap: 10px;
   animation: fadeInUp 0.3s ease-out;
+}
+
+@media (max-width: 640px) {
+  .image-text-layout {
+    grid-template-columns: 1fr !important;
+  }
 }
