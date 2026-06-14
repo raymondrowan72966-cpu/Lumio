@@ -743,7 +743,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file'].includes(block.type);
   const cardlessSelectionStyle = isTextAuthoringBlock
     ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
     : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
@@ -1330,18 +1330,8 @@ function renderBlockContent(block, editable) {
       const src = d.src;
 
       const innerContent = src
-        ? `<audio class="block-audio-el" controls ${loop ? 'loop' : ''} ${autoplay ? 'autoplay' : ''} ${!allowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block;" src="${src}"></audio>
-          ${showSpeed ? `
-            <div class="flex items-center gap-8 mt-8">
-              <span class="text-sm text-muted">Speed</span>
-              <select class="input" style="width:auto; padding:4px 8px; font-size:13px;" onchange="this.closest('.audio-player-wrap').querySelector('.block-audio-el').playbackRate=parseFloat(this.value)">
-                <option value="0.75">0.75x</option>
-                <option value="1" selected>1x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
-            </div>` : ''}`
+        ? `<audio class="block-audio-el" controls ${loop ? 'loop' : ''} ${autoplay ? 'autoplay' : ''} ${!allowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; border-radius:${audioRadius};" src="${src}"></audio>
+          ${showSpeed ? playbackSpeedSelector('block-audio-el') : ''}`
         : `<div class="flex items-center gap-12"><span style="font-size:22px;">🔊</span><div class="text-sm text-muted">${editable ? 'No audio uploaded — use the Content tab to upload an audio file.' : 'Audio unavailable.'}</div></div>`;
 
       const showCaption = editable || d.caption;
@@ -1357,10 +1347,10 @@ function renderBlockContent(block, editable) {
         : '';
 
       return `<div style="padding-top:${paddingTop}px; padding-bottom:${paddingBottom}px;">
+        <div class="media-frame" style="max-width:${audioWidth}; margin:0 auto;">
+          ${innerContent}
+        </div>
         <div style="max-width:${audioWidth}; margin:0 auto;">
-          <div class="audio-player-wrap" style="border-radius:${audioRadius}; overflow:hidden;">
-            ${innerContent}
-          </div>
           ${captionHtml}
           ${transcriptHtml}
         </div>
@@ -1377,22 +1367,25 @@ function renderBlockContent(block, editable) {
       const videoShowSpeed = videoSettings.showPlaybackSpeed !== false;
       const videoLoop = !!videoSettings.loop;
       const videoAutoplay = !editable && !!videoSettings.autoplay;
-      const videoSrc = d.src || d.url;
 
-      const videoInner = videoSrc
-        ? `<video class="block-video-el" controls ${videoLoop ? 'loop' : ''} ${videoAutoplay ? 'autoplay muted' : ''} ${!videoAllowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; background:#000;" src="${videoSrc}"></video>
-          ${videoShowSpeed ? `
-            <div class="flex items-center gap-8 mt-8">
-              <span class="text-sm text-muted">Speed</span>
-              <select class="input" style="width:auto; padding:4px 8px; font-size:13px;" onchange="this.closest('.video-player-wrap').querySelector('.block-video-el').playbackRate=parseFloat(this.value)">
-                <option value="0.75">0.75x</option>
-                <option value="1" selected>1x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
-            </div>` : ''}`
-        : `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file.' : 'Video unavailable.'}</div></div>`;
+      // Priority rule: an uploaded file always wins over the embed/URL field.
+      const uploadedSrc = d.src;
+      const embed = !uploadedSrc && d.url ? parseVideoEmbedUrl(d.url) : null;
+      const trackHtml = d.subtitles ? `<track kind="subtitles" src="${subtitlesToVttDataUrl(d.subtitles)}" srclang="en" label="English" default>` : '';
+
+      let videoInner;
+      if (uploadedSrc || (embed && embed.type === 'mp4')) {
+        const videoSrc = uploadedSrc || embed.embedUrl;
+        videoInner = `<video class="block-video-el" controls ${videoLoop ? 'loop' : ''} ${videoAutoplay ? 'autoplay muted' : ''} ${!videoAllowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; background:#000; border-radius:${videoRadius};" src="${videoSrc}">${trackHtml}</video>
+          ${videoShowSpeed ? playbackSpeedSelector('block-video-el') : ''}`;
+      } else if (embed && (embed.type === 'youtube' || embed.type === 'vimeo')) {
+        const autoplayParam = videoAutoplay ? (embed.type === 'youtube' ? '?autoplay=1&mute=1' : '?autoplay=1&muted=1') : '';
+        videoInner = `<div style="position:relative; width:100%; padding-top:56.25%; background:#000; border-radius:${videoRadius}; overflow:hidden;">
+          <iframe src="${embed.embedUrl}${autoplayParam}" title="Video" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        </div>`;
+      } else {
+        videoInner = `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file or add an embed URL.' : 'Video unavailable.'}</div></div>`;
+      }
 
       const videoShowCaption = editable || d.caption;
       const videoCaptionHtml = videoShowCaption
@@ -1407,25 +1400,24 @@ function renderBlockContent(block, editable) {
         : '';
 
       return `<div style="padding-top:${videoPaddingTop}px; padding-bottom:${videoPaddingBottom}px;">
+        <div class="media-frame" style="max-width:${videoWidth}; margin:0 auto;">
+          ${videoInner}
+        </div>
         <div style="max-width:${videoWidth}; margin:0 auto;">
-          <div class="video-player-wrap" style="border-radius:${videoRadius}; overflow:hidden;">
-            ${videoInner}
-          </div>
           ${videoCaptionHtml}
           ${videoTranscriptHtml}
         </div>
       </div>`;
     }
     case 'file': {
-      const fileRadius = RADIUS_MAP[ds.radius] || 'var(--r-md)';
       const filePaddingTop = ds.paddingTop ?? 8;
       const filePaddingBottom = ds.paddingBottom ?? 8;
       const fileSrc = d.src;
-      const fileName = d.srcFileName || d.filename;
-      const fileSize = formatFileSize(d.srcFileSize) || d.filesize || '';
+      const fileName = d.srcFileName;
+      const fileSize = formatFileSize(d.srcFileSize);
 
       const fileRow = fileName
-        ? `<div class="flex items-center gap-12" style="padding:12px 16px; border:1px solid var(--border); border-radius:${fileRadius};">
+        ? `<div class="flex items-center gap-12">
             <span style="font-size:22px;">📎</span>
             <div style="flex:1; min-width:0;">
               <div style="font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName)}</div>
@@ -1433,7 +1425,7 @@ function renderBlockContent(block, editable) {
             </div>
             ${fileSrc ? `<a href="${fileSrc}" download="${escapeHtml(fileName)}" class="btn btn-secondary btn-sm">Download</a>` : ''}
           </div>`
-        : `<div class="flex items-center gap-12" style="padding:12px 16px; border:1px solid var(--border); border-radius:${fileRadius};">
+        : `<div class="flex items-center gap-12">
             <span style="font-size:22px;">📎</span>
             <div class="text-sm text-muted">${editable ? 'No file uploaded — use the Content tab to upload an attachment.' : 'Attachment unavailable.'}</div>
           </div>`;
@@ -1574,6 +1566,43 @@ function blockIconFor(type) {
 function imagePlaceholder(label, height, width) {
   return `<div style="background:linear-gradient(135deg, var(--pastel-lavender), var(--pastel-cyan)); border-radius:var(--r-md); height:${height}px; ${width?`width:${width}px; flex-shrink:0;`:''} display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; color:var(--ink-400); border:1px dashed var(--border);">
     <span style="font-size:24px;">🖼️</span><span class="text-sm">${label}</span>
+  </div>`;
+}
+
+/* Classifies a video URL as a YouTube/Vimeo embed or a direct/MP4 source.
+   Returns { type: 'youtube'|'vimeo'|'mp4', embedUrl }. */
+function parseVideoEmbedUrl(url) {
+  if (!url) return null;
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (yt) return { type: 'youtube', embedUrl: `https://www.youtube.com/embed/${yt[1]}` };
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeo) return { type: 'vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}` };
+  return { type: 'mp4', embedUrl: url };
+}
+
+/* Converts SRT subtitle text to WebVTT (passes WebVTT text through unchanged). */
+function srtToVtt(text) {
+  const trimmed = (text || '').replace(/\r+/g, '').trim();
+  if (/^WEBVTT/i.test(trimmed)) return trimmed;
+  return `WEBVTT\n\n${trimmed.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')}`;
+}
+
+/* Encodes subtitle/transcript text (VTT or SRT) as a data: URL for a <track> element. */
+function subtitlesToVttDataUrl(text) {
+  return `data:text/vtt;charset=utf-8,${encodeURIComponent(srtToVtt(text))}`;
+}
+
+/* Playback-speed selector — sets .playbackRate on the sibling <video>/<audio> element. */
+function playbackSpeedSelector(elClass) {
+  return `<div class="flex items-center gap-8 mt-8">
+    <span class="text-sm text-muted">Speed</span>
+    <select class="input" style="width:auto; padding:4px 8px; font-size:13px;" onchange="this.closest('.media-frame').querySelector('.${elClass}').playbackRate=parseFloat(this.value)">
+      <option value="0.75">0.75x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.25">1.25x</option>
+      <option value="1.5">1.5x</option>
+      <option value="2">2x</option>
+    </select>
   </div>`;
 }
 
@@ -2243,8 +2272,12 @@ function renderRightTabContent(block, index, course) {
     case 'labelled_graphic':
       return contentFields([['Image URL', 'imageUrl', d.imageUrl, 'input']]) +
         `<div class="field"><label>Hotspots (one per line, format: Label :: Description)</label><textarea class="textarea content-field" data-field="hotspots" rows="6">${(d.hotspots||[]).map(h=>`${h.label||''}${h.description?` :: ${h.description}`:''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'quote1': case 'quote2': case 'quote3': case 'quote4': case 'quote_image':
-      return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
+    case 'quote1': case 'quote2': case 'quote3': case 'quote4':
+      return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` +
+        quoteAvatarOnlyFields(block) + aiActions();
+    case 'quote_image':
+      return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` +
+        quoteImageUploadFields(block) + aiActions();
     case 'quote_carousel':
       return `<p class="text-sm text-muted">Click directly on a quote's text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment). Use the + Add Quote button to add a new card, and the arrow / × controls on each card to reorder or remove quotes.</p>` + aiActions();
     case 'kc_multiple_choice':
@@ -2310,7 +2343,7 @@ function segControl(id, prop, options, current) {
   </div>`;
 }
 
-/* Avatar + background image upload controls for the Quote on Image block. */
+/* Avatar + background image upload controls for the Quote on Image block (Content tab). */
 function quoteImageUploadFields(block) {
   const d = block.data || {};
   return `
@@ -2342,7 +2375,7 @@ function mediaPickerAvatarField(d, target, title, label, noBorder) {
     </div>`;
 }
 
-/* Avatar-only upload section for Quote Style 1-4 (no background image). */
+/* Avatar-only upload section for Quote Style 1-4 (no background image; Content tab). */
 function quoteAvatarOnlyFields(block) {
   const d = block.data || {};
   return `
@@ -2570,10 +2603,20 @@ function renderVideoBlockPanel(block, index) {
       <label>Transcript</label>
       <textarea class="textarea content-field" data-field="transcript" rows="6" placeholder="Add a plain-text transcript (optional)">${d.transcript || ''}</textarea>
     </div>
+    <div class="prop-section mt-16" style="border-top:1px solid var(--border); padding-top:16px;">
+      <div class="prop-section-title">Embed URL (optional)</div>
+      <p class="text-sm text-muted mb-8">YouTube, Vimeo, or a direct MP4 link. Used only if no video file is uploaded above.</p>
+      <input class="input content-field" data-field="url" value="${d.url || ''}" placeholder="https://youtube.com/... or https://example.com/video.mp4" />
+    </div>
     <div class="prop-section mt-16" style="border-bottom:none; border-top:1px solid var(--border); padding-top:16px;">
-      <div class="prop-section-title">Embed via URL (optional)</div>
-      <p class="text-sm text-muted mb-8">Used only if no video file is uploaded above.</p>
-      <input class="input content-field" data-field="url" value="${d.url || ''}" placeholder="https://example.com/video.mp4" />
+      <div class="prop-section-title">Subtitles / Captions (optional)</div>
+      <p class="text-sm text-muted mb-8">Upload a VTT or SRT file, or paste subtitle/transcript text below. Adds a CC button to the video player.</p>
+      <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="subtitle-upload-trigger">${d.subtitles ? '🔄 Replace Subtitles File' : '📤 Upload Subtitles (VTT/SRT)'}</button>
+        ${d.subtitles ? `<button class="btn btn-ghost btn-sm" id="subtitle-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        <input type="file" id="subtitle-file-input" accept=".vtt,.srt,text/vtt" style="display:none" />
+      </div>
+      <textarea class="textarea content-field mt-8" data-field="subtitles" rows="5" placeholder="Or paste WebVTT / SRT subtitle text here">${escapeHtml(d.subtitles || '')}</textarea>
     </div>
   `;
 }
@@ -2674,8 +2717,7 @@ function blockTypeDesignFields(block, ds) {
             <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 22}" style="flex:1;" />
             <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 22}px</span>
           </div>
-        </div>
-        ${block.type === 'quote_image' ? quoteImageUploadFields(block) : block.type === 'quote_carousel' ? '' : quoteAvatarOnlyFields(block)}`;
+        </div>`;
     }
     case 'Interactive':
       return `
@@ -3379,6 +3421,36 @@ function bindBuilderEvents(course, lesson, blocks) {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
+
+  // Video — subtitle/caption file upload (VTT/SRT), read as text and stored on block.data.subtitles
+  app.querySelector('#subtitle-upload-trigger')?.addEventListener('click', () => {
+    app.querySelector('#subtitle-file-input')?.click();
+  });
+  app.querySelector('#subtitle-file-input')?.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    const file = e.target.files && e.target.files[0];
+    if (!block || !file) return;
+    if (!/\.(vtt|srt)$/i.test(file.name)) {
+      toast('Please upload a VTT or SRT subtitle file.', '⚠️');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      block.data = block.data || {};
+      block.data.subtitles = reader.result;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    };
+    reader.readAsText(file);
+  });
+  app.querySelector('#subtitle-remove')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block || !block.data) return;
+    delete block.data.subtitles;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
 
   // Settings tab — boolean toggles stored on block.settings (e.g. Audio Autoplay/Loop/Download/Speed)
   app.querySelectorAll('.settings-field').forEach(cb => cb.addEventListener('change', () => {

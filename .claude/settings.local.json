@@ -15,7 +15,10 @@
       "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\raymo\\\\Desktop\\\\Lumio\\\\Lumio Prototype\\\\css\\\\styles.css' | Measure-Object -Line\\).Lines\")",
       "Bash(cd \"Lumio Prototype\")",
       "Bash(ls)",
-      "Bash(ls \"../Lumio Prototype/js/screens/\")"
+      "Bash(ls \"../Lumio Prototype/js/screens/\")",
+      "Bash(ls css/)",
+      "Bash(ls *.css)",
+      "Bash(awk -F: '$2<1330')"
     ]
   }
 }
