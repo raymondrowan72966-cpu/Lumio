@@ -14,6 +14,7 @@ const LearnerUI = {
   flipped: {},           // "lessonId:blockIndex" -> Set<cardIndex> | bool
   carouselIndex: {},     // "lessonId:blockIndex" -> active slide index
   quoteCarouselIndex: {}, // "lessonId:blockIndex" -> active quote index
+  listChecked: {},       // "lessonId:blockIndex" -> Set<itemIndex> of checked checkbox-list items
   scenarioAnswers: {},   // "lessonId:blockIndex" -> selected choice index
   activeHotspot: {},     // "lessonId:blockIndex" -> active hotspot index | null
   previewDevice: 'desktop', // 'desktop' | 'tablet' | 'mobile' — preview-only, not persisted
@@ -311,7 +312,7 @@ function renderLearnerBlocks(blocks, ctx) {
     const block = blocks[i];
     const ds = block.design || {};
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}`;
+    const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}`;
     const { treatment } = DesignSystem.resolveBlockStyle(block);
     let wrapperStyle;
     if (treatment === 'cardless') {
@@ -349,6 +350,7 @@ function renderLearnerBlock(block, index, ctx) {
     case 'quote_carousel': return learnerQuoteCarouselBlock(block, index, ctx);
     case 'scenario': return learnerScenarioBlock(block, index, ctx);
     case 'labelled_graphic': return learnerLabelledGraphicBlock(block, index, ctx);
+    case 'list_checkbox': return learnerListCheckboxBlock(block, index, ctx);
     default: return renderBlockContent(block, false);
   }
 }
@@ -534,6 +536,23 @@ function learnerAccordionBlock(block, index, ctx) {
       </div>
     `;
     }).join('')}`;
+}
+
+/* ---- Checkbox list (interactive — learners can tick/untick; state persists for the session) ---- */
+function learnerListCheckboxBlock(block, index, ctx) {
+  const d = block.data || {};
+  const ds = block.design || {};
+  const def = LIST_DEFAULTS[block.type];
+  const items = normalizeListItems(d, def.items);
+  const key = ctx.lessonId + ':' + index;
+  if (!LearnerUI.listChecked[key]) {
+    LearnerUI.listChecked[key] = new Set(items.map((it, i) => i).filter(i => items[i].checked));
+  }
+  const checkedSet = LearnerUI.listChecked[key];
+  const indent = ds.indent ?? 20;
+  const itemsHtml = renderListItemsHtml(block, ds, items, false, { checkedSet, key });
+  return `<h3 style="font-size:15px; margin-bottom:10px;">${richTextOut(d.heading != null ? d.heading : def.heading)}</h3>
+    <div class="list-items-wrap" role="list" style="padding-left:${indent}px;">${itemsHtml}</div>`;
 }
 
 /* ---- Tabs ---- */
@@ -965,4 +984,18 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     LearnerUI.activeHotspot[key] = LearnerUI.activeHotspot[key] === i ? null : i;
     rerender();
   }));
+
+  // Checkbox list — learner ticks/unticks items (session-only state)
+  const toggleListChecked = (key, i) => {
+    const set = LearnerUI.listChecked[key] || new Set();
+    if (set.has(i)) set.delete(i); else set.add(i);
+    LearnerUI.listChecked[key] = set;
+    rerender();
+  };
+  app.querySelectorAll('.list-checkbox-marker[data-key]').forEach(marker => {
+    const key = marker.dataset.key, i = parseInt(marker.dataset.itemindex, 10);
+    if (!key) return;
+    marker.addEventListener('click', () => toggleListChecked(key, i));
+    marker.addEventListener('keydown', (e) => onActivateKey(e, () => toggleListChecked(key, i)));
+  });
 }

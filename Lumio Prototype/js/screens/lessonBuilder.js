@@ -337,6 +337,118 @@ const STATEMENT_DEFAULTS = {
   stmt_note:    { icon: '📝', label: 'Note',         iconColor: '#8A8A94' },
 };
 
+/* Default heading + seed items per List type (used when a block has no content yet). */
+const LIST_DEFAULTS = {
+  list_numbered: { heading: 'Steps', items: ['Log in to the HR portal', 'Complete your profile', 'Review your benefits'] },
+  list_checkbox: { heading: 'Checklist', items: ['Set up your email', 'Join the team chat', 'Schedule 1:1 with manager'] },
+  list_bullet:   { heading: 'Key Points', items: ['Curiosity over certainty', 'Clarity over cleverness', 'Progress over perfection'] },
+};
+
+const BULLET_GLYPHS = { disc: '●', circle: '○', square: '■', dash: '–', arrow: '→', check: '✓' };
+const BULLET_SIZE_MAP = { sm: 10, md: 14, lg: 18 };
+const CHECKBOX_SIZE_MAP = { sm: 14, md: 18, lg: 24 };
+
+/* Converts a 1-based number to alphabetic (1->A, 26->Z, 27->AA, ...). */
+function numberToAlpha(n) {
+  let s = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+/* Converts a 1-based number to an uppercase Roman numeral. */
+function numberToRoman(n) {
+  const map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let res = '';
+  for (const [val, sym] of map) {
+    while (n >= val) { res += sym; n -= val; }
+  }
+  return res;
+}
+
+/* Auto-numbering display for a 1-based position, per the list's Number Style. */
+function listNumberMarker(style, n) {
+  if (style === 'alpha') return numberToAlpha(n);
+  if (style === 'roman') return numberToRoman(n);
+  return String(n);
+}
+
+/* Lazily migrates legacy string[] items to {text, checked?, override?, textAlign?} objects,
+   in place, so existing lessons keep their content. Falls back to per-type defaults. */
+function normalizeListItems(d, defaultItems) {
+  const source = (d.items && d.items.length) ? d.items : (defaultItems || []);
+  d.items = source.map(it => typeof it === 'string' ? { text: it } : (it || {}));
+  return d.items;
+}
+
+/* Wrapper-level style additions for List blocks: top/bottom padding only. */
+function listBlockExtraStyle(block) {
+  if (blockCategory(block.type) !== 'Lists') return '';
+  const ds = block.design || {};
+  return `padding-top:${ds.paddingTop ?? 4}px; padding-bottom:${ds.paddingBottom ?? 4}px;`;
+}
+
+/* Renders the marker/control for a single checkbox-list item. */
+function renderCheckboxMarker(ds, checked, i, key) {
+  const style = ds.checkboxStyle || 'square';
+  const size = CHECKBOX_SIZE_MAP[ds.checkboxSize || 'md'];
+  const borderColor = ds.checkboxBorderColor || 'var(--border)';
+  const tickColor = ds.checkboxTickColor || 'var(--theme-primary, var(--indigo))';
+  let boxStyle, inner;
+  if (style === 'checkmark') {
+    boxStyle = 'border:none; background:transparent;';
+    inner = checked
+      ? `<span style="color:${tickColor}; font-size:${size}px; line-height:1;">✓</span>`
+      : `<span style="color:${borderColor}; font-size:${size}px; line-height:1; opacity:0.5;">☐</span>`;
+  } else {
+    const radius = style === 'circle' ? '50%' : '4px';
+    const filled = style === 'filled';
+    boxStyle = `border:2px solid ${borderColor}; border-radius:${radius}; background:${(checked && filled) ? tickColor : 'transparent'};`;
+    inner = checked ? `<span style="color:${filled ? '#fff' : tickColor}; font-size:${Math.round(size * 0.7)}px; line-height:1;">✓</span>` : '';
+  }
+  return `<span class="list-checkbox-marker" data-itemindex="${i}" data-key="${key || ''}" role="checkbox" aria-checked="${checked}" tabindex="0"
+    style="flex-shrink:0; width:${size}px; height:${size}px; ${boxStyle} display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:2px;">${inner}</span>`;
+}
+
+/* Renders the item rows for a List block (numbered/checkbox/bullet), shared by the
+   Builder canvas and the Learner Preview. `opts.checkedSet` (Learner Preview only)
+   overrides each item's checked state with the learner's session-local toggles. */
+function renderListItemsHtml(block, ds, items, editable, opts) {
+  opts = opts || {};
+  const isNumbered = block.type === 'list_numbered';
+  const isBullet = block.type === 'list_bullet';
+  const isCheckbox = block.type === 'list_checkbox';
+  return items.map((item, i) => {
+    let marker = '';
+    if (isNumbered) {
+      const override = (item.override || '').trim();
+      const display = override || listNumberMarker(ds.numberStyle || 'decimal', i + 1);
+      marker = `<span class="list-marker" style="min-width:24px; font-weight:600; flex-shrink:0; line-height:1.7;">${escapeHtml(display)}</span>
+        ${editable ? `<input class="list-number-override" data-itemindex="${i}" placeholder="Auto" title="Custom number/label for this item" value="${escapeHtml(item.override || '')}" style="width:64px; font-size:11px; padding:2px 4px; margin-right:6px; border:1px solid var(--border); border-radius:4px; flex-shrink:0;" />` : ''}`;
+    } else if (isBullet) {
+      const glyph = BULLET_GLYPHS[ds.bulletStyle || 'disc'];
+      const size = BULLET_SIZE_MAP[ds.bulletSize || 'md'];
+      marker = `<span class="list-marker" style="flex-shrink:0; min-width:20px; font-size:${size}px; line-height:1.7; color:${ds.bulletColor || 'currentColor'};">${glyph}</span>`;
+    } else if (isCheckbox) {
+      const checked = opts.checkedSet ? opts.checkedSet.has(i) : !!item.checked;
+      marker = renderCheckboxMarker(ds, checked, i, opts.key);
+    }
+    const controls = editable ? `<div class="flex gap-4 list-item-controls" style="flex-shrink:0;">
+        <button class="btn-icon list-item-move-up" data-itemindex="${i}" title="Move item up" aria-label="Move item up" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">↑</button>
+        <button class="btn-icon list-item-move-down" data-itemindex="${i}" title="Move item down" aria-label="Move item down" ${i === items.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === items.length - 1 ? '0.4' : '1'};">↓</button>
+        <button class="btn-icon list-item-remove" data-itemindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="width:22px; height:22px; background:rgba(0,0,0,0.08); border:none; border-radius:4px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>
+      </div>` : '';
+    return `<div class="list-item-row flex items-start gap-4" data-itemindex="${i}" role="listitem" style="margin-bottom:8px;">
+      ${marker}
+      <div class="editable-text list-item-text" data-role="body" data-field="listItem" data-col="${i}" data-richtext="true" ${editable ? 'contenteditable="true"' : ''} data-placeholder="List item" style="flex:1; line-height:1.7; font-size:15px;${item.textAlign ? ` text-align:${item.textAlign};` : ''}">${richTextOut(item.text || '')}</div>
+      ${controls}
+    </div>`;
+  }).join('');
+}
+
 /* Wrapper-level style additions for Text blocks: custom padding + background. */
 function textBlockExtraStyle(block) {
   if (blockCategory(block.type) !== 'Text') return '';
@@ -468,10 +580,46 @@ function applyQuoteStylesToDom(block, index) {
   }
 }
 
+/* Re-apply List block padding/indent/colour directly to the DOM for live preview during slider/colour drags. */
+function applyListStylesToDom(block, index) {
+  const wrapper = document.querySelector(`.canvas-block[data-index="${index}"]`);
+  if (!wrapper) return;
+  const ds = block.design || {};
+  const content = wrapper.querySelector('.block-content-area');
+  if (content) content.style.cssText = `padding:22px; ${listBlockExtraStyle(block)}`;
+  const itemsWrap = wrapper.querySelector('.list-items-wrap');
+  if (itemsWrap) itemsWrap.style.paddingLeft = `${ds.indent ?? 20}px`;
+  const addBtn = wrapper.querySelector('.list-item-add');
+  if (addBtn) addBtn.style.marginLeft = `${ds.indent ?? 20}px`;
+
+  if (block.type === 'list_bullet') {
+    wrapper.querySelectorAll('.list-marker').forEach(m => { m.style.color = ds.bulletColor || 'currentColor'; });
+  } else if (block.type === 'list_checkbox') {
+    const style = ds.checkboxStyle || 'square';
+    const borderColor = ds.checkboxBorderColor || 'var(--border)';
+    const tickColor = ds.checkboxTickColor || 'var(--theme-primary, var(--indigo))';
+    const filled = style === 'filled';
+    wrapper.querySelectorAll('.list-checkbox-marker').forEach(m => {
+      const checked = m.getAttribute('aria-checked') === 'true';
+      const tickSpan = m.querySelector('span');
+      if (style === 'checkmark') {
+        m.style.border = 'none';
+        m.style.background = 'transparent';
+        if (tickSpan) tickSpan.style.color = checked ? tickColor : borderColor;
+      } else {
+        m.style.borderColor = borderColor;
+        m.style.background = (checked && filled) ? tickColor : 'transparent';
+        if (tickSpan) tickSpan.style.color = filled ? '#fff' : tickColor;
+      }
+    });
+  }
+}
+
 /* Dispatch to the right live-preview updater based on block category. */
 function applyLivePreview(block, index) {
   if (blockCategory(block.type) === 'Statements') applyStatementStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Quotes') applyQuoteStylesToDom(block, index);
+  else if (blockCategory(block.type) === 'Lists') applyListStylesToDom(block, index);
   else applyBlockStylesToDom(block, index);
 }
 
@@ -535,7 +683,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet'].includes(block.type);
   const cardlessSelectionStyle = isTextAuthoringBlock
     ? `outline:1px solid ${isSelected ? 'rgba(20,20,30,0.14)' : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
     : `outline:2px solid ${isSelected ? 'var(--theme-primary, var(--indigo))' : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
@@ -555,7 +703,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
         <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">⧉</button>
         <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✕</button>${moveButtons}
       </div>
-      <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}">
+      <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
       </div>
     </div>
@@ -718,6 +866,11 @@ function ensureRichTextToolbar() {
           const i = parseInt(active.elx.dataset.col);
           quotes[i] = quotes[i] || {};
           quotes[i][active.elx.dataset.field === 'quoteText' ? 'textAlign' : 'authorAlign'] = btn.dataset.val;
+        } else if (active.elx.dataset.field === 'listItem') {
+          const items = active.block.data.items || (active.block.data.items = normalizeListItems(active.block.data, (LIST_DEFAULTS[active.block.type] || {}).items));
+          const i = parseInt(active.elx.dataset.col);
+          items[i] = items[i] || {};
+          items[i].textAlign = btn.dataset.val;
         } else {
           active.block.data[active.elx.dataset.field + 'Align'] = btn.dataset.val;
         }
@@ -770,6 +923,11 @@ function syncRichTextField(block, elx) {
     const i = parseInt(elx.dataset.col);
     quotes[i] = quotes[i] || {};
     quotes[i][elx.dataset.field === 'quoteText' ? 'text' : 'author'] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'listItem') {
+    const items = block.data.items || (block.data.items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items));
+    const i = parseInt(elx.dataset.col);
+    items[i] = items[i] || {};
+    items[i].text = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
   }
@@ -948,12 +1106,15 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
 
-    case 'list_numbered':
-      return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Steps'}</h3><ol style="padding-left:20px; line-height:1.9;">${(d.items || ['Log in to the HR portal','Complete your profile','Review your benefits']).map(i=>`<li>${i}</li>`).join('')}</ol>`;
-    case 'list_checkbox':
-      return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Checklist'}</h3>${(d.items || ['Set up your email','Join the team chat','Schedule 1:1 with manager']).map(i=>`<label class="flex items-center gap-8 mt-8" style="font-size:14px;"><input type="checkbox"/> ${i}</label>`).join('')}`;
-    case 'list_bullet':
-      return `<h3 style="font-size:15px; margin-bottom:10px;">${d.heading || 'Key Points'}</h3><ul style="padding-left:20px; line-height:1.9;">${(d.items || ['Curiosity over certainty','Clarity over cleverness','Progress over perfection']).map(i=>`<li>${i}</li>`).join('')}</ul>`;
+    case 'list_numbered': case 'list_checkbox': case 'list_bullet': {
+      const def = LIST_DEFAULTS[block.type];
+      const items = normalizeListItems(d, def.items);
+      const indent = ds.indent ?? 20;
+      const itemsHtml = renderListItemsHtml(block, ds, items, editable, {});
+      return `<h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="${def.heading}" style="font-size:15px; margin-bottom:10px;">${richTextOut(d.heading != null ? d.heading : def.heading)}</h3>
+        <div class="list-items-wrap" role="list" style="padding-left:${indent}px;">${itemsHtml}</div>
+        ${editable ? `<button class="btn btn-secondary btn-sm list-item-add mt-8" style="margin-left:${indent}px;">+ Add Item</button>` : ''}`;
+    }
 
     case 'image':
       return imagePlaceholder(d.label || 'Image placeholder', 160);
@@ -1517,6 +1678,92 @@ function renderStatementBlockPanel(block, index) {
   `;
 }
 
+/* ============================================================
+   LIST BLOCK SETTINGS PANEL (Content / Spacing / Indent / per-type style)
+   ============================================================ */
+function renderListBlockPanel(block, index) {
+  block.design = block.design || {};
+  const ds = block.design;
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <p class="text-sm text-muted">No additional settings for this block.</p>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'content') {
+    return `<p class="text-sm text-muted">Click directly on the heading or list items in the canvas to edit them. Select text to format it (bold, italic, underline, colour, alignment). Use the + Add Item button, and the arrow / × controls on each item, to manage the list structure.</p>` + aiActions();
+  }
+
+  // DESIGN TAB — Spacing / Indent / per-type style options
+  let typeFields = '';
+  if (block.type === 'list_numbered') {
+    typeFields = `
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Number Style</div>
+        ${segControl('design-numberstyle', 'numberStyle', [{id:'decimal',label:'1, 2, 3'},{id:'alpha',label:'A, B, C'},{id:'roman',label:'I, II, III'}], ds.numberStyle || 'decimal')}
+        <p class="text-sm text-muted mt-12">Click into the small field beside any item to give it a custom number or label (e.g. "10" or "Step 1"). Leave it blank to use automatic numbering.</p>
+      </div>`;
+  } else if (block.type === 'list_bullet') {
+    typeFields = `
+      <div class="prop-section">
+        <div class="prop-section-title">Bullet Style</div>
+        ${segControl('design-bulletstyle', 'bulletStyle', [{id:'disc',label:'● Solid'},{id:'circle',label:'○ Hollow'},{id:'square',label:'■ Square'},{id:'dash',label:'– Dash'},{id:'arrow',label:'→ Arrow'},{id:'check',label:'✓ Check'}], ds.bulletStyle || 'disc')}
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Bullet Size</div>
+        ${segControl('design-bulletsize', 'bulletSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.bulletSize || 'md')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Bullet Colour</div>
+        <input type="color" class="input list-bullet-color" value="${(ds.bulletColor && ds.bulletColor.startsWith('#')) ? ds.bulletColor : '#1a1a1a'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+      </div>`;
+  } else if (block.type === 'list_checkbox') {
+    typeFields = `
+      <div class="prop-section">
+        <div class="prop-section-title">Checkbox Style</div>
+        ${segControl('design-checkboxstyle', 'checkboxStyle', [{id:'square',label:'Square'},{id:'filled',label:'Filled'},{id:'checkmark',label:'Checkmark'},{id:'circle',label:'Circle'}], ds.checkboxStyle || 'square')}
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Checkbox Size</div>
+        ${segControl('design-checkboxsize', 'checkboxSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.checkboxSize || 'md')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Checkbox Colours</div>
+        <p class="text-sm text-muted mb-8">Border Colour</p>
+        <input type="color" class="input list-checkbox-border-color" value="${(ds.checkboxBorderColor && ds.checkboxBorderColor.startsWith('#')) ? ds.checkboxBorderColor : '#c4c4cc'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+        <p class="text-sm text-muted mb-8 mt-12">Tick Colour</p>
+        <input type="color" class="input list-checkbox-tick-color" value="${(ds.checkboxTickColor && ds.checkboxTickColor.startsWith('#')) ? ds.checkboxTickColor : '#7C3AED'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+      </div>`;
+  }
+
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Spacing</div>
+      <p class="text-sm text-muted mb-8">Top Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="60" value="${ds.paddingTop ?? 4}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 4}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="60" value="${ds.paddingBottom ?? 4}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 4}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Indent</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="indent" min="0" max="60" value="${ds.indent ?? 20}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.indent ?? 20}px</span>
+      </div>
+    </div>
+    ${typeFields}
+  `;
+}
+
 function renderRightTabContent(block, index, course) {
   const d = block.data || {};
   if (blockCategory(block.type) === 'Text') {
@@ -1524,6 +1771,9 @@ function renderRightTabContent(block, index, course) {
   }
   if (blockCategory(block.type) === 'Statements') {
     return renderStatementBlockPanel(block, index);
+  }
+  if (blockCategory(block.type) === 'Lists') {
+    return renderListBlockPanel(block, index);
   }
   if (BuilderUI.rightTab === 'design') {
     block.design = block.design || {};
@@ -1612,9 +1862,6 @@ function renderRightTabContent(block, index, course) {
       return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` + aiActions();
     case 'quote_carousel':
       return `<p class="text-sm text-muted">Click directly on a quote's text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment). Use the + Add Quote button to add a new card, and the arrow / × controls on each card to reorder or remove quotes.</p>` + aiActions();
-    case 'list_numbered': case 'list_checkbox': case 'list_bullet':
-      return contentFields([['Heading', 'heading', d.heading, 'input']]) +
-        `<div class="field"><label>Items (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>` + aiActions();
     case 'kc_multiple_choice':
       return contentFields([['Question', 'question', d.question, 'textarea']]) +
         `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
@@ -2271,6 +2518,99 @@ function bindBuilderEvents(course, lesson, blocks) {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
+
+  // List blocks — on-canvas item management (add / remove / reorder)
+  app.querySelectorAll('.list-item-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+    const newItem = { text: '' };
+    if (block.type === 'list_checkbox') newItem.checked = false;
+    items.push(newItem);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.list-item-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.itemindex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.list-item-move-up').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+    const i = parseInt(btn.dataset.itemindex);
+    if (i <= 0) return;
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.list-item-move-down').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
+    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+    const i = parseInt(btn.dataset.itemindex);
+    if (i >= items.length - 1) return;
+    [items[i + 1], items[i]] = [items[i], items[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Numbered list — manual number/label override per item (live update, no re-render so focus is kept)
+  app.querySelectorAll('.list-number-override').forEach(input => input.addEventListener('input', (e) => {
+    const wrapper = e.target.closest('.canvas-block');
+    const block = blocks[parseInt(wrapper.dataset.index)];
+    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+    const i = parseInt(e.target.dataset.itemindex);
+    items[i] = items[i] || {};
+    items[i].override = e.target.value;
+    const row = e.target.closest('.list-item-row');
+    const marker = row ? row.querySelector('.list-marker') : null;
+    if (marker) {
+      const override = e.target.value.trim();
+      marker.textContent = override || listNumberMarker((block.design || {}).numberStyle || 'decimal', i + 1);
+    }
+    flashSaveStatus();
+  }));
+
+  // Checkbox list — toggle an item's default (authored) checked state on canvas
+  app.querySelectorAll('.list-checkbox-marker').forEach(marker => {
+    const toggle = (e) => {
+      e.stopPropagation();
+      const wrapper = marker.closest('.canvas-block');
+      const block = blocks[parseInt(wrapper.dataset.index)];
+      const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+      const i = parseInt(marker.dataset.itemindex);
+      items[i] = items[i] || {};
+      items[i].checked = !items[i].checked;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    };
+    marker.addEventListener('click', toggle);
+    marker.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); } });
+  });
+
+  // List blocks — Bullet / Checkbox colour pickers (live preview on input, full re-render on change)
+  app.querySelectorAll('.list-bullet-color, .list-checkbox-border-color, .list-checkbox-tick-color').forEach(input => {
+    const prop = input.classList.contains('list-bullet-color') ? 'bulletColor'
+      : input.classList.contains('list-checkbox-border-color') ? 'checkboxBorderColor'
+      : 'checkboxTickColor';
+    input.addEventListener('input', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design[prop] = e.target.value;
+      applyListStylesToDom(block, BuilderUI.selected);
+    });
+    input.addEventListener('change', () => {
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    });
+  });
 
   // Text blocks — Typography / Spacing sliders (live preview, no full re-render mid-drag)
   app.querySelectorAll('.design-range').forEach(r => {

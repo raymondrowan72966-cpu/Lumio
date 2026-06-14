@@ -12,7 +12,10 @@
       "Bash(find . -path ./.git -prune -o -iname \"*pages*\" -print)",
       "Bash(head -30 \"Lumio Demo Build/DEMO_GUIDE.md\")",
       "Bash(head -30 \"Lumio Demo Build/README.md\")",
-      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\raymo\\\\Desktop\\\\Lumio\\\\Lumio Prototype\\\\css\\\\styles.css' | Measure-Object -Line\\).Lines\")"
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\raymo\\\\Desktop\\\\Lumio\\\\Lumio Prototype\\\\css\\\\styles.css' | Measure-Object -Line\\).Lines\")",
+      "Bash(cd \"Lumio Prototype\")",
+      "Bash(ls)",
+      "Bash(ls \"../Lumio Prototype/js/screens/\")"
     ]
   }
 }
