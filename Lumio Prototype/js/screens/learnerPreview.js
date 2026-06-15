@@ -379,16 +379,23 @@ function learnerCarouselBlock(block, index, ctx) {
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.carouselIndex[key] || 0) % slides.length + slides.length) % slides.length;
   const slide = slides[active];
-  const slideHtml = slide.src
-    ? `<img src="${slide.src}" alt="" class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="width:100%; height:200px; object-fit:cover; border-radius:var(--r-md); display:block; cursor:zoom-in;" />`
-    : `<div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
-        <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.caption || `Slide ${active + 1}`)}</span>
+  const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
+  let slideHtml;
+  if (!slide.src) {
+    slideHtml = `<div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
+        <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.title || slide.description || `Slide ${active + 1}`)}</span>
       </div>`;
-  const captionHtml = (slide.src && slide.caption) ? `<div class="text-sm mt-8" style="text-align:center;">${richTextOut(slide.caption)}</div>` : '';
+  } else if ((slide.imageFit || 'cover') === 'full') {
+    slideHtml = `<div class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="position:relative; width:100%; height:200px; border-radius:var(--r-md); overflow:hidden; cursor:zoom-in;"><img src="${slide.src}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+  } else {
+    const of = fitMap[slide.imageFit] || 'cover';
+    slideHtml = `<img src="${slide.src}" alt="" class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="width:100%; height:200px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; cursor:zoom-in;" />`;
+  }
+  const textHtml = `${slide.title ? `<div class="text-sm mt-8" style="font-weight:600; text-align:center;">${escapeHtml(slide.title)}</div>` : ''}${slide.description ? `<div class="text-sm text-muted mt-4" style="text-align:center;">${escapeHtml(slide.description)}</div>` : ''}`;
   return `
     <div>
       ${slideHtml}
-      ${captionHtml}
+      ${textHtml}
       <div class="flex items-center justify-between mt-8">
         <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Previous slide">← Prev</button>
         <div class="flex gap-8" role="group" aria-label="Slide indicators">
@@ -402,7 +409,7 @@ function learnerCarouselBlock(block, index, ctx) {
 /* ---- Quote Carousel ---- */
 function learnerQuoteCarouselBlock(block, index, ctx) {
   const d = block.data || {};
-  const quotes = (d.quotes && d.quotes.length) ? d.quotes : DEFAULT_QUOTES;
+  const quotes = normalizeQuoteItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
   const q = quotes[active];

@@ -793,6 +793,7 @@ const LumioData = {
       { id: 'continue', name: 'Continue', icon: '⏵' },
       { id: 'numbered_divider', name: 'Numbered Divider', icon: '①' },
       { id: 'line_divider', name: 'Line Divider', icon: '—' },
+      { id: 'spacer', name: 'Spacer', icon: '⬜' },
     ]},
     { category: 'Knowledge Checks', icon: '✅', blocks: [
       { id: 'kc_multiple_choice', name: 'Multiple Choice', icon: '◉' },

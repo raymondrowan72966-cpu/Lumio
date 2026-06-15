@@ -32,6 +32,7 @@ const BlockCapabilities = (function () {
     line_divider: { category: 'minimal' },
     numbered_divider: { category: 'minimal' },
     continue: { category: 'minimal' },
+    spacer: { category: 'minimal' },
     // These types keep the Media/Layout family's 'document' category
     // (they are document-flow content, not overlays/minimal dividers),
     // but their current wrapper treatment is 'card', not the category's
@@ -84,6 +85,7 @@ const BlockCapabilities = (function () {
     line_divider: { decorative: true, contrastCheck: false },
     numbered_divider: { decorative: true, contrastCheck: false },
     continue: { decorative: false, contrastCheck: false },
+    spacer: { decorative: true, contrastCheck: false },
   }, (defaults) => ({ decorative: defaults.decorative, contrastCheck: false }));
 
   // ----------------------------------------------------------
@@ -149,6 +151,7 @@ const BlockCapabilities = (function () {
   // ----------------------------------------------------------
   const COMPLETION_CAPABILITIES = build({
     continue: { strategy: 'none' },
+    spacer: { strategy: 'none' },
     list_checkbox: { strategy: 'interacted' },
   }, (defaults) => ({ strategy: defaults.completion }));
 

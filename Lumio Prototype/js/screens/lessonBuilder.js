@@ -341,11 +341,20 @@ const MARKER_ICONS = {
 const MARKER_SIZE_MAP = { sm: 20, md: 28, lg: 38 };
 const IMAGE_RADIUS_MAP = { sharp: '4px', soft: 'var(--r-md)', round: 'var(--r-xl)' };
 
-/* Lazily migrates legacy string[] carousel items to {src, caption} objects, in place. */
+/* Lazily migrates legacy string[]/{src,caption} carousel items to {src, title, description, imageFit} objects, in place. */
 function normalizeCarouselItems(d) {
   const source = (d.items && d.items.length) ? d.items : ['Slide 1', 'Slide 2', 'Slide 3'];
-  d.items = source.map(it => typeof it === 'string' ? { src: null, caption: it } : { src: (it && it.src) || null, caption: (it && it.caption) || '' });
+  d.items = source.map(it => typeof it === 'string'
+    ? { src: null, title: '', description: it, imageFit: 'cover' }
+    : { src: (it && it.src) || null, title: (it && it.title) || '', description: (it && it.description) || (it && it.caption) || '', imageFit: (it && it.imageFit) || 'cover' });
   return d.items;
+}
+
+/* Lazily migrates quote_carousel quotes to {text, author, avatar} objects, in place. */
+function normalizeQuoteItems(d) {
+  if (!d.quotes || !d.quotes.length) d.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q));
+  d.quotes = d.quotes.map(q => Object.assign({ text: '', author: '', avatar: null }, q));
+  return d.quotes;
 }
 
 /* Lazily migrates column_grid items to {title, description, imageUrl} objects, in place. */
@@ -372,14 +381,16 @@ function normalizeFlashcardItems(d) {
    optional image (per imageFit), text, and a Flip Icon (top right). No editing
    chrome is ever rendered on the card surface — card management lives in the
    Content panel. */
-function flashcardFaceContent(face) {
+function flashcardFaceContent(face, i, faceName, ce, editable) {
   const fit = face.imageFit || 'cover';
   const hasImage = !!face.image;
   const flipIcon = `<div class="flip-card-flipicon">↻</div>`;
+  const showText = !!face.text || editable;
+  const placeholder = faceName === 'back' ? 'Back text' : 'Front text';
   if (hasImage && fit === 'full') {
     return `
       <img src="${face.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
-      ${face.text ? `<div style="position:relative; z-index:1; background:rgba(0,0,0,0.35); color:#fff; padding:8px 12px; border-radius:var(--r-sm); font-weight:600; font-size:14px; max-width:90%;">${richTextOut(face.text)}</div>` : ''}
+      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; background:rgba(0,0,0,0.35); color:#fff; padding:8px 12px; border-radius:var(--r-sm); font-weight:600; font-size:14px; max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
       ${flipIcon}
     `;
   }
@@ -387,7 +398,7 @@ function flashcardFaceContent(face) {
   const objectFit = fitMap[fit] || 'cover';
   return `
     ${hasImage ? `<img src="${face.image}" alt="" style="max-width:100%; ${face.text ? 'max-height:70px; margin-bottom:8px;' : 'flex:1; height:100%;'} ${objectFit === 'none' ? 'object-fit:none; object-position:center;' : `object-fit:${objectFit};`} border-radius:var(--r-sm);" />` : ''}
-    ${face.text ? `<div data-role="body" data-richtext="true" style="font-weight:600; font-size:14px;">${richTextOut(face.text)}</div>` : ''}
+    ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="font-weight:600; font-size:14px;">${richTextOut(face.text || '')}</div>` : ''}
     ${flipIcon}
   `;
 }
@@ -724,7 +735,20 @@ function applyLivePreview(block, index) {
   else if (blockCategory(block.type) === 'Lists') applyListStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') applyImageStylesToDom(block, index);
   else if (block.type === 'audio') applyAudioStylesToDom(block, index);
+  else if (blockCategory(block.type) === 'Charts' || blockCategory(block.type) === 'Dividers') refreshGenericCanvas(block, index);
   else applyBlockStylesToDom(block, index);
+}
+
+/* Re-render a block's canvas preview in place (without rebuilding the
+   right-hand panel) so dataset/style edits reflect live on the canvas. */
+function refreshGenericCanvas(block, index) {
+  const wrapper = document.querySelector(`.canvas-block[data-index="${index}"]`);
+  if (!wrapper) return;
+  const content = wrapper.querySelector('.block-content-area');
+  if (!content) return;
+  content.innerHTML = renderBlockContent(block, true);
+  const blocks = LumioState.lessons[LumioState.currentLessonId];
+  content.querySelectorAll('.editable-text[contenteditable="true"]').forEach(elx => bindEditableTextField(elx, blocks));
 }
 
 /* Re-apply Audio block padding directly to the DOM for live preview during slider drags. */
@@ -1094,10 +1118,6 @@ function syncRichTextField(block, elx) {
     const i = parseInt(elx.dataset.col);
     items[i] = items[i] || {};
     items[i].text = sanitizeRichHtml(elx.innerHTML);
-  } else if (elx.dataset.field === 'carouselCaption') {
-    const items = normalizeCarouselItems(block.data);
-    const i = parseInt(elx.dataset.col);
-    items[i].caption = sanitizeRichHtml(elx.innerHTML);
   } else if (elx.dataset.field === 'gridItemTitle' || elx.dataset.field === 'gridItemDesc') {
     const items = normalizeColumnGridItems(block.data);
     const i = parseInt(elx.dataset.col);
@@ -1107,8 +1127,66 @@ function syncRichTextField(block, elx) {
     const i = parseInt(elx.dataset.col);
     const face = elx.dataset.face === 'back' ? 'back' : 'front';
     items[i][face].text = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'itemTitle' || elx.dataset.field === 'itemBody' || elx.dataset.field === 'carouselSlideTitle' || elx.dataset.field === 'carouselSlideDesc') {
+    const listKey = elx.dataset.list || 'items';
+    const items = block.data[listKey] || (block.data[listKey] = []);
+    const i = parseInt(elx.dataset.iindex, 10);
+    if (!items[i]) return;
+    const propMap = { itemTitle: 'title', itemBody: 'body', carouselSlideTitle: 'title', carouselSlideDesc: 'description' };
+    items[i][propMap[elx.dataset.field]] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'sceneDialogue') {
+    const scenes = block.data.scenes || [];
+    const i = parseInt(elx.dataset.iindex, 10);
+    if (scenes[i]) scenes[i].dialogue = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
+  }
+}
+
+/* Wire universal inline-editing behaviour (input sync + rich-text toolbar)
+   onto a single .editable-text[contenteditable="true"] element. Used both
+   for the bulk binding pass over the whole canvas and for elements created
+   later by targeted re-renders (e.g. refreshGenericCanvas). */
+function bindEditableTextField(elx, blocks) {
+  elx.addEventListener('input', () => {
+    const idx = parseInt(elx.closest('.canvas-block').dataset.index, 10);
+    const block = blocks[idx];
+    if (!block) return;
+    block.data = block.data || {};
+    const field = elx.dataset.field;
+    if (elx.dataset.richtext === 'true') {
+      syncRichTextField(block, elx);
+      return;
+    }
+    const text = elx.innerText.replace(/\n+$/, '');
+    if (field === 'col') {
+      const cols = block.data.cols || (block.data.cols = DEFAULT_COLUMNS.slice());
+      cols[parseInt(elx.dataset.col)] = text;
+    } else if (field === 'cell') {
+      const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
+      const r = parseInt(elx.dataset.row), c = parseInt(elx.dataset.col);
+      if (rows[r]) rows[r][c] = text;
+    } else {
+      block.data[field] = text;
+    }
+  });
+
+  if (elx.dataset.richtext === 'true') {
+    const idx = parseInt(elx.closest('.canvas-block').dataset.index, 10);
+    const block = blocks[idx];
+    const showToolbar = () => {
+      RichTextToolbar.activeField = { block, elx };
+      positionRichTextToolbar();
+    };
+    elx.addEventListener('mouseup', () => setTimeout(showToolbar, 0));
+    elx.addEventListener('keyup', () => setTimeout(showToolbar, 0));
+    elx.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (document.activeElement !== elx && !RichTextToolbar.el.contains(document.activeElement)) {
+          hideRichTextToolbar();
+        }
+      }, 0);
+    });
   }
 }
 
@@ -1257,31 +1335,15 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
     case 'quote_carousel': {
-      const quotes = (d.quotes && d.quotes.length) ? d.quotes : DEFAULT_QUOTES;
+      const quotes = normalizeQuoteItems(d);
       return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
         ${quotes.map((q, i) => `
-          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none; position:relative;">
-            ${editable ? `<button class="btn-icon quote-carousel-remove" data-qindex="${i}" title="Remove quote" aria-label="Remove quote" ${quotes.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${quotes.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
+          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;">
             ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
             <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
             <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
-            ${editable ? `<div class="mt-8">
-              <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Avatar</label>
-              <div class="flex items-center gap-8">
-                <div class="media-thumb" style="width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--surface-0); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                  ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:14px; opacity:0.5;">🖼️</span>`}
-                </div>
-                <button class="btn btn-secondary btn-sm quote-carousel-avatar-trigger" data-qindex="${i}">${q.avatar ? '🔄 Replace' : '📤 Upload'}</button>
-                ${q.avatar ? `<button class="btn btn-ghost btn-sm quote-carousel-avatar-remove" data-qindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
-              </div>
-            </div>` : ''}
-            ${editable ? `<div class="flex gap-4 mt-8">
-              <button class="btn-icon quote-carousel-move-left" data-qindex="${i}" title="Move left" aria-label="Move quote left" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">←</button>
-              <button class="btn-icon quote-carousel-move-right" data-qindex="${i}" title="Move right" aria-label="Move quote right" ${i === quotes.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === quotes.length - 1 ? '0.4' : '1'};">→</button>
-            </div>` : ''}
           </div>
         `).join('')}
-        ${editable ? `<button class="btn btn-secondary btn-sm quote-carousel-add" style="min-width:140px; align-self:center;">+ Add Quote</button>` : ''}
       </div>`;
     }
 
@@ -1350,27 +1412,27 @@ function renderBlockContent(block, editable) {
 
     case 'carousel': {
       const items = normalizeCarouselItems(d);
+      const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
       return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
-        ${items.map((item, i) => `
-          <div class="card card-pad" style="min-width:180px; max-width:220px; position:relative;">
-            ${editable ? `<button class="btn-icon carousel-slide-remove" data-cindex="${i}" title="Remove slide" aria-label="Remove slide" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
-            ${item.src
-              ? `<img src="${item.src}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" data-cindex="${i}" style="width:100%; height:120px; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
-              : imagePlaceholder(item.caption || `Slide ${i + 1}`, 120)}
-            ${editable
-              ? `<div class="editable-text text-sm mt-8" data-role="body" data-field="carouselCaption" data-col="${i}" data-richtext="true" contenteditable="true" data-placeholder="Caption (optional)">${richTextOut(item.caption || '')}</div>
-                 <div class="flex items-center gap-8 mt-8">
-                   <button class="btn btn-secondary btn-sm carousel-slide-image-trigger" data-cindex="${i}">${item.src ? '🔄 Replace' : '📤 Upload'}</button>
-                   ${item.src ? `<button class="btn btn-ghost btn-sm carousel-slide-image-remove" data-cindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
-                 </div>
-                 <div class="flex gap-4 mt-8">
-                   <button class="btn-icon carousel-slide-move-left" data-cindex="${i}" title="Move left" aria-label="Move slide left" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">←</button>
-                   <button class="btn-icon carousel-slide-move-right" data-cindex="${i}" title="Move right" aria-label="Move slide right" ${i === items.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === items.length - 1 ? '0.4' : '1'};">→</button>
-                 </div>`
-              : (item.caption ? `<div class="text-sm mt-8" style="text-align:center;">${richTextOut(item.caption)}</div>` : '')}
+        ${items.map((item, i) => {
+          const fit = item.imageFit || 'cover';
+          let imageHtml;
+          if (!item.src) {
+            imageHtml = imagePlaceholder(item.title || item.description || `Slide ${i + 1}`, 120);
+          } else if (fit === 'full') {
+            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="position:relative; width:100%; height:120px; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${item.src}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+          } else {
+            const of = fitMap[fit] || 'cover';
+            imageHtml = `<img src="${item.src}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="width:100%; height:120px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
+          }
+          return `
+          <div class="card card-pad" style="min-width:180px; max-width:220px;">
+            ${imageHtml}
+            ${(item.title || editable) ? `<div class="editable-text text-sm mt-8" data-role="title" data-field="carouselSlideTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Slide title" style="font-weight:600;">${richTextOut(item.title || '')}</div>` : ''}
+            ${(item.description || editable) ? `<div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="carouselSlideDesc" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Slide description">${richTextOut(item.description || '')}</div>` : ''}
           </div>
-        `).join('')}
-        ${editable ? `<button class="btn btn-secondary btn-sm carousel-slide-add" style="min-width:140px; align-self:center;">+ Add Slide</button>` : ''}
+        `;
+        }).join('')}
       </div>`;
     }
     case 'column_grid': {
@@ -1537,14 +1599,14 @@ function renderBlockContent(block, editable) {
         ${items.map((item, i) => {
           const open = expandFirst && i === 0;
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
-            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
-              <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} style="margin:0; font-size:15px;">${escapeHtml(item.title || '')}</${headingTag}></span>
+            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')) lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
+              <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px;">${richTextOut(item.title || '')}</${headingTag}></span>
               <span class="lumio-accordion-chevron" data-style="${ds.chevronStyle || 'chevron'}"></span>
             </div>
             <div class="lumio-accordion-body" style="max-height:${open ? 'none' : '0px'};">
               <div class="lumio-accordion-body-inner">
                 ${itemImageHtml(item, 200)}
-                <div class="text-sm">${richTextOut(item.body)}</div>
+                <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section body content...">${richTextOut(item.body || '')}</div>
                 ${itemMediaExtrasHtml(item)}
               </div>
             </div>
@@ -1569,12 +1631,12 @@ function renderBlockContent(block, editable) {
       const animate = settings.animation !== false;
       return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
-          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="lumioTabSwitch(this, ${i})">${escapeHtml(item.title || 'Tab ' + (i + 1))}</button>`).join('')}
+          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')) lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
         <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
           ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
             ${itemImageHtml(item, 220)}
-            <div class="text-sm">${richTextOut(item.body)}</div>
+            <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab content...">${richTextOut(item.body || '')}</div>
             ${itemMediaExtrasHtml(item)}
           </div>`).join('')}
         </div>
@@ -1641,8 +1703,8 @@ function renderBlockContent(block, editable) {
           ${items.map((item, i) => `<div class="lumio-process-step ${i === 0 ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
             ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
-            <${headingTag} style="margin:4px 0 6px;">${escapeHtml(item.title || 'Step ' + (i + 1))}</${headingTag}>
-            <div class="text-sm">${richTextOut(item.body)}</div>
+            <${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step ${i + 1}" style="margin:4px 0 6px;">${richTextOut(item.title || (editable ? '' : 'Step ' + (i + 1)))}</${headingTag}>
+            <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step description...">${richTextOut(item.body || '')}</div>
             ${itemMediaExtrasHtml(item)}
           </div>`).join('')}
         </div>
@@ -1684,7 +1746,7 @@ function renderBlockContent(block, editable) {
               ${scene.backgroundAudio ? `<div class="media-frame" style="margin-bottom:8px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${scene.backgroundAudio}"></audio></div>` : ''}
               <div class="lumio-scenario-dialogue" data-style="${dialogueStyle}">
                 ${scene.characterName ? `<div class="lumio-scenario-character-name">${escapeHtml(scene.characterName)}</div>` : ''}
-                <div class="lumio-scenario-dialogue-text">${richTextOut(scene.dialogue)}</div>
+                <div class="editable-text lumio-scenario-dialogue-text" data-role="body" data-field="sceneDialogue" data-list="scenes" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Dialogue text...">${richTextOut(scene.dialogue || '')}</div>
                 ${(scene.choices && scene.choices.length) ? `
                   <div class="lumio-scenario-choices">
                     ${scene.choices.map((c) => `<button class="lumio-scenario-choice" data-feedback="${escapeHtml(c.feedback || '')}" data-next="${c.nextScene ?? ''}" data-correct="${c.correctPath ? '1' : '0'}" onclick="event.stopPropagation(); lumioScenarioChoice(this)">${escapeHtml(c.text || '')}</button>`).join('')}
@@ -1710,13 +1772,13 @@ function renderBlockContent(block, editable) {
         <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; max-width:100%;">
           ${items.map((item, i) => `
             <div>
-              <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
-                    ${flashcardFaceContent(item.front)}
+                    ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
                   <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
-                    ${flashcardFaceContent(item.back)}
+                    ${flashcardFaceContent(item.back, i, 'back', ce, editable)}
                   </div>
                 </div>
               </div>
@@ -1735,13 +1797,13 @@ function renderBlockContent(block, editable) {
         <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:320px; max-width:100%;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
-              <div class="flip-card" onclick="event.stopPropagation(); this.classList.toggle('flipped')" style="height:180px; cursor:pointer;">
+              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); }" style="height:180px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
-                    ${flashcardFaceContent(item.front)}
+                    ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
                   <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
-                    ${flashcardFaceContent(item.back)}
+                    ${flashcardFaceContent(item.back, i, 'back', ce, editable)}
                   </div>
                 </div>
               </div>
@@ -1788,36 +1850,51 @@ function renderBlockContent(block, editable) {
     }
 
     case 'chart_bar':
-      return chartPreview('bar', d);
+      return renderBarChart(block, editable);
     case 'chart_line':
-      return chartPreview('line', d);
-    case 'chart_pie': {
-      const items = (d.items && d.items.length) ? d.items : [{label:'Engineering',value:40},{label:'Sales',value:30},{label:'Support',value:30}];
-      const colors = ['var(--indigo)','var(--cyan)','var(--orange)','var(--teal)'];
-      const total = items.reduce((s,it)=>s+(Number(it.value)||0),0) || 1;
-      let acc = 0;
-      const segments = items.map((it,i) => {
-        const start = acc/total*100;
-        acc += (Number(it.value)||0);
-        const end = acc/total*100;
-        return `${colors[i%colors.length]} ${start}% ${end}%`;
-      }).join(', ');
-      return `${d.title ? `<h3 style="font-size:15px; margin-bottom:14px;">${d.title}</h3>` : ''}
-      <div style="display:flex; align-items:center; gap:24px;">
-        <div style="width:120px; height:120px; border-radius:50%; background:conic-gradient(${segments});"></div>
-        <div class="text-sm">
-          ${items.map((it,i)=>`<div class="flex items-center gap-8 ${i>0?'mt-8':''}"><span style="width:10px;height:10px;border-radius:50%;background:${colors[i%colors.length]};display:inline-block;"></span> ${it.label||''} — ${Math.round((Number(it.value)||0)/total*100)}%</div>`).join('')}
-        </div>
+      return renderLineChart(block, editable);
+    case 'chart_pie':
+      return renderPieChart(block, editable);
+
+    case 'continue': {
+      const btnStyle = continueButtonStyle(ds);
+      const align = ds.align || 'center';
+      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      return `<div style="${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
+        <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span> ▾</button>
       </div>`;
     }
-
-    case 'continue':
-      return `<div style="text-align:center; padding:8px 0;"><button class="btn btn-secondary">${d.label || 'Continue'} ▾</button>
-        <p class="text-sm text-muted mt-8">Content below stays hidden until the learner clicks Continue.</p></div>`;
-    case 'numbered_divider':
-      return `<div class="flex items-center gap-12"><div style="width:32px; height:32px; border-radius:50%; background:var(--gradient-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;">${d.number || '2'}</div>${d.label ? `<div style="font-weight:600;">${d.label}</div>` : ''}<div style="flex:1; height:1px; background:var(--border);"></div></div>`;
-    case 'line_divider':
-      return `<div style="height:1px; background:var(--border);"></div>`;
+    case 'numbered_divider': {
+      const shapeRadiusMap = { circle: '50%', square: '4px', rounded: '10px' };
+      const markerSize = ds.markerSize ?? 32;
+      const fontSize = ds.fontSize ?? 14;
+      const lineColor = ds.lineColor || 'var(--border)';
+      const lineStyle = ds.lineStyle || 'solid';
+      const lineThickness = ds.lineThickness ?? 1;
+      return `<div class="flex items-center gap-12">
+        <div style="width:${markerSize}px; height:${markerSize}px; min-width:${markerSize}px; border-radius:${shapeRadiusMap[ds.markerShape] || '50%'}; background:${ds.markerFill || 'var(--gradient-primary)'}; color:${ds.markerTextColor || '#fff'}; border:${ds.markerBorderColor ? `2px solid ${ds.markerBorderColor}` : 'none'}; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:${fontSize}px; flex-shrink:0; overflow:hidden;">
+          <span class="editable-text" data-field="marker" data-richtext="true" ${ce} data-placeholder="1" style="text-align:center; line-height:1.1;">${richTextOut(d.marker || '1')}</span>
+        </div>
+        <div style="flex:1; height:${lineThickness}px; background:${lineStyle === 'none' ? 'transparent' : lineColor}; border-top:${lineStyle !== 'solid' && lineStyle !== 'none' ? `${lineThickness}px ${lineStyle} ${lineColor}` : 'none'}; ${lineStyle !== 'solid' && lineStyle !== 'none' ? 'background:transparent; height:0;' : ''}"></div>
+      </div>`;
+    }
+    case 'line_divider': {
+      const lineColor = ds.lineColor || 'var(--border)';
+      const thickness = ds.thickness ?? 1;
+      const style = ds.lineStyle || 'solid';
+      const width = ds.width ?? 100;
+      const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end', full: 'stretch' };
+      const isFull = (ds.align || 'full') === 'full';
+      return `<div style="display:flex; justify-content:${alignMap[ds.align || 'full'] || 'center'};">
+        <div style="width:${isFull ? '100%' : width + '%'}; ${style === 'solid' ? `height:${thickness}px; background:${lineColor};` : `height:0; border-top:${thickness}px ${style} ${lineColor};`}"></div>
+      </div>`;
+    }
+    case 'spacer': {
+      const heightMap = { xs: 16, sm: 32, md: 64, lg: 120, xl: 200 };
+      const preset = ds.heightPreset || 'md';
+      const h = preset === 'custom' ? (ds.customHeight ?? 64) : (heightMap[preset] ?? 64);
+      return `<div style="height:${h}px; width:100%; ${editable ? 'background:repeating-linear-gradient(45deg, var(--surface-50), var(--surface-50) 10px, transparent 10px, transparent 20px); border-radius:var(--r-sm);' : ''}"></div>`;
+    }
 
     case 'kc_multiple_choice':
       return knowledgeCheckMC(d);
@@ -1895,29 +1972,233 @@ function playbackSpeedSelector(elClass) {
   </div>`;
 }
 
-function chartPreview(kind, d) {
-  d = d || {};
-  const title = d.title ? `<h3 style="font-size:15px; margin-bottom:14px;">${d.title}</h3>` : '';
-  if (kind === 'bar') {
-    const items = (d.items && d.items.length) ? d.items : [{label:'',value:60},{label:'',value:90},{label:'',value:40},{label:'',value:75},{label:'',value:55}];
-    const max = Math.max(...items.map(it => Number(it.value) || 0), 1);
-    return `${title}<div class="flex items-end gap-12" style="height:140px;">
-      ${items.map(it => `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;">
-        <div style="width:100%; background:var(--gradient-primary); height:${Math.max((Number(it.value)||0)/max*100, 2)}%; border-radius:6px 6px 0 0;"></div>
-      </div>`).join('')}
-    </div>
-    ${items.some(it=>it.label) ? `<div class="flex gap-12 mt-4">${items.map(it=>`<div class="text-sm" style="flex:1; text-align:center;">${it.label||''}</div>`).join('')}</div>` : ''}`;
+/* ============================================================
+   CHARTS — Bar, Line, Pie. Shared data model: block.data = {
+   title, xLabel, yLabel, items:[{label,value,color}] }. Design
+   (block.design) covers color mode, background style/image,
+   heading level, padding, and per-type extras (line style,
+   thickness, points; pie segment colors). Settings
+   (block.settings) covers grid lines, values, axis labels,
+   legend, percentages/labels (pie) and animation.
+   ============================================================ */
+
+const CHART_PALETTE = ['#7C3AED', '#06B6D4', '#F97316', '#14B8A6', '#EC4899', '#84CC16', '#6366F1', '#F43F5E'];
+const CHART_BG_MAP = {
+  light: 'var(--surface-0)',
+  gray: 'var(--surface-50)',
+  theme: 'var(--pastel-lavender)',
+  tint: 'var(--pastel-cyan)',
+  dark: '#1F1B3A',
+  black: '#000000',
+};
+
+/* Ensures block.data.items exists with { label, value, color } objects, seeding
+   sensible sample data for a freshly-added chart. Mutates and returns the array. */
+function normalizeChartItems(d, kind) {
+  if (!d.items || !d.items.length) {
+    d.items = kind === 'pie'
+      ? [{ label: 'Engineering', value: 40, color: '' }, { label: 'Sales', value: 30, color: '' }, { label: 'Support', value: 30, color: '' }]
+      : [{ label: 'Mon', value: 60 }, { label: 'Tue', value: 90 }, { label: 'Wed', value: 40 }, { label: 'Thu', value: 75 }, { label: 'Fri', value: 55 }];
+  } else {
+    d.items = d.items.map(it => ({ label: (it && it.label) || '', value: Number(it && it.value) || 0, color: (it && it.color) || '' }));
   }
-  const items = (d.items && d.items.length) ? d.items : [{label:'',value:20},{label:'',value:50},{label:'',value:40},{label:'',value:80},{label:'',value:65},{label:'',value:90}];
+  return d.items;
+}
+
+function formatChartValue(v) {
+  v = Number(v) || 0;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
+/* Resolves the single-series accent colour for Bar/Line charts (Theme vs Custom Color). */
+function chartAccentColor(ds) {
+  return (ds.colorMode === 'custom' && ds.customColor) ? ds.customColor : '#7C3AED';
+}
+
+/* Resolves a Pie segment's colour: per-segment override > custom palette (tinted) > theme palette. */
+function chartPieColor(ds, item, i) {
+  if (item.color) return item.color;
+  if (ds.colorMode === 'custom' && ds.customColor) {
+    return `color-mix(in srgb, ${ds.customColor} ${Math.max(25, 100 - i * 16)}%, white)`;
+  }
+  return CHART_PALETTE[i % CHART_PALETTE.length];
+}
+
+function chartTitleHtml(d, ds, editable) {
+  const tag = ['h3', 'h4', 'h5'].includes(ds.headingLevel) ? ds.headingLevel : 'h4';
+  const sizeMap = { h3: '20px', h4: '16px', h5: '14px' };
+  if (!editable) {
+    if (!d.title) return '';
+    return `<${tag} class="lumio-chart-title" style="font-size:${sizeMap[tag]};">${richTextOut(d.title)}</${tag}>`;
+  }
+  return `<${tag} class="lumio-chart-title editable-text" data-field="title" data-richtext="true" contenteditable="true" data-placeholder="Chart title" style="font-size:${sizeMap[tag]};">${richTextOut(d.title || '')}</${tag}>`;
+}
+
+/* Outer wrapper style for all 3 chart types: Background Style preset (incl.
+   Image Background) + Padding, shared across Bar/Line/Pie Design tabs. */
+function chartWrapperStyle(ds) {
+  const dark = ds.bgStyle === 'dark' || ds.bgStyle === 'black';
+  let style = `padding:${ds.padding ?? 20}px; border-radius:var(--theme-radius, var(--r-lg)); color:${dark ? '#ffffff' : 'var(--ink-900)'}; box-sizing:border-box;`;
+  if (ds.bgStyle === 'image' && ds.bgImage) {
+    style += `background-image:url('${ds.bgImage}'); background-size:cover; background-position:center;`;
+  } else {
+    style += `background:${CHART_BG_MAP[ds.bgStyle] || 'var(--surface-0)'};`;
+  }
+  return style;
+}
+
+/* Smoothed line path (Catmull-Rom -> cubic Bézier) for the Line chart's "Smoothed Line" option. */
+function catmullRomPath(pts) {
+  if (pts.length < 2) return '';
+  let path = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    path += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return path;
+}
+
+function renderBarChart(block, editable) {
+  const d = block.data || (block.data = {});
+  const ds = block.design || {};
+  const s = block.settings || {};
+  const items = normalizeChartItems(d, 'bar');
+  const showGrid = s.showGridLines !== false;
+  const showValues = s.showValues !== false;
+  const showAxis = s.showAxisLabels !== false;
+  const showLegend = !!s.showLegend;
+  const animate = s.animation !== false;
+  const accent = chartAccentColor(ds);
   const max = Math.max(...items.map(it => Number(it.value) || 0), 1);
+  const niceMax = max * 1.15;
+  const W = 600, H = 260;
+  const padL = showAxis && d.yLabel ? 44 : 28;
+  const padB = showAxis ? 34 : 14;
+  const padT = showValues ? 26 : 12;
+  const padR = 12;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = items.length;
-  const points = items.map((it, i) => {
-    const x = n > 1 ? (i / (n - 1)) * 300 : 150;
-    const y = 90 - ((Number(it.value) || 0) / max) * 80;
-    return `${x},${y}`;
-  }).join(' ');
-  return `${title}<svg viewBox="0 0 300 100" style="width:100%; height:120px;"><polyline points="${points}" fill="none" stroke="var(--indigo)" stroke-width="3"/></svg>
-  ${items.some(it=>it.label) ? `<div class="flex justify-between text-sm mt-4">${items.map(it=>`<span>${it.label||''}</span>`).join('')}</div>` : ''}`;
+  const slot = plotW / n;
+  const barW = Math.max(slot * 0.5, 6);
+  const gridLines = showGrid ? [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padT + plotH * (1 - f);
+    return `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="${f === 0 ? '0' : '4 4'}"/>`;
+  }).join('') : '';
+  const bars = items.map((it, i) => {
+    const v = Number(it.value) || 0;
+    const bh = Math.max(plotH * (v / niceMax), 1);
+    const x = padL + i * slot + (slot - barW) / 2;
+    const y = padT + plotH - bh;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="4" fill="${accent}" class="lumio-chart-bar ${animate ? 'animate' : ''}" style="${animate ? `animation-delay:${(i * 0.05).toFixed(2)}s;` : ''}"/>
+      ${showValues ? `<text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="currentColor">${formatChartValue(v)}</text>` : ''}`;
+  }).join('');
+  const xLabels = showAxis ? items.map((it, i) => {
+    const x = padL + i * slot + slot / 2;
+    return `<text x="${x}" y="${H - 12}" text-anchor="middle" font-size="11" fill="currentColor">${escapeHtml(it.label || '')}</text>`;
+  }).join('') : '';
+  const yAxisLabel = showAxis && d.yLabel ? `<text x="14" y="${padT + plotH / 2}" text-anchor="middle" font-size="11" fill="currentColor" transform="rotate(-90 14 ${padT + plotH / 2})">${escapeHtml(d.yLabel)}</text>` : '';
+  const xAxisLabel = showAxis && d.xLabel ? `<div class="lumio-chart-axis-label">${escapeHtml(d.xLabel)}</div>` : '';
+  const legend = showLegend ? `<div class="lumio-chart-legend mt-12"><div class="lumio-chart-legend-item"><span class="lumio-chart-legend-swatch" style="background:${accent}; border-radius:3px;"></span>${escapeHtml(d.title || 'Series 1')}</div></div>` : '';
+  return `<div class="lumio-chart-wrap" style="${chartWrapperStyle(ds)}">
+    ${chartTitleHtml(d, ds, editable)}
+    <svg class="lumio-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${gridLines}${bars}${xLabels}${yAxisLabel}
+    </svg>
+    ${xAxisLabel}${legend}
+  </div>`;
+}
+
+function renderLineChart(block, editable) {
+  const d = block.data || (block.data = {});
+  const ds = block.design || {};
+  const s = block.settings || {};
+  const items = normalizeChartItems(d, 'line');
+  const showGrid = s.showGridLines !== false;
+  const showValues = s.showValues !== false;
+  const showAxis = s.showAxisLabels !== false;
+  const showLegend = !!s.showLegend;
+  const animate = s.animation !== false;
+  const lineColor = ds.lineColor || chartAccentColor(ds);
+  const thickness = ds.lineThickness || 3;
+  const smooth = ds.lineStyle === 'smooth';
+  const showPoints = ds.showPoints !== false;
+  const max = Math.max(...items.map(it => Number(it.value) || 0), 1);
+  const niceMax = max * 1.15;
+  const W = 600, H = 260;
+  const padL = showAxis && d.yLabel ? 44 : 28;
+  const padB = showAxis ? 34 : 14;
+  const padT = showValues ? 26 : 12;
+  const padR = 16;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = items.length;
+  const pts = items.map((it, i) => ({
+    x: n > 1 ? padL + (i / (n - 1)) * plotW : padL + plotW / 2,
+    y: padT + plotH * (1 - (Number(it.value) || 0) / niceMax),
+    v: Number(it.value) || 0,
+    label: it.label,
+  }));
+  const gridLines = showGrid ? [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padT + plotH * (1 - f);
+    return `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="${f === 0 ? '0' : '4 4'}"/>`;
+  }).join('') : '';
+  const path = (smooth && pts.length > 2) ? catmullRomPath(pts) : ('M' + pts.map(p => `${p.x},${p.y}`).join(' L '));
+  const lineEl = `<path d="${path}" fill="none" stroke="${lineColor}" stroke-width="${thickness}" stroke-linecap="round" stroke-linejoin="round" class="lumio-chart-line ${animate ? 'animate' : ''}" style="${animate ? '--lumio-line-length:1400; stroke-dasharray:1400;' : ''}"/>`;
+  const points = showPoints ? pts.map(p => `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${lineColor}" stroke="var(--surface-0)" stroke-width="1.5" class="lumio-chart-point ${animate ? 'animate' : ''}"/>`).join('') : '';
+  const values = showValues ? pts.map(p => `<text x="${p.x}" y="${p.y - 10}" text-anchor="middle" font-size="11" fill="currentColor">${formatChartValue(p.v)}</text>`).join('') : '';
+  const xLabels = showAxis ? pts.map(p => `<text x="${p.x}" y="${H - 12}" text-anchor="middle" font-size="11" fill="currentColor">${escapeHtml(p.label || '')}</text>`).join('') : '';
+  const yAxisLabel = showAxis && d.yLabel ? `<text x="14" y="${padT + plotH / 2}" text-anchor="middle" font-size="11" fill="currentColor" transform="rotate(-90 14 ${padT + plotH / 2})">${escapeHtml(d.yLabel)}</text>` : '';
+  const xAxisLabel = showAxis && d.xLabel ? `<div class="lumio-chart-axis-label">${escapeHtml(d.xLabel)}</div>` : '';
+  const legend = showLegend ? `<div class="lumio-chart-legend mt-12"><div class="lumio-chart-legend-item"><span class="lumio-chart-legend-swatch" style="background:${lineColor}; border-radius:2px; width:14px; height:4px;"></span>${escapeHtml(d.title || 'Series 1')}</div></div>` : '';
+  return `<div class="lumio-chart-wrap" style="${chartWrapperStyle(ds)}">
+    ${chartTitleHtml(d, ds, editable)}
+    <svg class="lumio-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${gridLines}${lineEl}${points}${values}${xLabels}${yAxisLabel}
+    </svg>
+    ${xAxisLabel}${legend}
+  </div>`;
+}
+
+function renderPieChart(block, editable) {
+  const d = block.data || (block.data = {});
+  const ds = block.design || {};
+  const s = block.settings || {};
+  const items = normalizeChartItems(d, 'pie');
+  const showLegend = s.showLegend !== false;
+  const showValues = !!s.showValues;
+  const showPercentages = s.showPercentages !== false;
+  const showLabels = s.showLabels !== false;
+  const animate = s.animation !== false;
+  const total = items.reduce((sum, it) => sum + (Number(it.value) || 0), 0) || 1;
+  const colors = items.map((it, i) => chartPieColor(ds, it, i));
+  let acc = 0;
+  const gradient = items.map((it, i) => {
+    const start = acc / total * 360;
+    acc += Number(it.value) || 0;
+    const end = acc / total * 360;
+    return `${colors[i]} ${start}deg ${end}deg`;
+  }).join(', ');
+  const legendItems = items.map((it, i) => {
+    const pct = Math.round((Number(it.value) || 0) / total * 100);
+    const bits = [];
+    if (showLabels) bits.push(escapeHtml(it.label || ''));
+    if (showPercentages) bits.push(`${pct}%`);
+    if (showValues) bits.push(formatChartValue(it.value));
+    return `<div class="lumio-chart-legend-item"><span class="lumio-chart-legend-swatch" style="background:${colors[i]};"></span>${bits.join(' — ') || '&nbsp;'}</div>`;
+  }).join('');
+  return `<div class="lumio-chart-wrap" style="${chartWrapperStyle(ds)}">
+    ${chartTitleHtml(d, ds, editable)}
+    <div class="lumio-chart-pie-row">
+      <div class="lumio-chart-pie-circle lumio-chart-pie ${animate ? 'animate' : ''}" style="background:conic-gradient(${gradient});"></div>
+      ${showLegend ? `<div class="lumio-chart-legend">${legendItems}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function knowledgeCheckMC(d) {
@@ -2406,7 +2687,7 @@ function renderImageFamilyPanel(block, index) {
         return mediaPickerImageField(d, 'src', 'Background Image', 'Background Image') +
           `<p class="text-sm text-muted mt-8">Click directly on the heading or body text in the canvas to edit them.</p>` + aiActions(true);
       case 'carousel':
-        return `<p class="text-sm text-muted">Use the controls on each slide to upload an image and add a caption. Use + Add Slide to add more, and the arrow / × controls to reorder or remove slides.</p>` + aiActions();
+        return galleryCarouselContentPanel(block, d);
       case 'column_grid':
         return `<p class="text-sm text-muted">Use the controls on each item to upload an image and edit its title/description. Use + Add Item to add more.</p>` + aiActions();
       default:
@@ -2458,7 +2739,7 @@ function renderImageFamilyPanel(block, index) {
         <p class="text-sm text-muted mt-16">Increase overlay darkness or switch to dark text to keep content readable over bright images.</p>`;
     }
     case 'carousel':
-      return `<p class="text-sm text-muted">Manage slides directly on the canvas — upload images, edit captions, and reorder using the controls on each slide.</p>`;
+      return `<p class="text-sm text-muted">Use the Content tab to manage slides — add images, titles, descriptions and reorder.</p>`;
     case 'column_grid':
       return `
         <div class="prop-section" style="border-bottom:none;">
@@ -2484,6 +2765,12 @@ function renderRightTabContent(block, index, course) {
   }
   if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') {
     return renderImageFamilyPanel(block, index);
+  }
+  if (blockCategory(block.type) === 'Charts') {
+    return renderChartBlockPanel(block, index);
+  }
+  if (blockCategory(block.type) === 'Dividers') {
+    return renderDividerBlockPanel(block, index);
   }
   if (block.type === 'audio') {
     return renderAudioBlockPanel(block, index);
@@ -2572,8 +2859,6 @@ function renderRightTabContent(block, index, course) {
         <div class="field"><label>Completion Behaviour</label>
           ${segControlSettings('settings-completionbehaviour', 'completionBehaviour', [{id:'message',label:'Show Message'},{id:'restart',label:'Allow Restart'}], s.completionBehaviour || 'message')}
         </div>`;
-    } else if (block.type === 'continue') {
-      extra = `<div class="field"><label>Button label</label><input class="input content-field" data-field="label" value="${d.label || 'Continue'}" /></div>`;
     } else {
       extra = `<p class="text-sm text-muted">No additional settings for this block.</p>`;
     }
@@ -2603,22 +2888,12 @@ function renderRightTabContent(block, index, course) {
       return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` +
         quoteImageUploadFields(block) + aiActions();
     case 'quote_carousel':
-      return `<p class="text-sm text-muted">Click directly on a quote's text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment). Use the + Add Quote button to add a new card, and the arrow / × controls on each card to reorder or remove quotes.</p>` + aiActions();
+      return quoteCarouselContentPanel(block, d);
     case 'kc_multiple_choice':
       return contentFields([['Question', 'question', d.question, 'textarea']]) +
         `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
          <div class="field"><label>Correct option (number)</label><input class="input content-field" data-field="correct" type="number" min="1" value="${(d.correct ?? 1)+1}"/></div>` +
         `<button class="btn btn-secondary w-full mt-8" id="ai-gen-kc">✨ Regenerate from lesson content</button>`;
-    case 'continue':
-      return `<p class="text-sm text-muted">This divider pauses content below until the learner clicks Continue — great for pacing and reducing cognitive load.</p>`;
-    case 'chart_bar': case 'chart_line': case 'chart_pie':
-      return contentFields([['Chart title', 'title', d.title, 'input']]) +
-        `<div class="field"><label>Data (one per line, format: Label :: Value)</label><textarea class="textarea content-field" data-field="chartItems" rows="6">${(d.items||[]).map(it=>`${it.label||''} :: ${it.value??''}`).join('\n')}</textarea></div>` + aiActions();
-    case 'numbered_divider':
-      return contentFields([
-        ['Number', 'number', d.number, 'input'],
-        ['Label (optional)', 'label', d.label, 'input'],
-      ]);
     case 'accordion':
       return accordionContentPanel(block, d);
     case 'tabs':
@@ -2676,6 +2951,361 @@ function renderRightTabContent(block, index, course) {
     default:
       return `<p class="text-sm text-muted">Edit the ${blockLabel(block.type)} block's content directly on the canvas, or use AI to generate a draft.</p>` + aiActions();
   }
+}
+
+/* ============================================================
+   CHARTS — dedicated right-panel (Content / Design / Settings),
+   dispatched early from renderRightTabContent for the 'Charts'
+   category so the generic Background/Alignment/Corner-Radius
+   sections never apply to chart blocks.
+   ============================================================ */
+function renderChartBlockPanel(block, index) {
+  const d = block.data || (block.data = {});
+  const ds = block.design || (block.design = {});
+  const s = block.settings || (block.settings = {});
+  const isPie = block.type === 'chart_pie';
+  const isLine = block.type === 'chart_line';
+  if (BuilderUI.rightTab === 'design') return chartDesignPanel(block, d, ds, isPie, isLine);
+  if (BuilderUI.rightTab === 'settings') return chartSettingsPanel(block, s, isPie);
+  return chartContentPanel(block, d, isPie);
+}
+
+function chartContentPanel(block, d, isPie) {
+  const items = normalizeChartItems(d, isPie ? 'pie' : 'other');
+  const labelHeading = isPie ? 'Segment Label' : 'Label';
+  const valueHeading = isPie ? 'Segment Value' : 'Value';
+  const rows = items.map((it, i) => `
+    <div class="chart-row mb-8 pb-8" data-iindex="${i}" style="border-bottom:1px solid var(--border);">
+      <input class="input chart-field mb-8" data-field="label" data-iindex="${i}" value="${escapeHtml(it.label || '')}" placeholder="${labelHeading}" style="width:100%;" />
+      <div class="flex gap-8 items-center">
+        <input class="input chart-field" type="number" data-field="value" data-iindex="${i}" value="${it.value}" placeholder="${valueHeading}" style="flex:1;" />
+        <div class="flex gap-4">
+          <button class="btn-icon chart-row-up" data-iindex="${i}" title="Move up" aria-label="Move row up">↑</button>
+          <button class="btn-icon chart-row-down" data-iindex="${i}" title="Move down" aria-label="Move row down">↓</button>
+          <button class="btn-icon chart-row-duplicate" data-iindex="${i}" title="Duplicate" aria-label="Duplicate row">⧉</button>
+          <button class="btn-icon chart-row-remove" data-iindex="${i}" title="Delete" aria-label="Delete row">🗑️</button>
+        </div>
+      </div>
+    </div>`).join('');
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Chart Title</div>
+      <input class="input chart-field" data-field="title" value="${escapeHtml(d.title || '')}" placeholder="Chart title" />
+    </div>
+    ${isPie ? '' : `
+    <div class="prop-section">
+      <div class="prop-section-title">X-Axis Label</div>
+      <input class="input chart-field" data-field="xLabel" value="${escapeHtml(d.xLabel || '')}" placeholder="X-axis label" />
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Y-Axis Label</div>
+      <input class="input chart-field" data-field="yLabel" value="${escapeHtml(d.yLabel || '')}" placeholder="Y-axis label" />
+    </div>`}
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">${isPie ? 'Segments' : 'Data'}</div>
+      ${rows}
+      <button class="btn btn-secondary btn-sm chart-row-add">+ ${isPie ? 'Add Segment' : 'Add Row'}</button>
+    </div>
+  `;
+}
+
+function chartDesignPanel(block, d, ds, isPie, isLine) {
+  const items = normalizeChartItems(d, isPie ? 'pie' : 'other');
+  const colorMode = ds.colorMode === 'custom' ? 'custom' : 'theme';
+  const bgStyles = [
+    { id: 'light', label: 'Light' },
+    { id: 'gray', label: 'Grey' },
+    { id: 'theme', label: 'Theme' },
+    { id: 'tint', label: 'Tint' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'black', label: 'Black' },
+  ];
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Colour</div>
+      ${segControl('design-colormode', 'colorMode', [{ id: 'theme', label: 'Theme Color' }, { id: 'custom', label: 'Custom Color' }], colorMode)}
+      ${colorMode === 'custom' ? `<div class="flex items-center gap-12 mt-8">
+        <input type="color" class="design-color-input" data-prop="customColor" value="${ds.customColor || '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <span class="text-sm text-muted">Custom colour</span>
+      </div>` : ''}
+    </div>
+    ${isLine ? `
+    <div class="prop-section">
+      <div class="prop-section-title">Line</div>
+      <div class="flex items-center gap-12 mb-8">
+        <input type="color" class="design-color-input" data-prop="lineColor" value="${ds.lineColor || chartAccentColor(ds)}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <span class="text-sm text-muted">Line colour</span>
+      </div>
+      <label>Line Thickness</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="lineThickness" min="1" max="6" value="${ds.lineThickness || 3}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.lineThickness || 3}px</span>
+      </div>
+      ${segControl('design-linestyle', 'lineStyle', [{ id: 'straight', label: 'Straight Line' }, { id: 'smooth', label: 'Smoothed Line' }], ds.lineStyle === 'smooth' ? 'smooth' : 'straight')}
+      <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="design-checkbox" data-prop="showPoints" ${ds.showPoints !== false ? 'checked' : ''}/> Show data points</label>
+    </div>` : ''}
+    ${isPie ? `
+    <div class="prop-section">
+      <div class="prop-section-title">Segment Colours</div>
+      <p class="text-sm text-muted mb-8">Override individual segment colours. Leave default to use the theme/custom palette above.</p>
+      ${items.map((it, i) => `
+        <div class="flex items-center gap-12 mb-8">
+          <input type="color" class="chart-segment-color" data-iindex="${i}" value="${(it.color || chartPieColor(ds, it, i)).startsWith('#') ? (it.color || '#7C3AED') : '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+          <span class="text-sm">${escapeHtml(it.label || `Segment ${i + 1}`)}</span>
+          ${it.color ? `<button class="btn btn-ghost btn-sm chart-segment-color-reset" data-iindex="${i}" style="color:#E5484D;">Reset</button>` : ''}
+        </div>`).join('')}
+    </div>` : ''}
+    <div class="prop-section">
+      <div class="prop-section-title">Background Style</div>
+      ${segControl('design-bgstyle', 'bgStyle', bgStyles, (ds.bgStyle && ds.bgStyle !== 'image') ? ds.bgStyle : 'light')}
+      <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="chart-bg-image-toggle" ${ds.bgStyle === 'image' ? 'checked' : ''}/> Use image background</label>
+      ${ds.bgStyle === 'image' ? `
+        <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+          <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          </div>
+          <button class="btn btn-secondary btn-sm chart-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm chart-bg-image-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        </div>` : ''}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Layout</div>
+      <label>Heading Level</label>
+      ${segControl('design-headinglevel', 'headingLevel', [{ id: 'h3', label: 'H3' }, { id: 'h4', label: 'H4' }, { id: 'h5', label: 'H5' }], ['h3','h4','h5'].includes(ds.headingLevel) ? ds.headingLevel : 'h4')}
+      <label class="mt-8">Padding</label>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="padding" min="0" max="60" value="${ds.padding ?? 20}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.padding ?? 20}px</span>
+      </div>
+    </div>
+  `;
+}
+
+function chartSettingsPanel(block, s, isPie) {
+  if (isPie) {
+    return `
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showLegend" ${s.showLegend !== false ? 'checked' : ''}/> Show legend</label></div>
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showValues" ${s.showValues ? 'checked' : ''}/> Show values</label></div>
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showPercentages" ${s.showPercentages !== false ? 'checked' : ''}/> Show percentages</label></div>
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showLabels" ${s.showLabels !== false ? 'checked' : ''}/> Show segment labels</label></div>
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="animation" ${s.animation !== false ? 'checked' : ''}/> Animation</label></div>
+    `;
+  }
+  return `
+    <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showGridLines" ${s.showGridLines !== false ? 'checked' : ''}/> Show grid lines</label></div>
+    <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showValues" ${s.showValues !== false ? 'checked' : ''}/> Show values</label></div>
+    <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showAxisLabels" ${s.showAxisLabels !== false ? 'checked' : ''}/> Show axis labels</label></div>
+    <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="showLegend" ${s.showLegend ? 'checked' : ''}/> Show legend</label></div>
+    <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="animation" ${s.animation !== false ? 'checked' : ''}/> Animation</label></div>
+  `;
+}
+
+/* ============================================================
+   DIVIDERS — Continue / Numbered Divider / Line Divider / Spacer
+   dedicated right-panel (Content / Design / Settings), dispatched
+   early from renderRightTabContent for the 'Dividers' category.
+   ============================================================ */
+function renderDividerBlockPanel(block, index) {
+  block.data = block.data || {};
+  block.design = block.design || {};
+  block.settings = block.settings || {};
+  if (BuilderUI.rightTab === 'design') return dividerDesignPanel(block);
+  if (BuilderUI.rightTab === 'settings') return dividerSettingsPanel(block);
+  return dividerContentPanel(block);
+}
+
+function dividerContentPanel(block) {
+  const d = block.data;
+  switch (block.type) {
+    case 'continue': {
+      const completionType = d.completionType || 'none';
+      return `
+        <div class="prop-section">
+          <div class="prop-section-title">Label</div>
+          <input class="input divider-field" data-field="label" value="${escapeHtml(d.label || 'Continue')}" placeholder="Continue" />
+          <p class="text-sm text-muted mt-4">You can also edit this directly on the canvas.</p>
+        </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Hint Text</div>
+          <textarea class="textarea divider-field" data-field="hint" rows="2" placeholder="Complete the section above to continue">${escapeHtml(d.hint || '')}</textarea>
+          <p class="text-sm text-muted mt-4">Shown to the learner only while the button is locked.</p>
+        </div>
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Completion Type</div>
+          <select class="input divider-field" data-field="completionType">
+            <option value="none" ${completionType === 'none' ? 'selected' : ''}>None — Always Show Button</option>
+            <option value="directly_above" ${completionType === 'directly_above' ? 'selected' : ''}>Complete Block Directly Above</option>
+            <option value="all_above" ${completionType === 'all_above' ? 'selected' : ''}>Complete All Blocks Above</option>
+          </select>
+        </div>`;
+    }
+    case 'numbered_divider':
+      return `
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Marker Text</div>
+          <input class="input divider-field" data-field="marker" value="${escapeHtml(d.marker || '1')}" placeholder="1, A, STEP 1..." />
+          <p class="text-sm text-muted mt-4">You can also edit this directly on the canvas.</p>
+        </div>`;
+    case 'line_divider':
+      return `<p class="text-sm text-muted">This block has no content options — use the Design tab to style the line.</p>`;
+    case 'spacer':
+      return `<p class="text-sm text-muted">This block has no content options — use the Design tab to set its height.</p>`;
+    default:
+      return '';
+  }
+}
+
+function dividerDesignPanel(block) {
+  const ds = block.design;
+  switch (block.type) {
+    case 'continue': return continueDesignFields(ds);
+    case 'numbered_divider': return numberedDividerDesignFields(ds);
+    case 'line_divider': return lineDividerDesignFields(ds);
+    case 'spacer': return spacerDesignFields(ds);
+    default: return '';
+  }
+}
+
+function dividerSettingsPanel(block) {
+  const s = block.settings;
+  if (block.type === 'continue') {
+    return `
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="animation" ${s.animation !== false ? 'checked' : ''}/> Enable animation</label></div>
+      <div class="field"><label class="flex items-center gap-8"><input type="checkbox" class="settings-field" data-field="completionTracking" ${s.completionTracking !== false ? 'checked' : ''}/> Enable completion tracking</label></div>`;
+  }
+  return `<p class="text-sm text-muted">No additional settings for this block.</p>`;
+}
+
+function colorSwatchInput(prop, value, label) {
+  return `<div class="flex items-center gap-12 mb-8">
+    <input type="color" class="design-color-input" data-prop="${prop}" value="${value}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+    <span class="text-sm text-muted">${label}</span>
+  </div>`;
+}
+
+function lineDividerDesignFields(ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Line</div>
+      ${colorSwatchInput('lineColor', (ds.lineColor || '').startsWith('#') ? ds.lineColor : '#D9D9E3', 'Line colour')}
+      <label>Thickness</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="thickness" min="1" max="12" value="${ds.thickness ?? 1}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.thickness ?? 1}px</span>
+      </div>
+      <label>Style</label>
+      ${segControl('design-linedivider-style', 'lineStyle', [{id:'solid',label:'Solid'},{id:'dashed',label:'Dashed'},{id:'dotted',label:'Dotted'}], ds.lineStyle || 'solid')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Layout</div>
+      <label>Width</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="width" data-suffix="%" min="10" max="100" value="${ds.width ?? 100}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.width ?? 100}%</span>
+      </div>
+      <label class="mt-8">Alignment</label>
+      ${segControl('design-linedivider-align', 'align', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'},{id:'full',label:'Full Width'}], ds.align || 'full')}
+    </div>`;
+}
+
+function numberedDividerDesignFields(ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Line</div>
+      ${colorSwatchInput('lineColor', (ds.lineColor || '').startsWith('#') ? ds.lineColor : '#D9D9E3', 'Line colour')}
+      <label>Thickness</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="lineThickness" min="1" max="12" value="${ds.lineThickness ?? 1}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.lineThickness ?? 1}px</span>
+      </div>
+      <label>Style</label>
+      ${segControl('design-numdivider-linestyle', 'lineStyle', [{id:'solid',label:'Solid'},{id:'dashed',label:'Dashed'},{id:'dotted',label:'Dotted'}], ds.lineStyle || 'solid')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Marker</div>
+      ${colorSwatchInput('markerFill', (ds.markerFill || '').startsWith('#') ? ds.markerFill : '#7C3AED', 'Fill colour')}
+      ${colorSwatchInput('markerBorderColor', ds.markerBorderColor || '#ffffff', 'Border colour')}
+      ${colorSwatchInput('markerTextColor', ds.markerTextColor || '#ffffff', 'Text colour')}
+      <label>Shape</label>
+      ${segControl('design-numdivider-shape', 'markerShape', [{id:'circle',label:'Circle'},{id:'square',label:'Square'},{id:'rounded',label:'Rounded Square'}], ds.markerShape || 'circle')}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Size</div>
+      <label>Marker Size</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="markerSize" min="20" max="64" value="${ds.markerSize ?? 32}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.markerSize ?? 32}px</span>
+      </div>
+      <label>Font Size</label>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="fontSize" min="10" max="28" value="${ds.fontSize ?? 14}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.fontSize ?? 14}px</span>
+      </div>
+    </div>`;
+}
+
+function spacerDesignFields(ds) {
+  const preset = ds.heightPreset || 'md';
+  return `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Height</div>
+      ${segControl('design-spacer-height', 'heightPreset', [{id:'xs',label:'XS'},{id:'sm',label:'S'},{id:'md',label:'M'},{id:'lg',label:'L'},{id:'xl',label:'XL'},{id:'custom',label:'Custom'}], preset)}
+      ${preset === 'custom' ? `
+        <div class="flex items-center gap-8 mt-12">
+          <input type="range" class="design-range" data-prop="customHeight" min="0" max="400" value="${ds.customHeight ?? 64}" style="flex:1;" />
+          <span class="range-val text-sm text-muted">${ds.customHeight ?? 64}px</span>
+        </div>` : ''}
+    </div>`;
+}
+
+function continueDesignFields(ds) {
+  const bgStyles = [
+    { id: 'theme', label: 'Theme' },
+    { id: 'tint', label: 'Theme Tint' },
+    { id: 'light', label: 'Light' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'black', label: 'Black' },
+    { id: 'custom', label: 'Custom' },
+  ];
+  const bgStyle = (ds.bgStyle && ds.bgStyle !== 'image') ? ds.bgStyle : 'theme';
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Background</div>
+      ${segControl('design-continue-bg', 'bgStyle', bgStyles, bgStyle)}
+      ${bgStyle === 'custom' ? colorSwatchInput('customBg', ds.customBg || '#ffffff', 'Custom background colour') : ''}
+      <label class="flex items-center gap-8 mt-8"><input type="checkbox" class="continue-bg-image-toggle" ${ds.bgStyle === 'image' ? 'checked' : ''}/> Use background image</label>
+      ${ds.bgStyle === 'image' ? `
+        <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+          <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          </div>
+          <button class="btn btn-secondary btn-sm continue-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm continue-bg-image-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        </div>` : ''}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Button Size</div>
+      <label>Width</label>
+      ${segControl('design-continue-width', 'btnWidth', [{id:'auto',label:'Auto'},{id:'full',label:'Full Width'}], ds.btnWidth || 'auto')}
+      <label class="mt-8">Height</label>
+      <div class="flex items-center gap-8 mb-8">
+        <input type="range" class="design-range" data-prop="btnHeight" min="32" max="80" value="${ds.btnHeight ?? 44}" style="flex:1;" />
+        <span class="range-val text-sm text-muted">${ds.btnHeight ?? 44}px</span>
+      </div>
+      <label>Radius</label>
+      ${segControl('design-continue-radius', 'btnRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.btnRadius || 'soft')}
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Button Colour</div>
+      ${colorSwatchInput('btnFillColor', ds.btnFillColor || '#7C3AED', 'Fill colour')}
+      ${colorSwatchInput('btnTextColor', ds.btnTextColor || '#ffffff', 'Text colour')}
+      <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="btnBorder" ${ds.btnBorder ? 'checked' : ''}/> Show border</label>
+      ${ds.btnBorder ? colorSwatchInput('btnBorderColor', ds.btnBorderColor || '#000000', 'Border colour') : ''}
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Alignment</div>
+      ${segControl('design-continue-align', 'align', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'}], ds.align || 'center')}
+    </div>`;
 }
 
 function segControl(id, prop, options, current) {
@@ -3149,7 +3779,7 @@ function flashcardContentPanel(block, d) {
       ${['front', 'back'].map(face => `
         <div class="field">
           <label>${face === 'front' ? 'Front' : 'Back'}</label>
-          <textarea class="textarea flashcard-face-text" data-findex="${i}" data-face="${face}" rows="2" placeholder="${face === 'front' ? 'Front text' : 'Back text'}">${item[face].text || ''}</textarea>
+          <p class="text-sm text-muted mb-4">Click directly on the ${face} text on the canvas to edit it.</p>
           <div class="flex items-center gap-8 mt-4">
             <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? '🔄 Change Image' : '📤 Add Image'}</button>
             ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove" data-findex="${i}" data-face="${face}" style="color:#E5484D;">Remove image</button>` : ''}
@@ -3211,6 +3841,32 @@ const SURFACE_BG_MAP = {
 function surfaceBg(ds) { return SURFACE_BG_MAP[ds && ds.bgStyle] || 'var(--surface-0)'; }
 function surfaceTextColor(ds) { return (ds && (ds.bgStyle === 'dark' || ds.bgStyle === 'black')) ? '#ffffff' : 'var(--ink-900)'; }
 
+/* Continue block — outer surface (Theme/Tint/Light/Dark/Black/Custom/Image presets). */
+function continueWrapperStyle(ds) {
+  const radius = RADIUS_MAP[ds.radius] || RADIUS_MAP.soft;
+  if (ds.bgStyle === 'image' && ds.bgImage) {
+    return `background:url('${ds.bgImage}') center/cover; padding:16px; border-radius:${radius};`;
+  }
+  if (ds.bgStyle === 'custom') {
+    return `background:${ds.customBg || 'transparent'}; padding:16px; border-radius:${radius};`;
+  }
+  if (ds.bgStyle && ds.bgStyle !== 'theme') {
+    return `background:${surfaceBg(ds)}; color:${surfaceTextColor(ds)}; padding:16px; border-radius:${radius};`;
+  }
+  return 'padding:8px 0;';
+}
+
+/* Continue block — button styling (Width/Height/Radius/Fill/Text/Border). */
+function continueButtonStyle(ds) {
+  const widthStyle = ds.btnWidth === 'full' ? 'width:100%;' : '';
+  const height = ds.btnHeight ?? 44;
+  const radius = RADIUS_MAP[ds.btnRadius] || RADIUS_MAP.soft;
+  const fill = ds.btnFillColor || 'var(--theme-primary, var(--indigo))';
+  const textColor = ds.btnTextColor || '#ffffff';
+  const border = ds.btnBorder ? `2px solid ${ds.btnBorderColor || '#000000'}` : 'none';
+  return `${widthStyle} min-height:${height}px; border-radius:${radius}; background:${fill}; color:${textColor}; border:${border}; padding:0 28px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; gap:6px;`;
+}
+
 function normalizeItemList(d, key, factory) {
   if (!d[key] || !d[key].length) d[key] = factory();
   return d[key];
@@ -3223,6 +3879,12 @@ function defaultListItem(blockType, listKey) {
   }
   if (blockType === 'scenario' && listKey === 'scenes') {
     return { title: 'New Scene', dialogue: '', characterName: '', choices: [] };
+  }
+  if (blockType === 'quote_carousel' && listKey === 'quotes') {
+    return { text: 'New quote', author: '', avatar: null };
+  }
+  if (blockType === 'carousel' && listKey === 'items') {
+    return { src: null, title: '', description: '', imageFit: 'cover' };
   }
   return { title: '', body: '' };
 }
@@ -3307,11 +3969,62 @@ function itemListContentPanel(block, d, listKey, itemLabel, factory, opts) {
         <div class="prop-section-title" style="margin:0;">${itemLabel} ${i + 1}</div>
         ${itemManageToolbar(listKey, i, items.length)}
       </div>
-      <div class="field"><label>Title</label><input class="input lumio-item-text" data-list="${listKey}" data-iindex="${i}" data-field="title" value="${escapeHtml(item.title || '')}" /></div>
-      <div class="field"><label>${opts.bodyLabel || 'Content'}</label><textarea class="textarea lumio-item-text" rows="3" data-list="${listKey}" data-iindex="${i}" data-field="body">${escapeHtml(item.body || '')}</textarea></div>
+      ${opts.canvasEditable
+        ? `<p class="text-sm text-muted mb-8">Click directly on the ${(opts.titleLabel || 'title').toLowerCase()} or ${(opts.bodyLabel || 'content').toLowerCase()} in the canvas to edit them.</p>`
+        : `<div class="field"><label>Title</label><input class="input lumio-item-text" data-list="${listKey}" data-iindex="${i}" data-field="title" value="${escapeHtml(item.title || '')}" /></div>
+      <div class="field"><label>${opts.bodyLabel || 'Content'}</label><textarea class="textarea lumio-item-text" rows="3" data-list="${listKey}" data-iindex="${i}" data-field="body">${escapeHtml(item.body || '')}</textarea></div>`}
       ${itemMediaContentFields(item, listKey, i)}
     </div>
   `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="${listKey}">+ Add ${itemLabel}</button>` + aiActions();
+}
+
+/* ============================================================
+   QUOTE CAROUSEL — per-quote Content panel (avatar management,
+   reorder/duplicate/delete/add). Quote text and attribution remain
+   inline-editable on the canvas.
+   ============================================================ */
+
+function quoteCarouselContentPanel(block, d) {
+  const quotes = normalizeQuoteItems(d);
+  return quotes.map((q, i) => `
+    <div class="prop-section">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">Quote ${i + 1}</div>
+        ${itemManageToolbar('quotes', i, quotes.length)}
+      </div>
+      <p class="text-sm text-muted mb-8">Click directly on the quote text or attribution in the canvas to edit them.</p>
+      <div class="flex items-center gap-12">
+        <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+        </div>
+        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="quotes" data-iindex="${i}" data-field="avatar" data-kind="image" data-title="Avatar Image">${q.avatar ? '🔄 Change Image' : '📤 Add Image'}</button>
+        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="quotes" data-iindex="${i}" data-field="avatar" style="color:#E5484D;">Remove image</button>` : ''}
+      </div>
+    </div>
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="quotes">+ Add Quote</button>` + aiActions();
+}
+
+/* ============================================================
+   GALLERY CAROUSEL — per-slide Content panel (title, description,
+   image with layout selector, reorder/duplicate/delete/add).
+   ============================================================ */
+
+function galleryCarouselContentPanel(block, d) {
+  const items = normalizeCarouselItems(d);
+  return items.map((item, i) => `
+    <div class="prop-section">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">Slide ${i + 1}</div>
+        ${itemManageToolbar('items', i, items.length)}
+      </div>
+      <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
+      <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="items" data-iindex="${i}" data-field="src" data-kind="image" data-title="Image">${item.src ? '🔄 Change Image' : '📤 Add Image'}</button>
+        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="items" data-iindex="${i}" data-field="src" style="color:#E5484D;">Remove image</button>` : ''}
+      </div>
+      ${item.src ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="items" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
+    </div>
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="items">+ Add Slide</button>` + aiActions();
 }
 
 /* ============================================================
@@ -3322,7 +4035,7 @@ function accordionContentPanel(block, d) {
   return itemListContentPanel(block, d, 'items', 'Item', () => [
     { title: 'Section 1', body: 'Details about section 1...' },
     { title: 'Section 2', body: 'Details about section 2...' },
-  ], { bodyLabel: 'Body' });
+  ], { bodyLabel: 'Body', titleLabel: 'Title', canvasEditable: true });
 }
 
 function accordionDesignFields(block, ds) {
@@ -3365,7 +4078,7 @@ function tabsContentPanel(block, d) {
     { title: 'Overview', body: 'Overview content...' },
     { title: 'Details', body: 'Details content...' },
     { title: 'FAQ', body: 'FAQ content...' },
-  ], { bodyLabel: 'Body' });
+  ], { bodyLabel: 'Body', titleLabel: 'Tab title', canvasEditable: true });
 }
 
 function tabsDesignFields(block, ds) {
@@ -3393,7 +4106,7 @@ function processContentPanel(block, d) {
     { title: 'Step 1', body: 'Description of step 1' },
     { title: 'Step 2', body: 'Description of step 2' },
     { title: 'Step 3', body: 'Description of step 3' },
-  ], { bodyLabel: 'Description' });
+  ], { bodyLabel: 'Description', titleLabel: 'Step title', canvasEditable: true });
 }
 
 function processDesignFields(block, ds) {
@@ -3515,7 +4228,7 @@ function scenarioContentPanel(block, d) {
       </div>
       <div class="field"><label>Scene Title (internal)</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="title" value="${escapeHtml(scene.title || '')}" /></div>
       <div class="field"><label>Character Name</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="characterName" value="${escapeHtml(scene.characterName || '')}" /></div>
-      <div class="field"><label>Dialogue Text</label><textarea class="textarea lumio-scene-text" rows="3" data-sindex="${i}" data-field="dialogue">${escapeHtml(scene.dialogue || '')}</textarea></div>
+      <p class="text-sm text-muted mb-8">Click directly on the dialogue text in the canvas to edit it.</p>
       <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
         ${mediaBtn(i, 'backgroundImage', 'image', 'Background Image', scene.backgroundImage)}
         ${mediaBtn(i, 'backgroundVideo', 'video', 'Background Video', scene.backgroundVideo)}
@@ -4141,16 +4854,193 @@ function bindBuilderEvents(course, lesson, blocks) {
         const [label, description] = line.split('::').map(s => (s||'').trim());
         return { label, description };
       });
-    } else if (field === 'chartItems') {
-      block.data.items = e.target.value.split('\n').filter(x=>x.trim()).map(line => {
-        const [label, value] = line.split('::').map(s => (s||'').trim());
-        return { label, value: parseFloat(value) || 0 };
-      });
     } else {
       block.data[field] = e.target.value;
     }
     flashSaveStatus();
   }));
+
+  // Charts — Content panel: title / axis labels / dataset row label & value
+  app.querySelectorAll('.chart-field').forEach(f => f.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.data = block.data || {};
+    const field = f.dataset.field;
+    const iindex = f.dataset.iindex;
+    if (iindex !== undefined && iindex !== '') {
+      const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+      const item = items[parseInt(iindex)];
+      if (!item) return;
+      if (field === 'value') item.value = parseFloat(e.target.value) || 0;
+      else item.label = e.target.value;
+    } else {
+      block.data[field] = e.target.value;
+    }
+    applyLivePreview(block, BuilderUI.selected);
+  }));
+  app.querySelectorAll('.chart-field').forEach(f => f.addEventListener('change', () => flashSaveStatus()));
+
+  // Dividers — Content panel: Continue label/hint/completion type, Numbered Divider marker
+  app.querySelectorAll('.divider-field').forEach(f => f.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.data = block.data || {};
+    block.data[f.dataset.field] = e.target.value;
+    applyLivePreview(block, BuilderUI.selected);
+  }));
+  app.querySelectorAll('.divider-field').forEach(f => f.addEventListener('change', () => flashSaveStatus()));
+
+  // Continue block — Design panel: background image toggle + upload
+  app.querySelector('.continue-bg-image-toggle')?.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design.bgStyle = e.target.checked ? 'image' : 'theme';
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
+  app.querySelector('.continue-bg-image-trigger')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    openMediaPicker({
+      title: 'Background Image',
+      currentSrc: block.design.bgImage,
+      onInsert: (result) => {
+        block.design.bgImage = result.src;
+        block.design.bgStyle = 'image';
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete block.design.bgImage;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  });
+  app.querySelector('.continue-bg-image-remove')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    delete block.design.bgImage;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
+
+  // Charts — Content panel: dataset row add / duplicate / remove / reorder
+  app.querySelectorAll('.chart-row-add').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+    items.push({ label: '', value: 0, color: '' });
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.chart-row-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+    const i = parseInt(btn.dataset.iindex);
+    items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.chart-row-remove').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+    if (items.length <= 1) return;
+    items.splice(parseInt(btn.dataset.iindex), 1);
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.chart-row-up').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+    const i = parseInt(btn.dataset.iindex);
+    if (i <= 0) return;
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.chart-row-down').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, block.type === 'chart_pie' ? 'pie' : 'other');
+    const i = parseInt(btn.dataset.iindex);
+    if (i >= items.length - 1) return;
+    [items[i + 1], items[i]] = [items[i], items[i + 1]];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Charts — Design panel: per-segment colour overrides (Pie)
+  app.querySelectorAll('.chart-segment-color').forEach(inp => inp.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, 'pie');
+    const item = items[parseInt(inp.dataset.iindex)];
+    if (!item) return;
+    item.color = e.target.value;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.chart-segment-color-reset').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    const items = normalizeChartItems(block.data, 'pie');
+    const item = items[parseInt(btn.dataset.iindex)];
+    if (!item) return;
+    item.color = '';
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Charts — Design panel: image background toggle + upload
+  app.querySelector('.chart-bg-image-toggle')?.addEventListener('change', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design.bgStyle = e.target.checked ? 'image' : 'light';
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
+  app.querySelector('.chart-bg-image-trigger')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    openMediaPicker({
+      title: 'Background Image',
+      currentSrc: block.design.bgImage,
+      onInsert: (result) => {
+        block.design.bgImage = result.src;
+        block.design.bgStyle = 'image';
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+      onRemove: () => {
+        delete block.design.bgImage;
+        renderLessonBuilder(lesson.id);
+        flashSaveStatus();
+      },
+    });
+  });
+  app.querySelector('.chart-bg-image-remove')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    delete block.design.bgImage;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
 
   // Design tab — background swatches
   app.querySelectorAll('.design-swatch').forEach(sw => sw.addEventListener('click', () => {
@@ -4225,88 +5115,9 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Text blocks — universal inline (contenteditable) editing
-  app.querySelectorAll('.editable-text[contenteditable="true"]').forEach(elx => elx.addEventListener('input', () => {
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    block.data = block.data || {};
-    const field = elx.dataset.field;
-    if (elx.dataset.richtext === 'true') {
-      syncRichTextField(block, elx);
-      return;
-    }
-    const text = elx.innerText.replace(/\n+$/, '');
-    if (field === 'col') {
-      const cols = block.data.cols || (block.data.cols = DEFAULT_COLUMNS.slice());
-      cols[parseInt(elx.dataset.col)] = text;
-    } else if (field === 'cell') {
-      const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
-      const r = parseInt(elx.dataset.row), c = parseInt(elx.dataset.col);
-      if (rows[r]) rows[r][c] = text;
-    } else {
-      block.data[field] = text;
-    }
-  }));
-
-  // Heading & Paragraph — inline rich-text formatting toolbar.
-  // Each field (heading / body) is independently editable and tracks its
-  // own selection, so formatting applied to one never affects the other.
-  app.querySelectorAll('.editable-text[data-richtext="true"]').forEach(elx => {
-    const idx = parseInt(elx.closest('.canvas-block').dataset.index);
-    const block = blocks[idx];
-    const showToolbar = () => {
-      RichTextToolbar.activeField = { block, elx };
-      positionRichTextToolbar();
-    };
-    elx.addEventListener('mouseup', () => setTimeout(showToolbar, 0));
-    elx.addEventListener('keyup', () => setTimeout(showToolbar, 0));
-    elx.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (document.activeElement !== elx && !RichTextToolbar.el.contains(document.activeElement)) {
-          hideRichTextToolbar();
-        }
-      }, 0);
-    });
-  });
-
-  // Quote Carousel — add / remove / reorder quote cards
-  app.querySelectorAll('.quote-carousel-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
-    if (quotes.length <= 1) return;
-    quotes.splice(parseInt(btn.dataset.qindex), 1);
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.quote-carousel-move-left').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
-    const i = parseInt(btn.dataset.qindex);
-    if (i <= 0) return;
-    [quotes[i - 1], quotes[i]] = [quotes[i], quotes[i - 1]];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.quote-carousel-move-right').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
-    const i = parseInt(btn.dataset.qindex);
-    if (i >= quotes.length - 1) return;
-    [quotes[i + 1], quotes[i]] = [quotes[i], quotes[i + 1]];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.quote-carousel-add').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
-    quotes.push({ text: '', author: '' });
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
+  // Text blocks — universal inline (contenteditable) editing, plus the
+  // rich-text formatting toolbar for fields that support it.
+  app.querySelectorAll('.editable-text[contenteditable="true"]').forEach(elx => bindEditableTextField(elx, blocks));
 
   // List blocks — on-canvas item management (add / remove / reorder)
   app.querySelectorAll('.list-item-add').forEach(btn => btn.addEventListener('click', (e) => {
@@ -4954,39 +5765,6 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Quote Carousel — per-quote avatar via Media Picker
-  app.querySelectorAll('.quote-carousel-avatar-trigger').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const i = parseInt(btn.dataset.qindex);
-    const quotes = block.data.quotes || (block.data.quotes = DEFAULT_QUOTES.map(q => Object.assign({}, q)));
-    quotes[i] = quotes[i] || {};
-    openMediaPicker({
-      title: 'Avatar Image',
-      currentSrc: quotes[i].avatar,
-      onInsert: (result) => {
-        quotes[i].avatar = result.src;
-        renderLessonBuilder(lesson.id);
-        flashSaveStatus();
-      },
-      onRemove: () => {
-        delete quotes[i].avatar;
-        renderLessonBuilder(lesson.id);
-        flashSaveStatus();
-      },
-    });
-  }));
-  app.querySelectorAll('.quote-carousel-avatar-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block || !block.data || !block.data.quotes) return;
-    const i = parseInt(btn.dataset.qindex);
-    if (block.data.quotes[i]) delete block.data.quotes[i].avatar;
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-
   // Builder image interaction — image lightbox is a Preview-only feature.
   // First click selects the block (handled by the .canvas-block handler below);
   // a second click while already selected jumps to the Design tab; double-click
@@ -5029,81 +5807,6 @@ function bindBuilderEvents(course, lesson, blocks) {
       onRemove = () => { delete block.data.src; renderLessonBuilder(lesson.id); flashSaveStatus(); };
     }
     openMediaPicker({ title: 'Replace Image', currentSrc, onInsert, onRemove });
-  }));
-
-  // Carousel — per-slide image via Media Picker
-  app.querySelectorAll('.carousel-slide-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    const i = parseInt(btn.dataset.cindex);
-    openMediaPicker({
-      title: 'Slide Image',
-      currentSrc: items[i].src,
-      onInsert: (result) => {
-        items[i].src = result.src;
-        renderLessonBuilder(lesson.id);
-        flashSaveStatus();
-      },
-      onRemove: () => {
-        items[i].src = null;
-        renderLessonBuilder(lesson.id);
-        flashSaveStatus();
-      },
-    });
-  }));
-  app.querySelectorAll('.carousel-slide-image-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    items[parseInt(btn.dataset.cindex)].src = null;
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-
-  // Carousel — add / remove / reorder slides
-  app.querySelectorAll('.carousel-slide-add').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    items.push({ src: null, caption: '' });
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.carousel-slide-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    if (items.length <= 1) return;
-    items.splice(parseInt(btn.dataset.cindex), 1);
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.carousel-slide-move-left').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    const i = parseInt(btn.dataset.cindex);
-    if (i <= 0) return;
-    [items[i - 1], items[i]] = [items[i], items[i - 1]];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.carousel-slide-move-right').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[parseInt(btn.closest('.canvas-block').dataset.index)];
-    if (!block) return;
-    const items = normalizeCarouselItems(block.data);
-    const i = parseInt(btn.dataset.cindex);
-    if (i >= items.length - 1) return;
-    [items[i + 1], items[i]] = [items[i], items[i + 1]];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
   }));
 
   // Column Grid — per-item image via Media Picker
@@ -5657,15 +6360,20 @@ function bindDragAndDrop(lesson, blocks) {
     });
   }
 
-  // Catch-all: a block dragged anywhere over the canvas — not just onto a
-  // drop-zone — can be dropped. Drop-zones call stopPropagation() when they
-  // handle a drop themselves, so this only fires for drops elsewhere on the
-  // canvas (over a block, in the margins, etc.) and appends to the end of
-  // the lesson (or to the active insertion zone, if one exists).
-  const canvas = app.querySelector('#lesson-canvas');
-  if (canvas) {
-    canvas.addEventListener('dragover', (e) => e.preventDefault());
-    canvas.addEventListener('drop', (e) => {
+  // Catch-all: a block dragged anywhere over the lesson content region —
+  // not just onto a drop-zone — can be dropped. Drop-zones (and the
+  // empty-canvas placeholder) call stopPropagation() when they handle a
+  // drop themselves, so this only fires for drops elsewhere in the canvas
+  // (over a block, in the margins above/below/beside content, empty space
+  // at the bottom, etc.) and appends to the end of the lesson (or to the
+  // active insertion zone, if one exists). Bound on the scrollable wrap
+  // (not just #lesson-canvas) so the *entire* visible content area accepts
+  // drops, even where #lesson-canvas's own box doesn't reach — the drag is
+  // only cancelled if released outside this region entirely.
+  const canvasWrap = app.querySelector('#lesson-canvas-wrap');
+  if (canvasWrap) {
+    canvasWrap.addEventListener('dragover', (e) => e.preventDefault());
+    canvasWrap.addEventListener('drop', (e) => {
       const targetIndex = BuilderUI.insertZoneIndex !== null ? BuilderUI.insertZoneIndex : blocks.length;
       BuilderUI.insertZoneIndex = null;
       handleLibraryOrCanvasDrop(e, targetIndex, blocks, lesson);

@@ -1025,3 +1025,40 @@ button { font-family: var(--font-body); cursor: pointer; }
 .lumio-scenario-feedback { animation: fadeInUp 0.25s ease-out; }
 .lumio-scenario-final-msg { font-weight: 600; margin: 0; }
 .lumio-scenario-continue { margin-top: 10px; }
+
+/* --- Charts (Bar / Line / Pie) --- */
+.lumio-chart-wrap { box-sizing: border-box; }
+.lumio-chart-title { margin: 0 0 14px; font-weight: 700; color: inherit; }
+.lumio-chart-svg { width: 100%; height: auto; overflow: visible; display: block; }
+.lumio-chart-axis-label { font-size: 13px; text-align: center; margin-top: 6px; opacity: 0.75; }
+.lumio-chart-legend { font-size: 13px; }
+.lumio-chart-legend-item { display: flex; align-items: center; gap: 8px; }
+.lumio-chart-legend-item + .lumio-chart-legend-item { margin-top: 8px; }
+.lumio-chart-legend-swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.lumio-chart-bar.animate {
+  animation: lumio-bar-grow 0.6s ease-out;
+  transform-origin: bottom;
+  transform-box: fill-box;
+}
+@keyframes lumio-bar-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.lumio-chart-line.animate {
+  animation: lumio-line-draw 0.8s ease-out forwards;
+}
+@keyframes lumio-line-draw {
+  from { stroke-dashoffset: var(--lumio-line-length, 1000); }
+  to { stroke-dashoffset: 0; }
+}
+.lumio-chart-point.animate { animation: fadeIn 0.4s ease-out 0.5s both; }
+.lumio-chart-pie.animate { animation: lumio-pie-grow 0.6s ease-out; }
+@keyframes lumio-pie-grow {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.lumio-chart-pie-row { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.lumio-chart-pie-circle { width: 160px; height: 160px; border-radius: 50%; flex-shrink: 0; }
+@media (max-width: 480px) {
+  .lumio-chart-pie-circle { width: 120px; height: 120px; }
+}

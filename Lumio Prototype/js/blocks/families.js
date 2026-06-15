@@ -51,6 +51,7 @@ const BlockFamilies = {
     numbered_divider: 'layout',
     line_divider: 'layout',
     continue: 'layout',
+    spacer: 'layout',
 
     // Interactive (4)
     accordion: 'interactive',
