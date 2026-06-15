@@ -420,6 +420,24 @@ function lumioFcsNav(btn, delta) {
   if (progress) progress.textContent = `${next + 1} / ${cards.length}`;
 }
 
+/* Records completion progress for the interactive block ancestor of `el`,
+   but only inside Learner Preview (LearnerUI.activeCtx is set there and
+   left null on the Builder canvas, where progress isn't tracked). `kind` is
+   'visited' | 'opened' | 'flipped' | 'completed', matching the CompletionEngine
+   API; `itemIndex` is ignored for 'completed'. */
+function lumioRecordProgress(el, kind, itemIndex) {
+  if (typeof LearnerUI === 'undefined' || !LearnerUI.activeCtx) return;
+  const wrap = el.closest('[data-lp-index]');
+  if (!wrap) return;
+  const index = parseInt(wrap.dataset.lpIndex, 10);
+  const ctx = LearnerUI.activeCtx;
+  if (kind === 'visited') CompletionEngine.markVisited(ctx, index, itemIndex);
+  else if (kind === 'opened') CompletionEngine.markOpened(ctx, index, itemIndex);
+  else if (kind === 'flipped') CompletionEngine.markFlipped(ctx, index, itemIndex);
+  else if (kind === 'completed') CompletionEngine.markCompleted(ctx, index);
+  refreshContinueLocks(ctx);
+}
+
 /* Full-size image lightbox — a Learner Preview-only interaction, opened by
    clicking any .image-zoom-trigger image (see learnerPreview.js). */
 function openImageLightbox(src, alt) {
@@ -1772,7 +1790,7 @@ function renderBlockContent(block, editable) {
         <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; max-width:100%;">
           ${items.map((item, i) => `
             <div>
-              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); }" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -1797,7 +1815,7 @@ function renderBlockContent(block, editable) {
         <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:320px; max-width:100%;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
-              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); }" style="height:180px; cursor:pointer;">
+              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:180px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -4324,6 +4342,7 @@ function lumioAccordionToggle(header, single, animate) {
     row.classList.add('open');
     header.setAttribute('aria-expanded', 'true');
     body.style.maxHeight = animate ? (body.scrollHeight + 'px') : 'none';
+    lumioRecordProgress(row, 'opened', Array.from(wrap.children).indexOf(row));
   } else {
     row.classList.remove('open');
     header.setAttribute('aria-expanded', 'false');
@@ -4344,6 +4363,7 @@ function lumioTabSwitch(btn, i) {
     b.setAttribute('aria-selected', idx === i ? 'true' : 'false');
   });
   wrap.querySelectorAll('.lumio-tab-panel').forEach((p, idx) => p.classList.toggle('active', idx === i));
+  lumioRecordProgress(wrap, 'visited', i);
 }
 
 /* Process — jump to / step through a given step, updating indicators and
@@ -4359,6 +4379,7 @@ function lumioProcessGoto(wrap, idx) {
   const next = wrap.querySelector('.lumio-process-next');
   if (prev) prev.disabled = idx === 0;
   if (next) next.disabled = idx === steps.length - 1;
+  lumioRecordProgress(wrap, 'visited', idx);
 }
 function lumioProcessNav(wrap, dir) {
   const current = parseInt(wrap.dataset.current || '0', 10);
@@ -4379,6 +4400,7 @@ function lumioProcessTouchEnd(e, wrap) {
 // Mark a hotspot marker as visited: stop its pulse animation and, for the
 // "Checkmark" visited style, swap its glyph for a permanent checkmark.
 function lumioHotspotMarkVisited(marker) {
+  lumioRecordProgress(marker, 'opened', parseInt(marker.dataset.hindex, 10));
   if (marker.classList.contains('visited')) return;
   marker.classList.add('visited', 'pulse-off');
   const wrap = marker.closest('.lumio-labelled-graphic');
@@ -4506,6 +4528,7 @@ function lumioScenarioChoice(btn) {
     html += `<button class="btn btn-primary btn-sm lumio-scenario-continue">Continue</button>`;
   } else {
     html += `<p class="lumio-scenario-final-msg">${escapeHtml(wrap.dataset.completion || 'Scenario complete!')}</p>`;
+    lumioRecordProgress(wrap, 'completed');
   }
   feedbackEl.innerHTML = html;
   feedbackEl.style.display = 'block';

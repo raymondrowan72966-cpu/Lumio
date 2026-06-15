@@ -13,7 +13,7 @@ const WELCOME_TOUR_STEPS = [
 
 function renderWelcome() {
   const app = document.getElementById('app');
-  const firstName = LumioData.user.name.split(' ')[0];
+  const firstName = LumioState.currentUser.firstName;
   app.innerHTML = `
     <div style="min-height:100vh; position:relative; overflow:hidden; background:var(--surface-50); padding:48px 24px;">
       <div class="mesh-bg"></div>

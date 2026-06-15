@@ -14,6 +14,8 @@ const LearnerUI = {
   listChecked: {},       // "lessonId:blockIndex" -> Set<itemIndex> of checked checkbox-list items
   previewDevice: 'desktop', // 'desktop' | 'tablet' | 'mobile' — preview-only, not persisted
   fullScreen: false,         // full-screen learner preview — preview-only, not persisted
+  activeCtx: null,        // the { courseId, lessonId, progress } of the currently-rendered lesson —
+                          // read by the global lumioXxx interaction handlers to record completion progress
 };
 
 function ensureLearnerProgress(courseId) {
@@ -23,8 +25,10 @@ function ensureLearnerProgress(courseId) {
       completedLessons: [],
       kcAnswers: {},
       score: { correct: 0, total: 0 },
+      blockProgress: {},
     };
   }
+  if (!LumioState.learnerProgress[courseId].blockProgress) LumioState.learnerProgress[courseId].blockProgress = {};
   return LumioState.learnerProgress[courseId];
 }
 
@@ -258,6 +262,7 @@ function renderLearnerLesson(course, lessonId) {
   const lesson = course.lessons[lessonIdx];
   const blocks = LumioState.lessons[lessonId] || [];
   const ctx = { courseId: course.id, lessonId, progress };
+  LearnerUI.activeCtx = ctx;
   const isLast = lessonIdx === course.lessons.length - 1;
 
   const body = `
@@ -302,6 +307,7 @@ function renderLearnerBlocks(blocks, ctx) {
   }
 
   const revealed = LearnerUI.revealedContinues[ctx.lessonId] || new Set();
+  ctx.blocks = blocks;
   let html = '';
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
@@ -319,7 +325,7 @@ function renderLearnerBlocks(blocks, ctx) {
       const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
       wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:var(--shadow-soft); margin-bottom:16px; padding:22px; ${extraStyle}`;
     }
-    html += `<div style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
+    html += `<div data-lp-lesson="${ctx.lessonId}" data-lp-index="${i}" style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
     if (block.type === 'continue' && !revealed.has(i)) break;
   }
   return html;
@@ -339,20 +345,70 @@ function renderLearnerBlock(block, index, ctx) {
     case 'carousel': return learnerCarouselBlock(block, index, ctx);
     case 'quote_carousel': return learnerQuoteCarouselBlock(block, index, ctx);
     case 'list_checkbox': return learnerListCheckboxBlock(block, index, ctx);
+    case 'accordion': {
+      const settings = block.settings || {};
+      if (settings.expandFirst !== false) CompletionEngine.markOpened(ctx, index, 0);
+      return renderBlockContent(block, false);
+    }
+    case 'tabs': {
+      const d = block.data || {};
+      const items = d.items || [];
+      let active = (block.settings || {}).defaultTab || 0;
+      if (active < 0 || active >= items.length) active = 0;
+      CompletionEngine.markVisited(ctx, index, active);
+      return renderBlockContent(block, false);
+    }
+    case 'process': {
+      CompletionEngine.markVisited(ctx, index, 0);
+      return renderBlockContent(block, false);
+    }
+    case 'scenario': {
+      const d = block.data || {};
+      const scenes = d.scenes || [];
+      if (scenes.length && !(scenes[0].choices && scenes[0].choices.length)) {
+        CompletionEngine.markCompleted(ctx, index);
+      }
+      return renderBlockContent(block, false);
+    }
     default: return renderBlockContent(block, false);
   }
 }
 
-/* ---- Continue (progressive reveal) ---- */
+/* Re-evaluates the lock state of any not-yet-revealed Continue buttons for
+   this lesson in place (no full re-render), so completing an interactive
+   block above immediately enables/hides-hint-on a dependent Continue button
+   without disrupting the interaction the learner just performed (e.g. an
+   accordion's open animation). */
+function refreshContinueLocks(ctx) {
+  const blocks = ctx.blocks || LumioState.lessons[ctx.lessonId] || [];
+  const revealed = LearnerUI.revealedContinues[ctx.lessonId] || new Set();
+  document.querySelectorAll(`.lp-continue[data-lesson="${ctx.lessonId}"]`).forEach(btn => {
+    const index = parseInt(btn.dataset.index, 10);
+    if (revealed.has(index)) return;
+    const locked = CompletionEngine.isContinueLocked(blocks, index, ctx);
+    btn.disabled = locked;
+    btn.style.opacity = locked ? '0.5' : '';
+    btn.style.cursor = locked ? 'not-allowed' : '';
+    const hintEl = btn.parentElement.querySelector('.lumio-continue-hint');
+    if (hintEl) hintEl.style.display = locked ? '' : 'none';
+  });
+}
+
+/* ---- Continue (progression gate) ---- */
 function learnerContinueBlock(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const revealed = (LearnerUI.revealedContinues[ctx.lessonId] || new Set()).has(index);
+  const locked = !revealed && CompletionEngine.isContinueLocked(ctx.blocks || [], index, ctx);
   const srOnlyStyle = 'position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;';
+  const align = ds.align || 'center';
+  const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
   return `
-    <div style="text-align:center; padding:8px 0; position:relative;">
+    <div style="${continueWrapperStyle(ds)} display:flex; flex-direction:column; align-items:${justifyMap[align] || 'center'}; gap:8px;">
       ${revealed
         ? `<span class="pill pill-grey">✓ Continued</span>`
-        : `<button class="btn btn-secondary lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}">${d.label || 'Continue'} ▾</button>`}
+        : `<button class="btn lumio-continue-btn lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}" style="${continueButtonStyle(ds)} ${locked ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${locked ? 'disabled' : ''}>${richTextOut(d.label || 'Continue')} ▾</button>`}
+      ${locked && d.hint ? `<p class="text-sm text-muted lumio-continue-hint" style="text-align:${align}; margin:0;">${escapeHtml(d.hint)}</p>` : ''}
       <span aria-live="polite" style="${srOnlyStyle}">${revealed ? 'Additional content revealed below.' : ''}</span>
     </div>`;
 }
@@ -378,6 +434,7 @@ function learnerCarouselBlock(block, index, ctx) {
   const slides = normalizeCarouselItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.carouselIndex[key] || 0) % slides.length + slides.length) % slides.length;
+  CompletionEngine.markVisited(ctx, index, active);
   const slide = slides[active];
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
   let slideHtml;
@@ -412,6 +469,7 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
   const quotes = normalizeQuoteItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
+  CompletionEngine.markVisited(ctx, index, active);
   const q = quotes[active];
   return `
     <div>
@@ -643,7 +701,9 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
 
   // Continue
   app.querySelectorAll('.lp-continue').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.disabled) return;
     const lessonId = btn.dataset.lesson, idx = parseInt(btn.dataset.index, 10);
+    if (CompletionEngine.isContinueLocked(blocks, idx, ctx)) return;
     if (!LearnerUI.revealedContinues[lessonId]) LearnerUI.revealedContinues[lessonId] = new Set();
     LearnerUI.revealedContinues[lessonId].add(idx);
     rerender();
@@ -734,26 +794,40 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   }));
 
   // Carousel nav
+  const markCarouselVisited = (key, items) => {
+    const blockIndex = parseInt(key.split(':')[1], 10);
+    const active = ((LearnerUI.carouselIndex[key] || 0) % items.length + items.length) % items.length;
+    CompletionEngine.markVisited(ctx, blockIndex, active);
+  };
   app.querySelectorAll('.lp-carousel-prev').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) - 1;
+    markCarouselVisited(key, normalizeCarouselItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
     rerender();
   }));
   app.querySelectorAll('.lp-carousel-next').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) + 1;
+    markCarouselVisited(key, normalizeCarouselItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
     rerender();
   }));
 
   // Quote carousel nav
+  const markQuoteVisited = (key, quotes) => {
+    const blockIndex = parseInt(key.split(':')[1], 10);
+    const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
+    CompletionEngine.markVisited(ctx, blockIndex, active);
+  };
   app.querySelectorAll('.lp-quote-prev').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) - 1;
+    markQuoteVisited(key, normalizeQuoteItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
     rerender();
   }));
   app.querySelectorAll('.lp-quote-next').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) + 1;
+    markQuoteVisited(key, normalizeQuoteItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
     rerender();
   }));
 
@@ -762,6 +836,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const set = LearnerUI.listChecked[key] || new Set();
     if (set.has(i)) set.delete(i); else set.add(i);
     LearnerUI.listChecked[key] = set;
+    CompletionEngine.markCompleted(ctx, parseInt(key.split(':')[1], 10));
     rerender();
   };
   app.querySelectorAll('.list-checkbox-marker[data-key]').forEach(marker => {

@@ -43,7 +43,100 @@ const LumioState = {
   // learner preview runtime state
   learnerProgress: {}, // courseId -> { completedLessons, kcAnswers, score }
   learnerPreview: null, // { returnTo } — set when entering preview, used by Exit Preview
+
+  // signed-in user profile + account security
+  currentUser: {
+    id: 'u-owner',
+    firstName: 'Jordan',
+    lastName: 'Reyes',
+    email: 'jordan@lumio.app',
+    avatar: null, // data URL, or null for initials avatar
+    role: 'owner', // 'owner' | 'admin'
+    dateJoined: Date.now() - 120 * 24 * 3600 * 1000,
+    lastLogin: Date.now(),
+    password: 'lumio123', // prototype-only stand-in for a hashed password
+    status: 'active', // 'active' | 'disabled'
+  },
+
+  // workspace system info (Workspace Owner only)
+  workspace: {
+    systemInfo: {
+      platformVersion: '1.0.0',
+      buildNumber: '2026.06.15',
+      databaseVersion: 'Prototype (local storage)',
+      installationDate: Date.now() - 180 * 24 * 3600 * 1000,
+      licenseInfo: 'Unlicensed (prototype)', // future-ready: license key/plan details
+    },
+  },
+
+  // other workspace members managed alongside the signed-in user (any role)
+  adminUsers: [
+    {
+      id: 'u-admin1',
+      firstName: 'Taylor',
+      lastName: 'Brooks',
+      email: 'taylor@lumio.app',
+      avatar: null,
+      role: 'admin',
+      status: 'active', // 'active' | 'disabled'
+    },
+  ],
+
+  // pending workspace invitations
+  invitations: [],
 };
+
+/* ---------------- ROLES & PERMISSIONS ---------------- */
+const ROLE_LABELS = { owner: 'Owner', admin: 'Admin' };
+
+function isWorkspaceOwner() {
+  return LumioState.currentUser.role === 'owner';
+}
+function canAccessWorkspaceSettings() { return isWorkspaceOwner(); }
+function canManageUsers() { return isWorkspaceOwner(); }
+function canInviteAdministrators() { return isWorkspaceOwner(); }
+
+// Returns every workspace member (the signed-in user plus all other users),
+// used for rendering the Users tab and for the multi-owner safeguard checks.
+function allWorkspaceUsers() {
+  return [LumioState.currentUser, ...LumioState.adminUsers];
+}
+
+// Counts how many workspace members currently hold the Owner role. Used to
+// guard against removing, demoting, or disabling the last remaining Owner.
+function workspaceOwnerCount() {
+  return allWorkspaceUsers().filter(u => u.role === 'owner').length;
+}
+
+// Returns the initials + display name + avatar for the signed-in user,
+// used everywhere the current user's identity is shown (sidebar, profile).
+function currentUserDisplayName() {
+  const u = LumioState.currentUser;
+  return `${u.firstName} ${u.lastName}`.trim();
+}
+function currentUserInitials() {
+  const u = LumioState.currentUser;
+  return ((u.firstName[0] || '') + (u.lastName[0] || '')).toUpperCase();
+}
+
+// Renders the shared avatar badge: an uploaded photo if present, otherwise
+// initials on the gradient badge. Used in the sidebar and Profile page.
+function avatarHtml(user, size) {
+  const sizeStyle = size ? `width:${size}px; height:${size}px; font-size:${Math.round(size * 0.38)}px;` : '';
+  if (user.avatar) {
+    return `<div class="avatar" style="${sizeStyle} background:none; padding:0; overflow:hidden;">
+      <img src="${user.avatar}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;" />
+    </div>`;
+  }
+  const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
+  return `<div class="avatar" style="${sizeStyle}">${initials}</div>`;
+}
+
+// Formats a timestamp as "June 15, 2026" for read-only account fields.
+function formatDateLong(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 /* ---------------- ID GENERATION ---------------- */
 // Generates a globally-unique id with the given prefix (e.g. 'l' for lessons,
@@ -59,13 +152,14 @@ function generateUniqueId(prefix) {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 4;
+const LUMIO_STATE_VERSION = 7;
 
 // Keys of LumioState that should be persisted/restored across sessions.
 const LUMIO_PERSISTED_KEYS = [
   'projects', 'folders', 'currentFolder', 'searchQuery', 'typeFilter',
   'wizard', 'courses', 'lessons', 'currentCourseId', 'currentLessonId',
   'learnerProgress', 'learnerPreview',
+  'currentUser', 'workspace', 'adminUsers', 'invitations',
 ];
 
 function saveLumioState() {
@@ -177,6 +271,48 @@ function migrateLumioState(record) {
     });
 
     version = 4;
+  }
+
+  if (version < 5) {
+    // v5 introduces the User Profile / Workspace Settings system: a real
+    // currentUser profile, workspace identity/branding/system info, and
+    // administrator/invitation records. Existing saved states predate these
+    // keys, so backfill them from the LumioState defaults set above.
+    if (!state.currentUser) state.currentUser = JSON.parse(JSON.stringify(LumioState.currentUser));
+    if (!state.workspace) state.workspace = JSON.parse(JSON.stringify(LumioState.workspace));
+    if (!state.adminUsers) state.adminUsers = JSON.parse(JSON.stringify(LumioState.adminUsers));
+    if (!state.invitations) state.invitations = JSON.parse(JSON.stringify(LumioState.invitations));
+    version = 5;
+  }
+
+  if (version < 6) {
+    // v6 trims Workspace Settings down to an administrative area: drops the
+    // branding/white-label fields (workspace name, company name, logo,
+    // primary/secondary color, favicon, login background) and adds
+    // licenseInfo to systemInfo.
+    const w = state.workspace || {};
+    delete w.name;
+    delete w.companyName;
+    delete w.logo;
+    delete w.branding;
+    if (!w.systemInfo) w.systemInfo = JSON.parse(JSON.stringify(LumioState.workspace.systemInfo));
+    if (w.systemInfo.licenseInfo === undefined) w.systemInfo.licenseInfo = LumioState.workspace.systemInfo.licenseInfo;
+    state.workspace = w;
+    version = 6;
+  }
+
+  if (version < 7) {
+    // v7 introduces the multi-owner permission model: any workspace member
+    // (including the signed-in user) can hold the Owner or Admin role, and
+    // the signed-in user gains a `status` field so they participate in the
+    // "last remaining Owner" safeguard checks alongside other members.
+    if (state.currentUser && state.currentUser.status === undefined) {
+      state.currentUser.status = 'active';
+    }
+    (state.invitations || []).forEach(inv => {
+      if (inv.role !== 'owner' && inv.role !== 'admin') inv.role = 'admin';
+    });
+    version = 7;
   }
 
   return state;
@@ -391,15 +527,20 @@ function renderShell(activeId, contentHtml, opts = {}) {
         <div class="nav-item ${activeId === 'trash' ? 'active' : ''}" data-nav="#/trash">
           <span class="ic">🗑️</span><span>Trash</span>
         </div>
+        ${canAccessWorkspaceSettings() ? `
+        <div class="nav-item ${activeId === 'workspace-settings' ? 'active' : ''}" data-nav="#/workspace-settings">
+          <span class="ic">⚙️</span><span>Workspace Settings</span>
+        </div>
+        ` : ''}
         <div style="flex:1"></div>
         <div class="nav-item" data-nav="#/login">
           <span class="ic">↩️</span><span>Sign out</span>
         </div>
-        <div class="flex items-center gap-12" style="padding:10px 12px; border-top:1px solid var(--border); margin-top:8px;">
-          <div class="avatar">${LumioData.user.initials}</div>
-          <div style="font-size:13px;">
-            <div style="font-weight:600; color:var(--ink-900);">${LumioData.user.name}</div>
-            <div class="text-muted" style="font-size:12px;">Workspace Admin</div>
+        <div class="nav-item ${activeId === 'profile' ? 'active' : ''}" data-nav="#/profile" style="border-top:1px solid var(--border); margin-top:8px; border-radius:0;">
+          ${avatarHtml(LumioState.currentUser)}
+          <div style="font-size:13px; min-width:0;">
+            <div style="font-weight:600; color:var(--ink-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${currentUserDisplayName()}</div>
+            <div class="text-muted" style="font-size:12px;">${ROLE_LABELS[LumioState.currentUser.role]}</div>
           </div>
         </div>
       </aside>
@@ -447,6 +588,15 @@ function render() {
       break;
     case 'trash':
       renderTrash();
+      break;
+    case 'profile':
+      renderProfile();
+      break;
+    case 'workspace-settings':
+      renderWorkspaceSettings();
+      break;
+    case 'accept-invite':
+      renderAcceptInvite(param);
       break;
     case 'wizard':
       renderWizard();

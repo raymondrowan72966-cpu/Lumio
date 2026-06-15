@@ -153,6 +153,11 @@ const BlockCapabilities = (function () {
     continue: { strategy: 'none' },
     spacer: { strategy: 'none' },
     list_checkbox: { strategy: 'interacted' },
+    // Carousel/Quote Carousel default to the 'layout' family's 'none'
+    // strategy, but the spec requires Continue to be able to gate on
+    // "every slide/quote visited" — override to 'interacted'.
+    carousel: { strategy: 'interacted' },
+    quote_carousel: { strategy: 'interacted' },
   }, (defaults) => ({ strategy: defaults.completion }));
 
   return {

@@ -3,8 +3,6 @@
    ============================================================ */
 
 const LumioData = {
-  user: { name: 'Jordan Reyes', initials: 'JR' },
-
   folders: [
     { id: 'f1', name: 'Onboarding', color: 'indigo', icon: '📁' },
     { id: 'f2', name: 'Compliance', color: 'orange', icon: '📁' },
