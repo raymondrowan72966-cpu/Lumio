@@ -52,6 +52,16 @@
   --shadow-md: 0 12px 32px rgba(31, 27, 58, 0.10);
   --shadow-lift: 0 16px 40px rgba(124, 58, 237, 0.18);
 
+  /* Elevation tokens — use these instead of raw shadow values.
+     elevation-0: flat (no shadow)
+     elevation-1: standard cards
+     elevation-2: menus, dropdowns, popovers
+     elevation-3: modals, dialogs */
+  --elevation-0: none;
+  --elevation-1: var(--shadow-soft);
+  --elevation-2: var(--shadow-md);
+  --elevation-3: 0 20px 48px rgba(31, 27, 58, 0.16);
+
   /* Type */
   --font-display: 'Poppins', sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -323,6 +333,24 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 .card-pad { padding: 24px; }
 
+/* Knowledge-check answer-option rows: flat bordered rows that sit inside an
+   already-elevated block — no additional shadow so elevation doesn't stack. */
+.kc-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-0);
+  font-size: 13px;
+  box-shadow: none;
+  transition: border-color 0.15s;
+}
+.kc-option.selected { border-color: var(--theme-primary, var(--indigo)); }
+.kc-option.correct  { border-color: var(--teal); }
+.kc-option.wrong    { border-color: #E5484D; }
+
 /* ============================================================
    PILLS / BADGES
    ============================================================ */
@@ -575,7 +603,9 @@ button { font-family: var(--font-body); cursor: pointer; }
 .gap-12 { gap: 12px; }
 .gap-16 { gap: 16px; }
 .gap-24 { gap: 24px; }
-.mt-8 { margin-top: 8px; }
+.mt-4  { margin-top: 4px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
 .mt-16 { margin-top: 16px; }
 .mt-24 { margin-top: 24px; }
 .mt-32 { margin-top: 32px; }

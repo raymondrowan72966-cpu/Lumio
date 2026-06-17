@@ -508,106 +508,185 @@ function learnerListCheckboxBlock(block, index, ctx) {
 /* ---- Flashcards ---- */
 
 /* ---- Knowledge Checks ---- */
+
+// Normalise KC block.settings with safe defaults so the rest of the engine
+// can read from a single object without null-checking every field.
+function normalizeKcSettings(s) {
+  s = s || {};
+  return {
+    maxAttempts:         s.maxAttempts ?? 0,           // 0 = unlimited
+    allowRetry:          s.allowRetry !== false,        // default true
+    requireCorrectAnswer: !!(s.requireCorrectAnswer),
+    completionRule:      s.completionRule  || 'submitted',
+    showCorrectAnswer:   s.showCorrectAnswer || 'immediately',
+    passingMode:         s.passingMode || 'all_correct',
+    passingPercentage:   s.passingPercentage ?? 80,
+    correctFeedback:     s.correctFeedback   ?? 'Correct! Well done.',
+    incorrectFeedback:   s.incorrectFeedback ?? 'Not quite. Please try again.',
+  };
+}
+
+// Determine whether to reveal the correct-answer highlights right now.
+function shouldRevealCorrect(ans, settings) {
+  if (!ans || !ans.submitted) return false;
+  switch (settings.showCorrectAnswer) {
+    case 'after_final': return !!(ans.locked);
+    case 'never':       return false;
+    default:            return true; // 'immediately'
+  }
+}
+
+// Attempt counter shown above the submit button (pre-submission).
+function kcAttemptNote(ans, settings) {
+  if (!settings.maxAttempts) return '';
+  const n = (ans && ans.attempts) || 0;
+  return `<div class="text-xs text-muted mt-8">Attempt ${n + 1} of ${settings.maxAttempts}</div>`;
+}
+
+// Feedback + optional retry button shown after submission.
+function kcPostSubmitFooter(ans, settings, key) {
+  const locked      = !!(ans && ans.locked);
+  const attempts    = (ans && ans.attempts) || 0;
+  const maxAttempts = settings.maxAttempts;
+  const lastCorrect = ans && ans.lastCorrect;
+  const canRetry    = !locked && settings.allowRetry;
+
+  const feedbackText  = lastCorrect === true  ? settings.correctFeedback
+                      : lastCorrect === false ? settings.incorrectFeedback
+                      : 'Response recorded.';
+  const feedbackColor = lastCorrect === true  ? 'var(--teal)'
+                      : lastCorrect === false ? '#E5484D'
+                      : 'var(--ink-700)';
+  const prefix        = lastCorrect === true ? '✓ ' : lastCorrect === false ? '✕ ' : '';
+  const attemptLine   = maxAttempts > 0
+    ? `<div class="text-xs text-muted mb-4">Attempt ${attempts} of ${maxAttempts}</div>`
+    : '';
+  return `
+    <div class="mt-12">
+      ${attemptLine}
+      <div class="text-sm" style="font-weight:600; color:${feedbackColor};">${prefix}${escapeHtml(feedbackText)}</div>
+      ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">Try Again</button>` : ''}
+    </div>`;
+}
+
 function learnerKcMultipleChoice(block, index, ctx) {
   const d = block.data || {};
-  const options = d.options || ['Curiosity over certainty', 'Clarity over cleverness', 'Speed over quality', 'Process over people'];
-  const correct = d.correct ?? 1;
+  const options = normalizeKcOptions(d);
+  const correct = d.correct ?? 0;
   const key = ctx.lessonId + ':' + index;
   const ans = ctx.progress.kcAnswers[key];
-  const submitted = ans && ans.submitted;
+  const settings = normalizeKcSettings(block.settings);
+  const submitted = !!(ans && ans.submitted);
+  const reveal = shouldRevealCorrect(ans, settings);
+  const canSubmit = ans && ans.selected !== undefined;
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
     <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following best reflects one of our core values?'}</legend>
+      <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following is correct?'}</legend>
       <div class="flex-col gap-8 mt-12">
-        ${options.map((o, i) => `
-          <label class="flex items-center gap-8 card card-pad text-sm" style="cursor:${submitted ? 'default' : 'pointer'};
-            ${submitted && i === correct ? 'border-color:var(--teal);' : ''}
-            ${submitted && ans.selected === i && i !== correct ? 'border-color:#E5484D;' : ''}">
-            <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}" ${ans && ans.selected === i ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
-            ${submitted && i === correct ? '<span style="margin-left:auto; color:var(--teal);">✓ Correct</span>' : ''}
-            ${submitted && ans.selected === i && i !== correct ? '<span style="margin-left:auto; color:#E5484D;">✕ Your answer</span>' : ''}
-          </label>
-        `).join('')}
+        ${options.map((o, i) => {
+          const isSelected = ans && ans.selected === i;
+          const isCorrect  = reveal && i === correct;
+          const isWrong    = reveal && isSelected && i !== correct;
+          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}`;
+          return `
+          <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
+            <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}"
+              ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
+            <span style="flex:1;">${escapeHtml(o)}</span>
+            ${isCorrect ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓ Correct</span>' : ''}
+            ${isWrong   ? '<span style="color:#E5484D; font-size:12px; font-weight:600;">✕ Your answer</span>' : ''}
+          </label>`;
+        }).join('')}
       </div>
     </fieldset>
     ${!submitted
-      ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${ans && ans.selected !== undefined ? '' : 'disabled'}>Check Answer</button>`
-      : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct!' : '✕ Not quite — the correct answer is highlighted above.'}</div>`}
+      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${canSubmit ? '' : 'disabled'}>Check Answer</button>`
+      : kcPostSubmitFooter(ans, settings, key)}
   `;
 }
 
 function learnerKcMultipleResponse(block, index, ctx) {
   const d = block.data || {};
-  const options = d.options || ['Curiosity', 'Clarity', 'Speed at all costs', 'People over process'];
+  const options = normalizeKcOptions(d);
   const key = ctx.lessonId + ':' + index;
   const ans = ctx.progress.kcAnswers[key] || { selected: [] };
+  const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const hasCorrect = Array.isArray(d.correct);
+  const reveal = shouldRevealCorrect(ans, settings);
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
     <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Which of these are core company values? (Select all that apply)'}</legend>
+      <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Select all that apply.'}</legend>
       <div class="flex-col gap-8 mt-12">
-        ${options.map((o, i) => `
-          <label class="flex items-center gap-8 text-sm card card-pad" style="cursor:${submitted ? 'default' : 'pointer'};
-            ${submitted && hasCorrect && d.correct.includes(i) ? 'border-color:var(--teal);' : ''}">
-            <input type="checkbox" data-kc-key="${key}" data-i="${i}" ${(ans.selected || []).includes(i) ? 'checked' : ''} ${submitted ? 'disabled' : ''} /> ${o}
-            ${submitted && hasCorrect && d.correct.includes(i) ? '<span style="margin-left:auto; color:var(--teal);">✓</span>' : ''}
-          </label>
-        `).join('')}
+        ${options.map((o, i) => {
+          const isSelected = (ans.selected || []).includes(i);
+          const isCorrect  = reveal && hasCorrect && d.correct.includes(i);
+          const isWrong    = reveal && isSelected && hasCorrect && !d.correct.includes(i);
+          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}`;
+          return `
+          <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
+            <input type="checkbox" data-kc-key="${key}" data-i="${i}"
+              ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
+            <span style="flex:1;">${escapeHtml(o)}</span>
+            ${isCorrect ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓</span>' : ''}
+          </label>`;
+        }).join('')}
       </div>
     </fieldset>
     ${!submitted
-      ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
-      : (hasCorrect
-          ? `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct!' : '✕ Not quite — correct options are highlighted above.'}</div>`
-          : `<div class="text-sm mt-12 text-muted">Response recorded.</div>`)}
+      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
+      : kcPostSubmitFooter(ans, settings, key)}
   `;
 }
 
 function learnerKcMatching(block, index, ctx) {
   const d = block.data || {};
-  const left = d.left || ['Onboarding', 'Benefits', 'IT Support'];
-  const right = d.right || ['Day 1 checklist', 'Health & retirement', 'Help desk ticket'];
+  const left  = normalizeKcLeft(d);
+  const right = normalizeKcRight(d);
   const key = ctx.lessonId + ':' + index;
   const ans = ctx.progress.kcAnswers[key] || { pairs: {}, selectedLeft: null };
   const pairs = ans.pairs || {};
+  const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
+  const locked    = !!(ans.locked);
+  const reveal    = shouldRevealCorrect(ans, settings);
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
     <p class="text-sm text-muted mb-8">Tap an item on the left, then its match on the right.</p>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
       <div class="flex-col gap-8">
         ${left.map((l, i) => {
-          const matchedTo = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
-          const label = matchedTo ? `${l}, matched with ${matchedTo}` : `${l}${ans.selectedLeft === i ? ', selected' : ''}`;
+          const matchedTo  = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
+          const isCorrect  = reveal && pairs[i] === i;
+          const isWrong    = reveal && Object.prototype.hasOwnProperty.call(pairs, i) && pairs[i] !== i;
+          const label      = matchedTo ? `${l}, matched with ${matchedTo}` : `${l}${ans.selectedLeft === i ? ', selected' : ''}`;
           return `
-          <div class="card card-pad text-sm lp-match-left" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${submitted ? '-1' : '0'}" aria-pressed="${ans.selectedLeft === i}" aria-label="${escapeHtml(label)}"
-            style="cursor:${submitted ? 'default' : 'pointer'}; ${ans.selectedLeft === i ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
-            ${l}${matchedTo ? ` → ${matchedTo}` : ''}
-          </div>
-        `;
+          <div class="kc-option lp-match-left${ans.selectedLeft === i ? ' selected' : ''}${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}" data-kc-key="${key}" data-i="${i}"
+            role="button" tabindex="${locked ? '-1' : '0'}" aria-pressed="${ans.selectedLeft === i}" aria-label="${escapeHtml(label)}"
+            style="cursor:${locked ? 'default' : 'pointer'};">
+            ${escapeHtml(l)}${matchedTo ? ` → ${escapeHtml(matchedTo)}` : ''}
+          </div>`;
         }).join('')}
       </div>
       <div class="flex-col gap-8">
         ${right.map((r, i) => `
-          <div class="card card-pad text-sm lp-match-right" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${submitted ? '-1' : '0'}" aria-label="${escapeHtml(r)}"
-            style="cursor:${submitted ? 'default' : 'pointer'}; background:var(--pastel-lavender); border:none;">${r}</div>
+          <div class="kc-option lp-match-right" data-kc-key="${key}" data-i="${i}"
+            role="button" tabindex="${locked ? '-1' : '0'}" aria-label="${escapeHtml(r)}"
+            style="cursor:${locked ? 'default' : 'pointer'}; background:var(--pastel-lavender); border-color:transparent;">${escapeHtml(r)}</div>
         `).join('')}
       </div>
     </div>
     ${!submitted
-      ? `<button class="btn btn-primary btn-sm mt-12 lp-match-submit" data-kc-key="${key}" ${Object.keys(pairs).length === left.length ? '' : 'disabled'}>Check Matches</button>`
-      : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ All matched correctly!' : '✕ Some matches are incorrect.'}</div>`}
+      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-match-submit" data-kc-key="${key}" ${Object.keys(pairs).length === left.length ? '' : 'disabled'}>Check Matches</button>`
+      : kcPostSubmitFooter(ans, settings, key)}
   `;
 }
 
 function learnerKcOrdering(block, index, ctx) {
   const d = block.data || {};
-  const items = d.items || ['Receive offer letter', 'Complete paperwork', 'Attend orientation', 'Meet your team'];
+  const items = normalizeKcItems(d);
   const key = ctx.lessonId + ':' + index;
   let ans = ctx.progress.kcAnswers[key];
   if (!ans || !ans.order) {
@@ -615,25 +694,32 @@ function learnerKcOrdering(block, index, ctx) {
     ctx.progress.kcAnswers[key] = ans;
   }
   const order = ans.order;
+  const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
+  const reveal    = shouldRevealCorrect(ans, settings);
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
     <p class="text-sm text-muted mb-8">Use the arrows to arrange these in the correct order.</p>
     <div class="flex-col gap-8 mt-8">
-      ${order.map((itemIdx, pos) => `
-        <div class="card card-pad flex items-center gap-12 text-sm">
-          <span class="pill pill-grey">${pos + 1}</span>
-          <span style="flex:1;">${items[itemIdx]}</span>
+      ${order.map((itemIdx, pos) => {
+        const inCorrectPos = reveal && itemIdx === pos;
+        const inWrongPos   = reveal && itemIdx !== pos;
+        return `
+        <div class="kc-option${inCorrectPos ? ' correct' : ''}${inWrongPos ? ' wrong' : ''}" style="gap:10px;">
+          <span class="pill pill-grey" style="flex-shrink:0;">${pos + 1}</span>
+          <span style="flex:1;">${escapeHtml(items[itemIdx])}</span>
           ${!submitted ? `
-            <button class="btn-icon lp-order-up" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''}>↑</button>
+            <button class="btn-icon lp-order-up"   data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''}>↑</button>
             <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''}>↓</button>
           ` : ''}
-        </div>
-      `).join('')}
+          ${inCorrectPos ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓</span>' : ''}
+          ${inWrongPos   ? '<span style="color:#E5484D; font-size:12px; font-weight:600;">✕</span>'   : ''}
+        </div>`;
+      }).join('')}
     </div>
     ${!submitted
-      ? `<button class="btn btn-primary btn-sm mt-12 lp-order-submit" data-kc-key="${key}">Check Order</button>`
-      : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct order!' : '✕ Not quite the right order.'}</div>`}
+      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-order-submit" data-kc-key="${key}">Check Order</button>`
+      : kcPostSubmitFooter(ans, settings, key)}
   `;
 }
 
@@ -641,56 +727,111 @@ function learnerKcFillGap(block, index, ctx) {
   const d = block.data || {};
   const key = ctx.lessonId + ':' + index;
   const ans = ctx.progress.kcAnswers[key] || {};
-  const text = d.text || 'Our core values are Curiosity, Clarity, ____, and People over process.';
+  const text = d.text || 'Complete this sentence: ____.';
+  const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
+  const reveal    = shouldRevealCorrect(ans, settings);
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
     <p style="font-size:15px; line-height:2;">${text}</p>
-    <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..." value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />
+    <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..."
+      value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />
+    ${reveal && ans.lastCorrect === false
+      ? (() => {
+          const firstAccepted = (Array.isArray(d.answers) && d.answers[0])
+            ? d.answers[0]
+            : (d.answer || '').split('|')[0].trim();
+          return firstAccepted ? `<div class="text-xs text-muted mt-4">Accepted answer: ${escapeHtml(firstAccepted)}</div>` : '';
+        })()
+      : ''}
     ${!submitted
-      ? `<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
-      : (ans.correct === null
-          ? `<div class="text-sm mt-12 text-muted">Response recorded.</div>`
-          : `<div class="text-sm mt-12" style="font-weight:600; color:${ans.correct ? 'var(--teal)' : '#E5484D'};">${ans.correct ? '✓ Correct!' : `✕ Not quite — accepted answer: ${(d.answer||'').split('|')[0].trim()}`}</div>`)}
+      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
+      : kcPostSubmitFooter(ans, settings, key)}
   `;
 }
 
 /* ---------------- SCORING ---------------- */
-function submitKc(ctx, key, type, blocks) {
-  const ans = ctx.progress.kcAnswers[key] || {};
-  if (ans.submitted) return;
-  const blockIndex = parseInt(key.split(':')[1], 10);
-  const d = (blocks[blockIndex] && blocks[blockIndex].data) || {};
-  let correct = null;
-
+function computeKcScore(type, ans, d) {
   if (type === 'mc') {
-    correct = ans.selected === (d.correct ?? 1);
-  } else if (type === 'response') {
-    if (Array.isArray(d.correct)) {
-      const sel = new Set(ans.selected || []);
-      const exp = new Set(d.correct);
-      correct = sel.size === exp.size && [...sel].every(x => exp.has(x));
-    }
-  } else if (type === 'ordering') {
+    const c = ans.selected === (d.correct ?? 0);
+    return { correct: c, score: c ? 1 : 0, total: 1 };
+  }
+  if (type === 'response') {
+    if (!Array.isArray(d.correct)) return { correct: null, score: 0, total: 0 };
+    const sel = new Set(ans.selected || []);
+    const exp = new Set(d.correct);
+    const matching = d.correct.filter(i => sel.has(i)).length;
+    const c = sel.size === exp.size && [...sel].every(x => exp.has(x));
+    return { correct: c, score: matching, total: d.correct.length };
+  }
+  if (type === 'ordering') {
     const order = ans.order || (d.items || []).map((_, i) => i);
-    correct = order.every((v, i) => v === i);
-  } else if (type === 'matching') {
+    const c = order.every((v, i) => v === i);
+    return { correct: c, score: order.filter((v, i) => v === i).length, total: order.length };
+  }
+  if (type === 'matching') {
     const left = d.left || [];
     const pairs = ans.pairs || {};
-    correct = left.every((_, i) => pairs[i] === i);
-  } else if (type === 'fill_gap') {
-    const accepted = (d.answer || '').split('|').map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (accepted.length) {
-      correct = accepted.includes((ans.response || '').trim().toLowerCase());
+    const c = left.every((_, i) => pairs[i] === i);
+    return { correct: c, score: left.filter((_, i) => pairs[i] === i).length, total: left.length };
+  }
+  if (type === 'fill_gap') {
+    let accepted = [];
+    if (Array.isArray(d.answers) && d.answers.length) {
+      accepted = d.answers.map(a => (a || '').trim()).filter(Boolean);
+    } else {
+      accepted = (d.answer || '').split('|').map(s => s.trim()).filter(Boolean);
     }
+    if (!accepted.length) return { correct: null, score: 0, total: 0 };
+    const response = (ans.response || '').trim();
+    const norm = d.caseSensitive ? response : response.toLowerCase();
+    const normAcc = accepted.map(a => d.caseSensitive ? a : a.toLowerCase());
+    const c = normAcc.includes(norm);
+    return { correct: c, score: c ? 1 : 0, total: 1 };
+  }
+  return { correct: null, score: 0, total: 0 };
+}
+
+function isKcPassed(scoreResult, settings) {
+  if (scoreResult.correct === null) return false;
+  if (settings.passingMode === 'percentage') {
+    if (!scoreResult.total) return false;
+    return (scoreResult.score / scoreResult.total) * 100 >= (settings.passingPercentage || 80);
+  }
+  return scoreResult.correct === true; // all_correct
+}
+
+function submitKc(ctx, key, type, blocks) {
+  const ans = ctx.progress.kcAnswers[key] || {};
+  if (ans.locked) return;
+  const blockIndex = parseInt(key.split(':')[1], 10);
+  const block = blocks[blockIndex] || {};
+  const d = block.data || {};
+  const settings = normalizeKcSettings(block.settings);
+
+  const scoreResult = computeKcScore(type, ans, d);
+  const passed = isKcPassed(scoreResult, settings);
+
+  // Count this block in the score totals exactly once (first submission).
+  if (!ans.attempts) {
+    if (scoreResult.correct !== null) ctx.progress.score.total++;
+  }
+  if (passed && !ans.passed) {
+    if (scoreResult.correct !== null) ctx.progress.score.correct++;
   }
 
+  ans.attempts = (ans.attempts || 0) + 1;
   ans.submitted = true;
-  ans.correct = correct;
-  if (correct !== null) {
-    ctx.progress.score.total++;
-    if (correct) ctx.progress.score.correct++;
+  ans.lastCorrect = scoreResult.correct;
+  ans.partialScore = { score: scoreResult.score, total: scoreResult.total };
+  if (passed) ans.passed = true;
+
+  // Lock when passed, retry is disabled, or max attempts reached.
+  const maxAttempts = settings.maxAttempts;
+  if (passed || !settings.allowRetry || (maxAttempts > 0 && ans.attempts >= maxAttempts)) {
+    ans.locked = true;
   }
+
   ctx.progress.kcAnswers[key] = ans;
 }
 
@@ -739,6 +880,31 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   // KC submit (multiple choice / multiple response)
   app.querySelectorAll('.lp-kc-submit').forEach(btn => btn.addEventListener('click', () => {
     submitKc(ctx, btn.dataset.kcKey, btn.dataset.kcType, blocks);
+    scheduleLumioSave();
+    rerender();
+  }));
+
+  // KC retry — clear submission state so the learner can attempt again
+  app.querySelectorAll('.lp-kc-retry').forEach(btn => btn.addEventListener('click', () => {
+    const key = btn.dataset.kcKey;
+    const blockIndex = parseInt(key.split(':')[1], 10);
+    const ans = ctx.progress.kcAnswers[key];
+    if (!ans || ans.locked) return;
+    // Clear per-attempt selection state; preserve attempts/passed/locked/partialScore
+    delete ans.selected;
+    delete ans.pairs;
+    ans.selectedLeft = null;
+    delete ans.response;
+    ans.submitted = false;
+    ans.lastCorrect = null;
+    // Re-shuffle ordering items for variety
+    const b = blocks[blockIndex];
+    if (b && b.type === 'kc_ordering') {
+      const itemCount = ((b.data || {}).items || []).length;
+      ans.order = shuffleArray(Array.from({ length: itemCount }, (_, i) => i));
+    }
+    ctx.progress.kcAnswers[key] = ans;
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -749,6 +915,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   }));
   app.querySelectorAll('.lp-kc-fillgap-submit').forEach(btn => btn.addEventListener('click', () => {
     submitKc(ctx, btn.dataset.kcKey, 'fill_gap', blocks);
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -766,6 +933,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   }));
   app.querySelectorAll('.lp-order-submit').forEach(btn => btn.addEventListener('click', () => {
     submitKc(ctx, btn.dataset.kcKey, 'ordering', blocks);
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -773,7 +941,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   const handleMatchClick = (elx) => {
     const key = elx.dataset.kcKey, i = parseInt(elx.dataset.i, 10);
     const ans = ctx.progress.kcAnswers[key] || { pairs: {}, selectedLeft: null };
-    if (ans.submitted) return;
+    if (ans.locked) return;
     if (elx.classList.contains('lp-match-left')) {
       ans.selectedLeft = i;
     } else if (ans.selectedLeft !== null && ans.selectedLeft !== undefined) {
@@ -790,6 +958,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   });
   app.querySelectorAll('.lp-match-submit').forEach(btn => btn.addEventListener('click', () => {
     submitKc(ctx, btn.dataset.kcKey, 'matching', blocks);
+    scheduleLumioSave();
     rerender();
   }));
 

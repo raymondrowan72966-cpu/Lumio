@@ -56,6 +56,7 @@ const LumioState = {
     lastLogin: Date.now(),
     password: 'lumio123', // prototype-only stand-in for a hashed password
     status: 'active', // 'active' | 'disabled'
+    authenticationProvider: 'local', // 'local' | 'microsoft' | 'google'
   },
 
   // workspace system info (Workspace Owner only)
@@ -79,6 +80,7 @@ const LumioState = {
       avatar: null,
       role: 'admin',
       status: 'active', // 'active' | 'disabled'
+      authenticationProvider: 'local', // 'local' | 'microsoft' | 'google'
     },
   ],
 
@@ -87,7 +89,8 @@ const LumioState = {
 };
 
 /* ---------------- ROLES & PERMISSIONS ---------------- */
-const ROLE_LABELS = { owner: 'Owner', admin: 'Admin' };
+const ROLE_LABELS = { owner: 'Workspace Owner', admin: 'Administrator' };
+const AUTH_PROVIDER_LABELS = { local: 'Lumio Account', microsoft: 'Microsoft SSO', google: 'Google SSO' };
 
 function isWorkspaceOwner() {
   return LumioState.currentUser.role === 'owner';
@@ -95,6 +98,28 @@ function isWorkspaceOwner() {
 function canAccessWorkspaceSettings() { return isWorkspaceOwner(); }
 function canManageUsers() { return isWorkspaceOwner(); }
 function canInviteAdministrators() { return isWorkspaceOwner(); }
+
+/* ---------------- AUTHENTICATION SERVICE STUBS ---------------- */
+// These are the only two integration points that need real implementations
+// when Microsoft/Google OAuth is connected. Replace each stub body with the
+// appropriate OAuth SDK call (e.g. MSAL for Microsoft, Google Identity
+// Services for Google). On successful authentication, create or look up the
+// matching workspace user and call navigate('#/projects') or navigate('#/welcome').
+
+function authenticateMicrosoft() {
+  // Future integration: initialise MSAL, call loginPopup/loginRedirect,
+  // exchange the id_token for a Lumio session, then navigate('#/welcome').
+  console.info('[Lumio Auth] Microsoft SSO — integration point (not yet wired)');
+  toast('Microsoft SSO is not configured for this workspace.', '⚠️');
+}
+
+function authenticateGoogle() {
+  // Future integration: load the Google Identity Services SDK,
+  // call google.accounts.id.initialize + prompt/renderButton,
+  // exchange the credential JWT for a Lumio session, then navigate('#/welcome').
+  console.info('[Lumio Auth] Google SSO — integration point (not yet wired)');
+  toast('Google SSO is not configured for this workspace.', '⚠️');
+}
 
 // Returns every workspace member (the signed-in user plus all other users),
 // used for rendering the Users tab and for the multi-owner safeguard checks.
@@ -112,11 +137,12 @@ function workspaceOwnerCount() {
 // used everywhere the current user's identity is shown (sidebar, profile).
 function currentUserDisplayName() {
   const u = LumioState.currentUser;
-  return `${u.firstName} ${u.lastName}`.trim();
+  return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User';
 }
 function currentUserInitials() {
   const u = LumioState.currentUser;
-  return ((u.firstName[0] || '') + (u.lastName[0] || '')).toUpperCase();
+  return ((u.firstName?.[0] || '') + (u.lastName?.[0] || '')).toUpperCase()
+    || (u.email?.[0] || '?').toUpperCase();
 }
 
 // Renders the shared avatar badge: an uploaded photo if present, otherwise
@@ -138,6 +164,29 @@ function formatDateLong(ts) {
   return new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+/* ---------------- KC DATA NORMALISERS ---------------- */
+// Shared by lessonBuilder.js (canvas + content panels) and learnerPreview.js
+// (learner render functions). Both files are in global scope, so defining
+// these once here guarantees a single source of truth for fallback values.
+
+function normalizeKcOptions(d) {
+  return Array.isArray(d.options) && d.options.length ? d.options : ['Option A', 'Option B', 'Option C'];
+}
+function normalizeKcLeft(d) {
+  return Array.isArray(d.left) && d.left.length ? d.left : ['Choice 1', 'Choice 2'];
+}
+function normalizeKcRight(d) {
+  return Array.isArray(d.right) && d.right.length ? d.right : ['Match 1', 'Match 2'];
+}
+function normalizeKcItems(d) {
+  return Array.isArray(d.items) && d.items.length ? d.items : ['Step 1', 'Step 2', 'Step 3'];
+}
+function normalizeKcAnswers(d) {
+  if (Array.isArray(d.answers) && d.answers.length) return [...d.answers];
+  if (d.answer) return d.answer.split('|').map(s => s.trim()).filter(Boolean);
+  return [''];
+}
+
 /* ---------------- ID GENERATION ---------------- */
 // Generates a globally-unique id with the given prefix (e.g. 'l' for lessons,
 // 'a' for assessments, 'c'/'p' for courses/projects). Combines a timestamp,
@@ -152,7 +201,7 @@ function generateUniqueId(prefix) {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 7;
+const LUMIO_STATE_VERSION = 9;
 
 // Keys of LumioState that should be persisted/restored across sessions.
 const LUMIO_PERSISTED_KEYS = [
@@ -313,6 +362,37 @@ function migrateLumioState(record) {
       if (inv.role !== 'owner' && inv.role !== 'admin') inv.role = 'admin';
     });
     version = 7;
+  }
+
+  if (version < 8) {
+    // v8 introduces authenticationProvider on all user records and invitations.
+    // Existing accounts are local by definition, so backfill 'local' everywhere.
+    if (state.currentUser && state.currentUser.authenticationProvider === undefined) {
+      state.currentUser.authenticationProvider = 'local';
+    }
+    (state.adminUsers || []).forEach(u => {
+      if (u.authenticationProvider === undefined) u.authenticationProvider = 'local';
+    });
+    (state.invitations || []).forEach(inv => {
+      if (inv.authenticationProvider === undefined) inv.authenticationProvider = 'local';
+    });
+    version = 8;
+  }
+
+  if (version < 9) {
+    // v9 ensures currentUser always has firstName/lastName/role so the sidebar
+    // never shows "undefined undefined". Backfill from the code defaults when
+    // fields are missing (happens when a v5–v8 save predated these fields or
+    // when the profile save had a bug that omitted them).
+    if (state.currentUser) {
+      const cu = state.currentUser;
+      const def = LumioState.currentUser; // always has good defaults from app.js
+      if (!cu.firstName) cu.firstName = def.firstName;
+      if (!cu.lastName)  cu.lastName  = def.lastName;
+      if (!cu.email)     cu.email     = def.email;
+      if (!cu.role)      cu.role      = def.role;
+    }
+    version = 9;
   }
 
   return state;

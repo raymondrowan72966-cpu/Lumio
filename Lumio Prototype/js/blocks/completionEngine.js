@@ -60,7 +60,11 @@ const CompletionEngine = (function () {
 
     if (cap.strategy === 'assessed') {
       const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, index)];
-      return !!(ans && ans.submitted);
+      if (!ans || (ans.attempts || 0) === 0) return false;
+      const s = block.settings || {};
+      // 'passed' completionRule or requireCorrectAnswer → must have passed at least once
+      if (s.requireCorrectAnswer || s.completionRule === 'passed') return !!(ans.passed);
+      return true; // completionRule 'submitted': any attempt completes the block
     }
 
     // strategy === 'interacted'

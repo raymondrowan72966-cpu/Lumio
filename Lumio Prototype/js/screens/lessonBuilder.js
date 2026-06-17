@@ -19,7 +19,8 @@ const BuilderUI = {
 function getCourseAndLesson(lessonId) {
   let course = null, lesson = null;
   for (const c of Object.values(LumioState.courses)) {
-    const l = c.lessons.find(x => x.id === lessonId);
+    const l = c.lessons.find(x => x.id === lessonId)
+      || (c.assessments || []).find(x => x.id === lessonId);
     if (l) { course = c; lesson = l; break; }
   }
   return { course, lesson };
@@ -1156,6 +1157,26 @@ function syncRichTextField(block, elx) {
     const scenes = block.data.scenes || [];
     const i = parseInt(elx.dataset.iindex, 10);
     if (scenes[i]) scenes[i].dialogue = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcQuestion') {
+    block.data.question = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcGapText') {
+    block.data.text = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcOption') {
+    const opts = block.data.options || (block.data.options = normalizeKcOptions(block.data).slice());
+    const i = parseInt(elx.dataset.col, 10);
+    opts[i] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcPairLeft') {
+    const left = block.data.left || (block.data.left = normalizeKcLeft(block.data).slice());
+    const i = parseInt(elx.dataset.col, 10);
+    left[i] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcPairRight') {
+    const right = block.data.right || (block.data.right = normalizeKcRight(block.data).slice());
+    const i = parseInt(elx.dataset.col, 10);
+    right[i] = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcItem') {
+    const items = block.data.items || (block.data.items = normalizeKcItems(block.data).slice());
+    const i = parseInt(elx.dataset.col, 10);
+    items[i] = sanitizeRichHtml(elx.innerHTML);
   } else {
     block.data[elx.dataset.field] = sanitizeRichHtml(elx.innerHTML);
   }
@@ -1184,6 +1205,18 @@ function bindEditableTextField(elx, blocks) {
       const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
       const r = parseInt(elx.dataset.row), c = parseInt(elx.dataset.col);
       if (rows[r]) rows[r][c] = text;
+    } else if (field === 'kcOption') {
+      const opts = block.data.options || (block.data.options = normalizeKcOptions(block.data).slice());
+      opts[parseInt(elx.dataset.col, 10)] = text;
+    } else if (field === 'kcPairLeft') {
+      const left = block.data.left || (block.data.left = normalizeKcLeft(block.data).slice());
+      left[parseInt(elx.dataset.col, 10)] = text;
+    } else if (field === 'kcPairRight') {
+      const right = block.data.right || (block.data.right = normalizeKcRight(block.data).slice());
+      right[parseInt(elx.dataset.col, 10)] = text;
+    } else if (field === 'kcItem') {
+      const items = block.data.items || (block.data.items = normalizeKcItems(block.data).slice());
+      items[parseInt(elx.dataset.col, 10)] = text;
     } else {
       block.data[field] = text;
     }
@@ -1915,23 +1948,15 @@ function renderBlockContent(block, editable) {
     }
 
     case 'kc_multiple_choice':
-      return knowledgeCheckMC(d);
+      return knowledgeCheckMC(d, editable);
     case 'kc_multiple_response':
-      return `<div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
-        <p style="font-weight:600;">${d.question || 'Which of these are core company values? (Select all that apply)'}</p>
-        <div class="flex-col gap-8 mt-12">${(d.options || ['Curiosity','Clarity','Speed at all costs','People over process']).map(o=>`<label class="flex items-center gap-8 text-sm"><input type="checkbox"/> ${o}</label>`).join('')}</div>`;
+      return knowledgeCheckMR(d, editable);
     case 'kc_matching':
-      return `<div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <div class="flex-col gap-8">${(d.left || ['Onboarding','Benefits','IT Support']).map(l=>`<div class="card card-pad text-sm">${l}</div>`).join('')}</div>
-          <div class="flex-col gap-8">${(d.right || ['Day 1 checklist','Health & retirement','Help desk ticket']).map(r=>`<div class="card card-pad text-sm" style="background:var(--pastel-lavender); border:none;">${r}</div>`).join('')}</div>
-        </div>`;
+      return knowledgeCheckMatching(d, editable);
     case 'kc_fill_gap':
-      return `<div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
-        <p style="font-size:15px; line-height:2;">${d.text || 'Our core values are Curiosity, Clarity, ____, and People over process.'}</p>`;
+      return knowledgeCheckFillGap(d, editable);
     case 'kc_ordering':
-      return `<div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
-        <div class="flex-col gap-8 mt-8">${(d.items || ['Receive offer letter','Complete paperwork','Attend orientation','Meet your team']).map((i,idx)=>`<div class="card card-pad flex items-center gap-12 text-sm"><span class="pill pill-grey">${idx+1}</span>${i}</div>`).join('')}</div>`;
+      return knowledgeCheckOrdering(d, editable);
 
     default:
       return `<div class="text-center" style="padding:24px; color:var(--ink-400);">
@@ -2219,17 +2244,105 @@ function renderPieChart(block, editable) {
   </div>`;
 }
 
-function knowledgeCheckMC(d) {
-  const options = d.options || ['Curiosity over certainty','Clarity over cleverness','Speed over quality','Process over people'];
-  const correct = d.correct ?? 1;
+function knowledgeCheckMC(d, editable) {
+  const options = normalizeKcOptions(d);
+  const ce = editable ? 'contenteditable="true"' : '';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
-    <p style="font-weight:600; font-size:14px;">${d.question || 'Which of the following best reflects one of our core values?'}</p>
-    <div class="flex-col gap-8 mt-12">
-      ${options.map((o,i) => `
-        <label class="flex items-center gap-8 card card-pad text-sm" style="cursor:pointer; ${i===correct ? 'border-color:var(--teal);' : ''}">
-          <input type="radio" name="kc-${Math.random()}" /> ${o} ${i===correct ? '<span style="margin-left:auto; color:var(--teal);">✓ Correct</span>' : ''}
-        </label>
+    <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
+      data-placeholder="Enter your question…"
+      style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
+    >${richTextOut(d.question || '')}</div>
+    <div class="flex-col gap-6 mt-12">
+      ${options.map((o, i) => `
+        <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
+          <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid var(--ink-300); flex-shrink:0; display:inline-block;"></span>
+          <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
+            data-placeholder="Option…" style="flex:1; outline:none;"
+          >${richTextOut(o || '')}</span>
+        </div>
+      `).join('')}
+    </div>
+    ${editable ? '<p class="text-xs text-muted mt-8">Mark the correct answer in the Content panel →</p>' : ''}
+  `;
+}
+
+function knowledgeCheckMR(d, editable) {
+  const options = normalizeKcOptions(d);
+  const ce = editable ? 'contenteditable="true"' : '';
+  return `
+    <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
+    <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
+      data-placeholder="Enter your question…"
+      style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
+    >${richTextOut(d.question || '')}</div>
+    <div class="flex-col gap-6 mt-12">
+      ${options.map((o, i) => `
+        <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
+          <span style="width:14px; height:14px; border-radius:3px; border:1.5px solid var(--ink-300); flex-shrink:0; display:inline-block;"></span>
+          <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
+            data-placeholder="Option…" style="flex:1; outline:none;"
+          >${richTextOut(o || '')}</span>
+        </div>
+      `).join('')}
+    </div>
+    ${editable ? '<p class="text-xs text-muted mt-8">Check correct answers in the Content panel →</p>' : ''}
+  `;
+}
+
+function knowledgeCheckMatching(d, editable) {
+  const left = normalizeKcLeft(d);
+  const right = normalizeKcRight(d);
+  const ce = editable ? 'contenteditable="true"' : '';
+  const rowBase = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md); font-size:13px; outline:none;';
+  return `
+    <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+      <div class="flex-col gap-6">
+        ${left.map((l, i) => `
+          <div class="editable-text" data-field="kcPairLeft" data-col="${i}" ${ce}
+            data-placeholder="Item…" style="${rowBase}"
+          >${richTextOut(l || '')}</div>
+        `).join('')}
+      </div>
+      <div class="flex-col gap-6">
+        ${right.map((r, i) => `
+          <div class="editable-text" data-field="kcPairRight" data-col="${i}" ${ce}
+            data-placeholder="Match…" style="${rowBase} background:var(--pastel-lavender); border-color:transparent;"
+          >${richTextOut(r || '')}</div>
+        `).join('')}
+      </div>
+    </div>
+    ${editable ? '<p class="text-xs text-muted mt-8">Each left item matches the right item on the same row.</p>' : ''}
+  `;
+}
+
+function knowledgeCheckFillGap(d, editable) {
+  const answers = normalizeKcAnswers(d);
+  const ce = editable ? 'contenteditable="true"' : '';
+  return `
+    <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
+    <div class="editable-text" data-field="kcGapText" data-richtext="true" ${ce}
+      data-placeholder="Enter the sentence with ____ marking the gap…"
+      style="font-size:15px; line-height:2; min-height:1.4em; outline:none;"
+    >${richTextOut(d.text || '')}</div>
+    <div class="text-xs text-muted mt-4">Accepted: ${answers.filter(Boolean).map(a => `<strong>${escapeHtml(a)}</strong>`).join(', ') || (editable ? '<em>Add accepted answers in the Content panel →</em>' : '—')}</div>
+  `;
+}
+
+function knowledgeCheckOrdering(d, editable) {
+  const items = normalizeKcItems(d);
+  const ce = editable ? 'contenteditable="true"' : '';
+  return `
+    <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
+    <div class="flex-col gap-6 mt-8">
+      ${items.map((item, i) => `
+        <div class="flex items-center gap-10 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
+          <span class="pill pill-grey" style="flex-shrink:0;">${i + 1}</span>
+          <span class="editable-text" data-field="kcItem" data-col="${i}" ${ce}
+            data-placeholder="Step…" style="flex:1; outline:none;"
+          >${richTextOut(item || '')}</span>
+        </div>
       `).join('')}
     </div>
   `;
@@ -2828,16 +2941,7 @@ function renderRightTabContent(block, index, course) {
   if (BuilderUI.rightTab === 'settings') {
     let extra = '';
     if (block.type.startsWith('kc_')) {
-      extra = `
-        <div class="field">
-          <label>Feedback</label>
-          <select class="input"><option>Show correct answer after attempt</option><option>Show feedback only at end</option><option>No feedback</option></select>
-        </div>
-        <div class="field">
-          <label class="flex items-center gap-8"><input type="checkbox" checked /> Allow retry</label>
-        </div>
-        <p class="text-sm text-muted">This is an in-lesson, ungraded Knowledge Check. For scored assessments, add an Assessment from the course outline.</p>
-      `;
+      extra = kcSettingsPanel(block);
     } else if (block.type === 'accordion') {
       const s = block.settings || {};
       extra = `
@@ -2908,10 +3012,7 @@ function renderRightTabContent(block, index, course) {
     case 'quote_carousel':
       return quoteCarouselContentPanel(block, d);
     case 'kc_multiple_choice':
-      return contentFields([['Question', 'question', d.question, 'textarea']]) +
-        `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
-         <div class="field"><label>Correct option (number)</label><input class="input content-field" data-field="correct" type="number" min="1" value="${(d.correct ?? 1)+1}"/></div>` +
-        `<button class="btn btn-secondary w-full mt-8" id="ai-gen-kc">✨ Regenerate from lesson content</button>`;
+      return kcMcContentPanel(block, d);
     case 'accordion':
       return accordionContentPanel(block, d);
     case 'tabs':
@@ -2919,22 +3020,13 @@ function renderRightTabContent(block, index, course) {
     case 'flashcard_grid': case 'flashcard_stack':
       return flashcardContentPanel(block, d);
     case 'kc_multiple_response':
-      return contentFields([['Question', 'question', d.question, 'textarea']]) +
-        `<div class="field"><label>Options (one per line)</label><textarea class="textarea content-field" data-field="options" rows="4">${(d.options||[]).join('\n')}</textarea></div>
-         <div class="field"><label>Correct options (numbers, comma-separated)</label><input class="input content-field" data-field="correctMulti" value="${(d.correct||[]).map(i=>i+1).join(', ')}"/></div>` +
-        `<button class="btn btn-secondary w-full mt-8" id="ai-gen-kc">✨ Regenerate from lesson content</button>`;
+      return kcMrContentPanel(block, d);
     case 'kc_matching':
-      return `<div class="field"><label>Left items (one per line)</label><textarea class="textarea content-field" data-field="left" rows="4">${(d.left||[]).join('\n')}</textarea></div>
-        <div class="field"><label>Right matches (one per line, same order as left)</label><textarea class="textarea content-field" data-field="right" rows="4">${(d.right||[]).join('\n')}</textarea></div>
-        <p class="text-sm text-muted mt-8">Each right-hand item should be the correct match for the left-hand item on the same line.</p>`;
+      return kcMatchingContentPanel(block, d);
     case 'kc_fill_gap':
-      return contentFields([
-        ['Sentence (use ____ for the gap)', 'text', d.text, 'textarea'],
-        ['Correct answer', 'answer', d.answer, 'input'],
-      ]) + `<p class="text-sm text-muted mt-8">For multiple acceptable answers, separate with "|" (e.g. colour|color).</p>`;
+      return kcFillGapContentPanel(block, d);
     case 'kc_ordering':
-      return `<div class="field"><label>Items, in correct order (one per line)</label><textarea class="textarea content-field" data-field="items" rows="5">${(d.items||[]).join('\n')}</textarea></div>
-        <p class="text-sm text-muted mt-8">Learners will see these in shuffled order and must arrange them to match this order.</p>`;
+      return kcOrderingContentPanel(block, d);
     case 'button': {
       const destType = d.destType || 'url';
       const lessonBlocks = LumioState.lessons[LumioState.currentLessonId] || [];
@@ -3123,6 +3215,228 @@ function chartSettingsPanel(block, s, isPie) {
    dedicated right-panel (Content / Design / Settings), dispatched
    early from renderRightTabContent for the 'Dividers' category.
    ============================================================ */
+
+/* ============================================================
+   KC NORMALIZER HELPERS
+   ============================================================ */
+// normalizeKcOptions / normalizeKcLeft / normalizeKcRight / normalizeKcItems /
+// normalizeKcAnswers are defined in app.js (loaded first) so they are
+// available to both lessonBuilder.js and learnerPreview.js globally.
+
+/* ============================================================
+   KC CONTENT PANEL FUNCTIONS (Rise-style authoring UI)
+   ============================================================ */
+function kcMcContentPanel(block, d) {
+  const opts = normalizeKcOptions(d);
+  const correct = d.correct ?? 0;
+  return `
+    <div class="field">
+      <label>Question</label>
+      <textarea class="textarea content-field" data-field="question" rows="3">${escapeHtml(d.question || '')}</textarea>
+    </div>
+    <div class="prop-section-title" style="margin-top:12px;">Answer Choices</div>
+    <p class="text-xs text-muted mb-8">Select the radio button to mark the correct answer.</p>
+    <div class="flex-col gap-6" id="kc-mc-answers">
+      ${opts.map((o, i) => `
+        <div class="flex items-center gap-8" data-i="${i}">
+          <input type="radio" class="kc-correct-radio" name="kc-mc-correct" data-i="${i}" ${i === correct ? 'checked' : ''} title="Mark as correct" />
+          <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
+          <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm w-full mt-8 kc-answer-add">+ Add Answer</button>
+  `;
+}
+
+function kcMrContentPanel(block, d) {
+  const opts = normalizeKcOptions(d);
+  const correct = Array.isArray(d.correct) ? d.correct : [];
+  return `
+    <div class="field">
+      <label>Question</label>
+      <textarea class="textarea content-field" data-field="question" rows="3">${escapeHtml(d.question || '')}</textarea>
+    </div>
+    <div class="prop-section-title" style="margin-top:12px;">Answer Choices</div>
+    <p class="text-xs text-muted mb-8">Check all answers that are correct.</p>
+    <div class="flex-col gap-6" id="kc-mr-answers">
+      ${opts.map((o, i) => `
+        <div class="flex items-center gap-8" data-i="${i}">
+          <input type="checkbox" class="kc-correct-check" data-i="${i}" ${correct.includes(i) ? 'checked' : ''} title="Mark as correct" />
+          <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
+          <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm w-full mt-8 kc-answer-add">+ Add Answer</button>
+  `;
+}
+
+function kcMatchingContentPanel(block, d) {
+  const left = normalizeKcLeft(d);
+  const right = normalizeKcRight(d);
+  const count = Math.max(left.length, right.length);
+  const rows = Array.from({ length: count }, (_, i) => ({ l: left[i] || '', r: right[i] || '' }));
+  return `
+    <div style="display:grid; grid-template-columns:1fr 1fr 28px; gap:6px; align-items:center; margin-bottom:6px;">
+      <span class="text-xs text-muted" style="font-weight:600; padding-left:2px;">CHOICE</span>
+      <span class="text-xs text-muted" style="font-weight:600; padding-left:2px;">MATCH</span>
+      <span></span>
+    </div>
+    <div class="flex-col gap-6" id="kc-pairs">
+      ${rows.map((row, i) => `
+        <div style="display:grid; grid-template-columns:1fr 1fr 28px; gap:6px; align-items:center;" data-i="${i}">
+          <input class="input kc-pair-left" data-i="${i}" value="${escapeHtml(row.l)}" placeholder="Choice…" style="font-size:13px;" />
+          <input class="input kc-pair-right" data-i="${i}" value="${escapeHtml(row.r)}" placeholder="Match…" style="font-size:13px;" />
+          <button class="btn-icon kc-pair-delete" data-i="${i}" title="Remove" ${rows.length <= 2 ? 'disabled' : ''}>✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm w-full mt-8 kc-pair-add">+ Add Pair</button>
+    <p class="text-xs text-muted mt-8">Each Choice is the correct match for the item on the same row.</p>
+  `;
+}
+
+function kcFillGapContentPanel(block, d) {
+  const answers = normalizeKcAnswers(d);
+  return `
+    <div class="field">
+      <label>Sentence with blank (use ____ for the gap)</label>
+      <textarea class="textarea content-field" data-field="text" rows="3">${escapeHtml(d.text || '')}</textarea>
+    </div>
+    <div class="prop-section-title" style="margin-top:12px;">Acceptable Answers</div>
+    <div class="flex-col gap-6" id="kc-accepted">
+      ${answers.map((a, i) => `
+        <div class="flex items-center gap-8" data-i="${i}">
+          <input class="input kc-accepted-text" data-i="${i}" value="${escapeHtml(a)}" placeholder="Acceptable answer…" style="flex:1; font-size:13px;" />
+          <button class="btn-icon kc-accepted-delete" data-i="${i}" title="Remove" ${answers.length <= 1 ? 'disabled' : ''}>✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm w-full mt-8 kc-accepted-add">+ Add Acceptable Answer</button>
+    <div class="field mt-8">
+      <label class="flex items-center gap-8" style="cursor:pointer; font-size:13px;">
+        <input type="checkbox" class="kc-case-sensitive" ${d.caseSensitive ? 'checked' : ''} />
+        Case-sensitive matching
+      </label>
+    </div>
+  `;
+}
+
+function kcOrderingContentPanel(block, d) {
+  const items = normalizeKcItems(d);
+  return `
+    <div class="prop-section-title">Items in Correct Order</div>
+    <div class="flex-col gap-6" id="kc-items">
+      ${items.map((item, i) => `
+        <div class="flex items-center gap-6" data-i="${i}">
+          <span class="pill pill-grey" style="flex-shrink:0; min-width:22px; text-align:center; font-size:11px;">${i + 1}</span>
+          <input class="input kc-item-text" data-i="${i}" value="${escapeHtml(item)}" placeholder="Item…" style="flex:1; font-size:13px;" />
+          <button class="btn-icon kc-item-up"   data-i="${i}" title="Move up"   ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="btn-icon kc-item-down" data-i="${i}" title="Move down" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn-icon kc-item-delete" data-i="${i}" title="Remove" ${items.length <= 2 ? 'disabled' : ''}>✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-secondary btn-sm w-full mt-8 kc-item-add">+ Add Item</button>
+    <p class="text-xs text-muted mt-8">Learners see these items in a shuffled order and must rearrange them into the correct sequence.</p>
+  `;
+}
+
+/* ============================================================
+   KC SETTINGS PANEL — Assessment Rules for all kc_* block types.
+   ============================================================ */
+function kcSettingsPanel(block) {
+  const s = block.settings || {};
+  const maxAttempts = s.maxAttempts ?? 0;
+  const attVal = maxAttempts === 0 ? 'unlimited' : maxAttempts <= 3 ? String(maxAttempts) : 'custom';
+  const isCustom = attVal === 'custom';
+  const showCA  = s.showCorrectAnswer  || 'immediately';
+  const compRule = s.completionRule    || 'submitted';
+  const passMode = s.passingMode       || 'all_correct';
+  return `
+    <div class="prop-section-title">Assessment Rules</div>
+
+    <div class="field">
+      <label>Attempts Allowed</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select class="input settings-kc-attempts" data-field="maxAttempts" style="flex:1;">
+          <option value="unlimited" ${attVal === 'unlimited' ? 'selected' : ''}>Unlimited</option>
+          <option value="1"  ${attVal === '1'  ? 'selected' : ''}>1</option>
+          <option value="2"  ${attVal === '2'  ? 'selected' : ''}>2</option>
+          <option value="3"  ${attVal === '3'  ? 'selected' : ''}>3</option>
+          <option value="custom" ${attVal === 'custom' ? 'selected' : ''}>Custom</option>
+        </select>
+        <input type="number" class="input settings-num" id="kc-custom-attempts" data-field="maxAttempts"
+          style="width:72px; ${isCustom ? '' : 'display:none;'}" min="1" max="99"
+          value="${isCustom ? maxAttempts : 5}" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="flex items-center gap-8">
+        <input type="checkbox" class="settings-field" data-field="allowRetry"
+          ${s.allowRetry !== false ? 'checked' : ''} />
+        Allow Retry
+      </label>
+    </div>
+
+    <div class="field">
+      <label class="flex items-center gap-8">
+        <input type="checkbox" class="settings-field" data-field="requireCorrectAnswer"
+          ${s.requireCorrectAnswer ? 'checked' : ''} />
+        Require Correct Answer to Complete
+      </label>
+    </div>
+
+    <div class="field">
+      <label>Show Correct Answer</label>
+      <select class="input settings-select-str" data-field="showCorrectAnswer">
+        <option value="immediately" ${showCA === 'immediately' ? 'selected' : ''}>Immediately</option>
+        <option value="after_final" ${showCA === 'after_final' ? 'selected' : ''}>After Final Attempt</option>
+        <option value="never"       ${showCA === 'never'       ? 'selected' : ''}>Never</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Completion Rule</label>
+      <select class="input settings-select-str" data-field="completionRule">
+        <option value="submitted" ${compRule === 'submitted' ? 'selected' : ''}>Submitted</option>
+        <option value="passed"    ${compRule === 'passed'    ? 'selected' : ''}>Passed</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Passing Requirement</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select class="input settings-select-str" data-field="passingMode" style="flex:1;">
+          <option value="all_correct" ${passMode === 'all_correct' ? 'selected' : ''}>All Correct</option>
+          <option value="percentage"  ${passMode === 'percentage'  ? 'selected' : ''}>Percentage</option>
+        </select>
+        <div id="kc-pct-wrap" style="display:${passMode === 'percentage' ? 'flex' : 'none'}; align-items:center; gap:4px;">
+          <input type="number" class="input settings-num" data-field="passingPercentage"
+            style="width:64px;" min="1" max="100" value="${s.passingPercentage ?? 80}" />
+          <span class="text-sm text-muted">%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prop-section-title" style="margin-top:16px;">Feedback</div>
+
+    <div class="field">
+      <label>Correct Feedback</label>
+      <input class="input settings-text" data-field="correctFeedback"
+        value="${escapeHtml(s.correctFeedback ?? 'Correct! Well done.')}" />
+    </div>
+    <div class="field">
+      <label>Incorrect Feedback</label>
+      <input class="input settings-text" data-field="incorrectFeedback"
+        value="${escapeHtml(s.incorrectFeedback ?? 'Not quite. Please try again.')}" />
+    </div>
+    <p class="text-sm text-muted mt-8">This is an in-lesson Knowledge Check. Configure passing thresholds and feedback above.</p>
+  `;
+}
+
 function renderDividerBlockPanel(block, index) {
   block.data = block.data || {};
   block.design = block.design || {};
@@ -5427,6 +5741,202 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     block.settings = block.settings || {};
     block.settings[inp.dataset.field] = inp.value;
+    flashSaveStatus();
+  }));
+
+  /* ---- KC authoring handlers ---- */
+
+  // MC / MR: mark correct (radio for MC, checkbox for MR)
+  app.querySelectorAll('.kc-correct-radio').forEach(r => r.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    block.data.correct = parseInt(r.dataset.i, 10);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.kc-correct-check').forEach(cb => cb.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const i = parseInt(cb.dataset.i, 10);
+    const s = new Set(Array.isArray(block.data.correct) ? block.data.correct : []);
+    if (cb.checked) s.add(i); else s.delete(i);
+    block.data.correct = [...s].sort((a, b) => a - b);
+    flashSaveStatus();
+  }));
+
+  // MC / MR: answer text
+  app.querySelectorAll('.kc-answer-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.options)) block.data.options = [];
+    block.data.options[parseInt(inp.dataset.i, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // MC / MR: add answer
+  app.querySelector('.kc-answer-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.options)) block.data.options = normalizeKcOptions(block.data);
+    block.data.options.push('');
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // MC / MR: delete answer
+  app.querySelectorAll('.kc-answer-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const i = parseInt(btn.dataset.i, 10);
+    const opts = block.data.options || [];
+    if (opts.length <= 2) return;
+    opts.splice(i, 1);
+    if (block.type === 'kc_multiple_choice') {
+      const c = block.data.correct ?? 0;
+      block.data.correct = c === i ? 0 : c > i ? c - 1 : c;
+    } else if (block.type === 'kc_multiple_response') {
+      block.data.correct = (block.data.correct || []).filter(c => c !== i).map(c => c > i ? c - 1 : c);
+    }
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Matching: pair text
+  app.querySelectorAll('.kc-pair-left').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.left)) block.data.left = [];
+    block.data.left[parseInt(inp.dataset.i, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.kc-pair-right').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.right)) block.data.right = [];
+    block.data.right[parseInt(inp.dataset.i, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Matching: add pair
+  app.querySelector('.kc-pair-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    block.data.left  = normalizeKcLeft(block.data);
+    block.data.right = normalizeKcRight(block.data);
+    block.data.left.push(''); block.data.right.push('');
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // Matching: delete pair
+  app.querySelectorAll('.kc-pair-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const i = parseInt(btn.dataset.i, 10);
+    const left  = block.data.left  || [];
+    const right = block.data.right || [];
+    if (Math.max(left.length, right.length) <= 2) return;
+    left.splice(i, 1); right.splice(i, 1);
+    block.data.left = left; block.data.right = right;
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Fill Gap: accepted answer text
+  app.querySelectorAll('.kc-accepted-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.answers)) block.data.answers = normalizeKcAnswers(block.data);
+    block.data.answers[parseInt(inp.dataset.i, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Fill Gap: add accepted answer
+  app.querySelector('.kc-accepted-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.answers)) block.data.answers = normalizeKcAnswers(block.data);
+    block.data.answers.push('');
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // Fill Gap: delete accepted answer
+  app.querySelectorAll('.kc-accepted-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.answers)) block.data.answers = normalizeKcAnswers(block.data);
+    if (block.data.answers.length <= 1) return;
+    block.data.answers.splice(parseInt(btn.dataset.i, 10), 1);
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Fill Gap: case sensitive
+  app.querySelector('.kc-case-sensitive')?.addEventListener('change', e => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    block.data.caseSensitive = e.target.checked;
+    flashSaveStatus();
+  });
+
+  // Ordering: item text
+  app.querySelectorAll('.kc-item-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.items)) block.data.items = [];
+    block.data.items[parseInt(inp.dataset.i, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Ordering: add item
+  app.querySelector('.kc-item-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.items)) block.data.items = normalizeKcItems(block.data);
+    block.data.items.push('');
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // Ordering: delete item
+  app.querySelectorAll('.kc-item-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const items = block.data.items || [];
+    if (items.length <= 2) return;
+    items.splice(parseInt(btn.dataset.i, 10), 1);
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Ordering: move up/down
+  app.querySelectorAll('.kc-item-up').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const i = parseInt(btn.dataset.i, 10); if (i === 0) return;
+    const items = block.data.items || [];
+    [items[i - 1], items[i]] = [items[i], items[i - 1]];
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+  app.querySelectorAll('.kc-item-down').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const items = block.data.items || [];
+    const i = parseInt(btn.dataset.i, 10);
+    if (i >= items.length - 1) return;
+    [items[i], items[i + 1]] = [items[i + 1], items[i]];
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Settings tab — string-valued selects (KC showCorrectAnswer, completionRule, passingMode)
+  app.querySelectorAll('.settings-select-str').forEach(sel => sel.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    block.settings[sel.dataset.field] = sel.value;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Settings tab — KC attempts select (maps named options to numeric maxAttempts)
+  app.querySelectorAll('.settings-kc-attempts').forEach(sel => sel.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    const customInput = app.querySelector('#kc-custom-attempts');
+    if (sel.value === 'unlimited') {
+      block.settings.maxAttempts = 0;
+      if (customInput) customInput.style.display = 'none';
+    } else if (sel.value === 'custom') {
+      block.settings.maxAttempts = parseInt(customInput && customInput.value || '5', 10) || 5;
+      if (customInput) customInput.style.display = '';
+    } else {
+      block.settings.maxAttempts = parseInt(sel.value, 10);
+      if (customInput) customInput.style.display = 'none';
+    }
+    flashSaveStatus();
+  }));
+
+  // Settings tab — numeric inputs (KC passingPercentage, custom attempts)
+  app.querySelectorAll('.settings-num').forEach(inp => inp.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.settings = block.settings || {};
+    block.settings[inp.dataset.field] = parseInt(inp.value, 10) || 0;
     flashSaveStatus();
   }));
 
