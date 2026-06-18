@@ -62,6 +62,7 @@ async function publishHtmlPackage(course, triggerBtn) {
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
   LumioState.learnerPreview={returnTo:''};
+  LearnerUI.publishedMode=true;
   window.navigate=function(hash){
     if(location.hash===hash){window.render();}
     else{location.hash=hash;}

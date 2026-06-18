@@ -187,6 +187,9 @@ function learnerDeviceSwitcherHtml(device) {
      - Frame wrapper: overflow:hidden (not auto — removes second scrollbar)
      - <main>: height:100% overflow-y:auto (sole scroll owner)
    Overview (isOverview:true): no sidebar on any device mode.
+
+   Published mode (LearnerUI.publishedMode=true): no authoring controls,
+   no device frames. Single CSS-responsive layout — browser determines breakpoint.
 */
 
 // Wires the mobile sidebar drawer: toggle button, backdrop tap-to-close.
@@ -204,7 +207,92 @@ function wireMobileSidebar(app) {
   backdrop?.addEventListener('click', close);
 }
 
+/* ---------- PRODUCTION SHELL (published packages) ----------
+   Used when LearnerUI.publishedMode is true. No authoring controls.
+   CSS media query drives sidebar: sticky on wide viewports, drawer on narrow. */
+function learnerShellProduction(course, bodyHtml, opts = {}) {
+  const progress = ensureLearnerProgress(course.id);
+  const app = document.getElementById('app');
+  const activeLessonId = opts.activeLessonId || null;
+  const isOverview = !!(opts.isOverview);
+
+  // Same-lesson scroll restoration (KC answers, Continue reveals, etc.)
+  const sameLesson = activeLessonId !== null && LearnerUI.lastLessonId === activeLessonId;
+  const prevScrollY = (sameLesson) ? window.scrollY : 0;
+  LearnerUI.lastLessonId = activeLessonId;
+
+  // Single sidebar rendered as drawer (gets id="lp-mobile-sidebar"); CSS makes it
+  // sticky on wide viewports and an off-screen drawer on narrow ones.
+  const sidebarHtml = isOverview ? '' : courseNavSidebar(course, progress, activeLessonId, false, true);
+
+  const prodHeader = `
+    <header style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+      ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="Open navigation">☰</button>` : ''}
+      ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Back</button>` : ''}
+      <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
+      ${progressBarHtml(course, progress)}
+    </header>`;
+
+  app.innerHTML = `
+    <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+      ${prodHeader}
+      <div style="display:flex; position:relative;">
+        ${!isOverview ? `<div id="lp-sidebar-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>` : ''}
+        ${sidebarHtml}
+        <main style="flex:1; min-width:0; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+      </div>
+    </div>
+    <style>
+      /* Wide viewport: sidebar is sticky beside content */
+      @media (min-width: 769px) {
+        #lp-mobile-sidebar {
+          position: sticky !important;
+          transform: none !important;
+          box-shadow: none !important;
+          transition: none !important;
+          z-index: auto !important;
+          top: 0;
+          align-self: flex-start;
+        }
+      }
+      /* Narrow viewport: sidebar becomes an off-screen drawer, hamburger visible */
+      @media (max-width: 768px) {
+        #lp-menu-toggle { display: flex !important; }
+        #lp-mobile-sidebar { position: fixed !important; top: 0; bottom: 0; z-index: 200; }
+      }
+    </style>
+    ${sharedLayoutStyles()}
+  `;
+
+  app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
+  app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
+    if (elx.classList.contains('locked')) return;
+    elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+  });
+  if (!isOverview) wireMobileSidebar(app);
+
+  // Sync sticky sidebar top offset to actual header height on wide viewports
+  requestAnimationFrame(() => {
+    const hdr = app.querySelector('header');
+    const sidebar = app.querySelector('#lp-mobile-sidebar');
+    if (hdr && sidebar && window.innerWidth >= 769) {
+      const h = hdr.offsetHeight;
+      sidebar.style.top = h + 'px';
+      sidebar.style.maxHeight = `calc(100vh - ${h}px)`;
+    }
+  });
+
+  if (sameLesson && prevScrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
+  }
+}
+
 function learnerShell(course, bodyHtml, opts = {}) {
+  if (LearnerUI.publishedMode) {
+    learnerShellProduction(course, bodyHtml, opts);
+    return;
+  }
+
   const progress = ensureLearnerProgress(course.id);
   const app = document.getElementById('app');
   const device = LearnerUI.previewDevice || 'desktop';
