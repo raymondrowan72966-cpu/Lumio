@@ -43,6 +43,7 @@ function renderCourseLanding(courseId) {
           <div class="tab ${course.mode==='preview'?'active':''}" data-mode="preview">👁️ Preview as Learner</div>
         </div>
         <button class="btn btn-secondary btn-sm" id="course-settings">⚙️ Settings</button>
+        <button class="btn btn-primary btn-sm" id="course-publish">🚀 Publish</button>
       </div>
     </header>
     <main class="app-content">
@@ -225,13 +226,9 @@ function openContentMenu(btn, course, kind, id) {
 
   menu.querySelector('[data-action="edit"]').addEventListener('click', () => {
     closePopovers();
-    if (isLesson) {
-      LumioState.currentLessonId = id;
-      if (!LumioState.lessons[id]) LumioState.lessons[id] = [];
-      navigate('#/lesson/' + id);
-    } else {
-      toast('Opening assessment editor (uses the same Lesson Builder canvas)', '✅');
-    }
+    LumioState.currentLessonId = id;
+    if (!LumioState.lessons[id]) LumioState.lessons[id] = [];
+    navigate('#/lesson/' + id);
   });
 
   menu.querySelector('[data-action="duplicate"]').addEventListener('click', () => {
@@ -285,7 +282,7 @@ function confirmDeleteContentItem(course, kind, id) {
         <p class="text-sm text-muted mt-8">This will remove this ${isLesson ? 'lesson' : 'assessment'} from the course. This cannot be undone.</p>
         <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
           <button class="btn btn-ghost" id="cancel-del-content">Cancel</button>
-          <button class="btn" style="background:#E5484D; color:#fff; border-radius:var(--r-pill); padding:12px 22px; font-weight:600; border:none;" id="confirm-del-content">Delete</button>
+          <button class="btn btn-danger" id="confirm-del-content">Delete</button>
         </div>
       </div>
     </div>
@@ -318,6 +315,7 @@ function bindCourseLandingEvents(course) {
   }));
 
   app.querySelector('#course-settings')?.addEventListener('click', () => openCourseSettings(course));
+  app.querySelector('#course-publish')?.addEventListener('click', () => openPublishModal(course));
   app.querySelector('#change-hero')?.addEventListener('click', () => openCourseSettings(course, 'hero'));
   app.querySelector('#start-course')?.addEventListener('click', () => {
     if (course.lessons.length === 0) {
@@ -334,13 +332,9 @@ function bindCourseLandingEvents(course) {
   app.querySelectorAll('.content-card').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.content-drag-handle, .content-title-edit, .content-menu-btn')) return;
-      if (card.dataset.kind === 'lesson') {
-        LumioState.currentLessonId = card.dataset.id;
-        if (!LumioState.lessons[card.dataset.id]) LumioState.lessons[card.dataset.id] = [];
-        navigate('#/lesson/' + card.dataset.id);
-      } else {
-        toast('Opening assessment editor (uses the same Lesson Builder canvas)', '✅');
-      }
+      LumioState.currentLessonId = card.dataset.id;
+      if (!LumioState.lessons[card.dataset.id]) LumioState.lessons[card.dataset.id] = [];
+      navigate('#/lesson/' + card.dataset.id);
     });
   });
 
@@ -536,6 +530,56 @@ function layoutThumbFrame(layoutId) {
     default: // A
       return `<div class="lt-frame" style="flex-direction:column; gap:6px;"><div class="lt-block" style="flex:1; background:${grad};"></div><div class="lt-block" style="height:14px; ${text}"></div></div>`;
   }
+}
+
+/* ============================================================
+   PUBLISH MODAL (Issue 12 — architecture preparation)
+   Publish is a separate workflow from Export Backup (.lumio).
+   Output formats listed here are future-planned; none generate output yet.
+   ============================================================ */
+function openPublishModal(course) {
+  const formats = [
+    { id: 'scorm12',    label: 'SCORM 1.2',          icon: '📦', desc: 'Compatible with most LMS platforms.' },
+    { id: 'scorm2004',  label: 'SCORM 2004 (4th ed)', icon: '📦', desc: 'Modern SCORM with advanced sequencing.' },
+    { id: 'xapi',       label: 'xAPI (Tin Can)',       icon: '🧩', desc: 'Rich data tracking via an LRS.' },
+    { id: 'html',       label: 'HTML Package',         icon: '🌐', desc: 'Self-contained web package.' },
+    { id: 'pdf',        label: 'PDF',                  icon: '📄', desc: 'Print-ready document export.' },
+  ];
+
+  const overlay = el(`
+    <div class="overlay">
+      <div class="modal" style="width:540px; padding:28px;">
+        <div class="flex items-center justify-between mb-4">
+          <h3 style="font-size:16px;">Publish "${course.title}"</h3>
+          <button class="btn-icon" id="publish-close" style="font-size:18px; color:var(--ink-400);">✕</button>
+        </div>
+        <p class="text-sm text-muted mb-20">Choose an output format. Publishing is separate from project backups (.lumio).</p>
+
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:24px;">
+          ${formats.map(f => `
+            <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); opacity:0.7;">
+              <span style="font-size:24px;">${f.icon}</span>
+              <div style="flex:1;">
+                <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
+                <div class="text-sm text-muted">${f.desc}</div>
+              </div>
+              <span class="pill pill-grey" style="font-size:11px;">Coming Soon</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="flex gap-12" style="justify-content:space-between; align-items:center;">
+          <p class="text-sm text-muted" style="max-width:300px;">Publishing formats will be available in the next major release.</p>
+          <button class="btn btn-ghost" id="publish-close-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#publish-close').addEventListener('click', close);
+  overlay.querySelector('#publish-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
 /* ============================================================

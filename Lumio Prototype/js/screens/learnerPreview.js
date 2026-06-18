@@ -73,51 +73,91 @@ function progressBarHtml(course, progress) {
     </div>`;
 }
 
+/* SVG mini-donut for lesson progress state.
+   r=8 gives circumference ≈ 50.3 — arc length = pct * 50.3 */
+function lessonDonut(state) {
+  const C = 50.27; // 2π × 8
+  const color = state === 'complete' ? 'var(--teal)' : state === 'started' ? 'var(--theme-primary, var(--indigo))' : 'var(--border)';
+  const fill = state === 'complete' ? C : state === 'started' ? C * 0.4 : 0;
+  return `<svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0;" aria-hidden="true">
+    <circle cx="10" cy="10" r="8" fill="none" stroke="var(--border)" stroke-width="2.5"/>
+    ${fill > 0 ? `<circle cx="10" cy="10" r="8" fill="none" stroke="${color}" stroke-width="2.5"
+      stroke-dasharray="${fill} ${C}" stroke-dashoffset="${C * 0.25}" stroke-linecap="round"/>` : ''}
+    ${state === 'complete' ? `<circle cx="10" cy="10" r="4" fill="${color}"/>` : ''}
+  </svg>`;
+}
+
 function courseNavSidebar(course, progress, activeLessonId) {
-  // Before the learner clicks "Start Course" (no progress yet, and not
-  // currently inside a lesson), the lesson/assessment list is visible so
-  // they can preview the course structure, but is not yet navigable.
   const locked = activeLessonId === null && progress.completedLessons.length === 0;
+  const pct = course.lessons.length
+    ? Math.round((progress.completedLessons.length / course.lessons.length) * 100) : 0;
+  // A lesson is "started" if it has any blockProgress entries but isn't completed.
+  const startedIds = new Set(
+    Object.keys(progress.blockProgress || {}).map(k => k.split(':')[0])
+      .filter(id => !progress.completedLessons.includes(id))
+  );
   return `
-    <aside style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px;">
-      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:12px;">Lessons</h4>
+    <aside style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0;">
+      <div style="margin-bottom:16px;">
+        <div class="flex items-center justify-between" style="margin-bottom:6px;">
+          <span style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400);">Course Progress</span>
+          <span class="text-sm" style="font-weight:600; color:var(--ink-700);">${pct}%</span>
+        </div>
+        <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
+          <div style="width:${pct}%; height:100%; background:var(--theme-accent, var(--teal)); border-radius:99px; transition:width .3s;"></div>
+        </div>
+      </div>
+      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:8px;">Lessons</h4>
       <div class="flex-col gap-8">
-        ${course.lessons.length ? course.lessons.map(l => `
+        ${course.lessons.length ? course.lessons.map(l => {
+          const isComplete = progress.completedLessons.includes(l.id);
+          const isStarted = !isComplete && startedIds.has(l.id);
+          const state = locked ? 'locked' : isComplete ? 'complete' : isStarted ? 'started' : 'not-started';
+          return `
           <div class="card card-pad lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${locked ? 'locked' : ''}" data-lesson="${l.id}"
             style="display:flex; align-items:center; gap:10px; ${locked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'} ${l.id === activeLessonId ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
-            <span>${locked ? '🔒' : (progress.completedLessons.includes(l.id) ? '✅' : '⬜')}</span>
+            ${locked ? `<span style="font-size:14px;">🔒</span>` : lessonDonut(state)}
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.title}</div>
               <div class="text-sm text-muted">${l.duration || ''}</div>
             </div>
-          </div>
-        `).join('') : `<p class="text-sm text-muted">No lessons yet.</p>`}
+          </div>`;
+        }).join('') : `<p class="text-sm text-muted">No lessons yet.</p>`}
       </div>
       ${course.assessments.length ? `
-      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin:20px 0 12px;">Assessments</h4>
+      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin:20px 0 8px;">Assessments</h4>
       <div class="flex-col gap-8">
-        ${course.assessments.map(a => `
-          <div class="card card-pad" style="opacity:${locked ? '0.55' : '0.7'}; display:flex; align-items:center; gap:10px;">
-            <span>${locked ? '🔒' : '📝'}</span>
+        ${course.assessments.map(a => {
+          const allLessonsDone = course.lessons.length === 0 || course.lessons.every(l => progress.completedLessons.includes(l.id));
+          const assessmentLocked = locked || !allLessonsDone;
+          const isActive = a.id === activeLessonId;
+          return `
+          <div class="card card-pad lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}"
+            style="display:flex; align-items:center; gap:10px; ${assessmentLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'} ${isActive ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
+            <span>${assessmentLocked ? '🔒' : '📝'}</span>
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.title}</div>
               <div class="text-sm text-muted">${a.type || 'Quiz'}</div>
             </div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>` : ''}
     </aside>`;
 }
 
 const LEARNER_DEVICE_FRAMES = {
-  desktop: { width: null, label: '🖥️ Desktop' },
-  tablet: { width: '768px', label: '📱 Tablet' },
-  mobile: { width: '390px', label: '📲 Mobile' },
+  desktop: { width: '1080px', label: '🖥️ Desktop' },
+  tablet:  { width: '768px',  label: '📱 Tablet' },
+  mobile:  { width: '390px',  label: '📲 Mobile' },
 };
 
 function learnerDeviceFrameStyle(device) {
   const frame = LEARNER_DEVICE_FRAMES[device] || LEARNER_DEVICE_FRAMES.desktop;
-  if (!frame.width) return 'width:100%; height:100%;';
+  // Desktop: capped reading width, no device chrome.
+  // Tablet/Mobile: simulated device frame with border + shadow.
+  if (device === 'desktop') {
+    return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto;`;
+  }
   return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); background:var(--theme-bg-style, var(--surface-0));`;
 }
 
@@ -146,18 +186,26 @@ function learnerShell(course, bodyHtml, opts = {}) {
   if (LearnerUI.fullScreen) {
     app.innerHTML = `
       <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
-        <div class="flex items-center justify-end" style="padding:10px 16px; flex-shrink:0;">
-          <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen Preview</button>
+        <div class="flex items-center justify-end" style="padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
+          <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
         </div>
-        <div style="flex:1; overflow:auto; display:flex; justify-content:center; padding:0 0 24px;">
-          <div style="${frameStyle}">
-            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+        <div style="flex:1; display:flex; min-height:0;">
+          ${courseNavSidebar(course, progress, activeLessonId)}
+          <div style="flex:1; overflow:auto; display:flex; justify-content:center; padding:0 0 24px;">
+            <div style="${frameStyle}">
+              <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+            </div>
           </div>
         </div>
       </div>
-      ${canvasStyles()}
+      ${sharedLayoutStyles()}
     `;
     app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
+    // Issue 5: wire both lesson AND assessment nav items in fullscreen mode.
+    app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
+      if (elx.classList.contains('locked')) return;
+      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+    });
     if (sameLesson) {
       const main = app.querySelector('main');
       if (main) main.scrollTop = prevScroll;
@@ -190,7 +238,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
         </div>
       </div>
     </div>
-    ${canvasStyles()}
+    ${sharedLayoutStyles()}
   `;
   app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
   app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
@@ -200,7 +248,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
     LearnerUI.previewDevice = btn.dataset.val;
     reRender();
   }));
-  app.querySelectorAll('.lp-nav-lesson').forEach(elx => {
+  app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
     if (elx.classList.contains('locked')) return;
     elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
   });
@@ -256,26 +304,44 @@ function renderLearnerCourseOverview(course) {
 /* ---------------- LESSON PLAYBACK ---------------- */
 function renderLearnerLesson(course, lessonId) {
   const progress = ensureLearnerProgress(course.id);
-  const lessonIdx = course.lessons.findIndex(l => l.id === lessonId);
-  if (lessonIdx === -1) { navigate('#/learner/' + course.id); return; }
 
-  const lesson = course.lessons[lessonIdx];
+  // Check if this is an assessment (not a regular lesson).
+  const assessmentIdx = (course.assessments || []).findIndex(a => a.id === lessonId);
+  const isAssessment = assessmentIdx !== -1;
+
+  const lessonIdx = isAssessment ? -1 : course.lessons.findIndex(l => l.id === lessonId);
+  if (!isAssessment && lessonIdx === -1) { navigate('#/learner/' + course.id); return; }
+
+  const lesson = isAssessment ? course.assessments[assessmentIdx] : course.lessons[lessonIdx];
   const blocks = LumioState.lessons[lessonId] || [];
   const ctx = { courseId: course.id, lessonId, progress };
   LearnerUI.activeCtx = ctx;
-  const isLast = lessonIdx === course.lessons.length - 1;
+
+  const isLastLesson = !isAssessment && lessonIdx === course.lessons.length - 1;
+  const hasAssessments = (course.assessments || []).length > 0;
+  // After last lesson, go to first assessment if one exists; otherwise finish course.
+  const nextAfterLastLesson = isLastLesson && hasAssessments ? course.assessments[0].id : null;
+  const isLastAssessment = isAssessment && assessmentIdx === course.assessments.length - 1;
+  const nextLabel = isAssessment
+    ? (isLastAssessment ? 'Finish Course ✓' : 'Next Assessment →')
+    : (isLastLesson ? (hasAssessments ? 'Take Assessment →' : 'Finish Course ✓') : 'Next →');
+
+  const prevId = isAssessment
+    ? (assessmentIdx > 0 ? course.assessments[assessmentIdx - 1].id : (course.lessons.length ? course.lessons[course.lessons.length - 1].id : null))
+    : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
   const body = `
-    <div style="max-width:720px; margin:0 auto; padding:40px 24px 40px; width:100%; flex:1;">
-      <div class="flex items-center justify-between mb-16">
+    <div style="max-width:860px; margin:0 auto; padding:40px 32px 40px; width:100%; flex:1;">
+      <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
         <h2 style="font-size:calc(var(--theme-font-size, 16px) + 4px); font-family:var(--theme-font-display, var(--font-display));">${lesson.title}</h2>
         ${lesson.duration ? `<span class="pill pill-grey">${lesson.duration}</span>` : ''}
+        ${isAssessment ? '<span class="pill pill-cyan">Assessment</span>' : ''}
       </div>
       ${renderLearnerBlocks(blocks, ctx)}
     </div>
     <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center;">
-      <button class="btn btn-secondary" id="lp-prev" ${lessonIdx === 0 ? 'disabled' : ''}>← Previous</button>
-      <button class="btn btn-primary" id="lp-next">${isLast ? 'Finish Course ✓' : 'Next →'}</button>
+      <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>← Previous</button>
+      <button class="btn btn-primary" id="lp-next">${nextLabel}</button>
     </div>
   `;
 
@@ -283,13 +349,26 @@ function renderLearnerLesson(course, lessonId) {
   bindLearnerBlockEvents(course, blocks, ctx);
 
   document.getElementById('lp-prev')?.addEventListener('click', () => {
-    if (lessonIdx > 0) navigate('#/learner/' + course.id + '/' + course.lessons[lessonIdx - 1].id);
+    if (prevId) navigate('#/learner/' + course.id + '/' + prevId);
   });
   document.getElementById('lp-next')?.addEventListener('click', () => {
-    if (!progress.completedLessons.includes(lessonId)) progress.completedLessons.push(lessonId);
-    if (isLast) {
-      navigate('#/learner/' + course.id);
-      setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
+    if (!isAssessment && !progress.completedLessons.includes(lessonId)) {
+      progress.completedLessons.push(lessonId);
+    }
+    if (isAssessment) {
+      if (isLastAssessment) {
+        navigate('#/learner/' + course.id);
+        setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
+      } else {
+        navigate('#/learner/' + course.id + '/' + course.assessments[assessmentIdx + 1].id);
+      }
+    } else if (isLastLesson) {
+      if (nextAfterLastLesson) {
+        navigate('#/learner/' + course.id + '/' + nextAfterLastLesson);
+      } else {
+        navigate('#/learner/' + course.id);
+        setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
+      }
     } else {
       navigate('#/learner/' + course.id + '/' + course.lessons[lessonIdx + 1].id);
     }
@@ -317,13 +396,13 @@ function renderLearnerBlocks(blocks, ctx) {
     const { treatment } = DesignSystem.resolveBlockStyle(block);
     let wrapperStyle;
     if (treatment === 'cardless') {
-      // Match the Builder canvas: cardless blocks render as flat page
-      // content with no card chrome, only spacing between blocks.
-      wrapperStyle = `background:transparent; box-shadow:none; border-radius:0; margin-bottom:16px; padding:22px; ${extraStyle}`;
+      // Cardless: flat page content, no card chrome, consistent spacing token.
+      wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${FLOW_SPACING}; padding:22px; ${extraStyle}`;
     } else {
+      // Card-treatment: white background, 1px border, NO shadow (Preview = Published rule).
       const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
       const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
-      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:var(--shadow-soft); margin-bottom:16px; padding:22px; ${extraStyle}`;
+      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:none; border:1px solid var(--border); margin-bottom:${FLOW_SPACING}; padding:22px; ${extraStyle}`;
     }
     html += `<div data-lp-lesson="${ctx.lessonId}" data-lp-index="${i}" style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
     if (block.type === 'continue' && !revealed.has(i)) break;

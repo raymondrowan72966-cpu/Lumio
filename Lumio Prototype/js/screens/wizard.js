@@ -679,6 +679,10 @@ function createCourseFromWizard(blueprint) {
     thumb: Math.floor(Math.random()*LumioData.thumbGradients.length),
     health: 60,
     lastAccessed: Date.now(),
+    ownerId: LumioState.currentUser.id,
+    sharedWith: [],
+    sharedScope: null,
+    sharedPermission: 'view',
   });
 
   // seed empty lesson content for created lessons

@@ -201,7 +201,12 @@ function generateUniqueId(prefix) {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 9;
+const LUMIO_STATE_VERSION = 10;
+
+/* Shared block-gap tokens — single source of truth used by both builder and
+   learner preview so spacing can never silently diverge between contexts. */
+const FLOW_SPACING = '32px';
+const FLOW_SPACING_TIGHT = '8px';
 
 // Keys of LumioState that should be persisted/restored across sessions.
 const LUMIO_PERSISTED_KEYS = [
@@ -395,6 +400,22 @@ function migrateLumioState(record) {
     version = 9;
   }
 
+  if (version < 10) {
+    // v10 introduces project ownership + sharing model. All existing projects
+    // are owned by the workspace owner ('u-owner') and start unshared.
+    (state.projects || []).forEach(p => {
+      if (p.ownerId === undefined) p.ownerId = 'u-owner';
+      if (p.sharedWith === undefined) p.sharedWith = [];
+      if (p.sharedScope === undefined) p.sharedScope = null;
+      if (p.sharedPermission === undefined) p.sharedPermission = 'view';
+    });
+    // Ensure folder objects have a color property (older saves may lack it).
+    (state.folders || []).forEach(f => {
+      if (!f.color) f.color = 'purple';
+    });
+    version = 10;
+  }
+
   return state;
 }
 
@@ -463,6 +484,112 @@ function scheduleLumioSave() {
   touchCurrentProject();
   if (lumioSaveTimer) clearTimeout(lumioSaveTimer);
   lumioSaveTimer = setTimeout(saveLumioState, 400);
+}
+
+/* ---------------- EXPORT / IMPORT ENGINE ---------------- */
+const LUMIO_FILE_VERSION = 1;
+
+function exportProject(id) {
+  const p = LumioState.projects.find(x => x.id === id);
+  if (!p) return;
+  const course = LumioState.courses[id] ? JSON.parse(JSON.stringify(LumioState.courses[id])) : null;
+  const lessonIds = course ? (course.lessons || []).map(l => l.id) : [];
+  const assessmentIds = course ? (course.assessments || []).map(a => a.id) : [];
+  const lessons = {};
+  [...lessonIds, ...assessmentIds].forEach(lid => {
+    if (LumioState.lessons[lid]) lessons[lid] = JSON.parse(JSON.stringify(LumioState.lessons[lid]));
+  });
+
+  const payload = {
+    lumioFile: LUMIO_FILE_VERSION,
+    exportedAt: Date.now(),
+    project: JSON.parse(JSON.stringify(p)),
+    course,
+    lessons,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (p.title || 'project').replace(/[^a-z0-9 _-]/gi, '_') + '.lumio';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`"${p.title}" backup exported`, '📦');
+}
+
+function importProject(file) {
+  // Validate file extension before reading — reject unsupported formats clearly.
+  const name = (file.name || '').toLowerCase();
+  if (!name.endsWith('.lumio')) {
+    const unsupported = ['.zip','.story','.scorm','.xapi'].some(ext => name.endsWith(ext));
+    if (unsupported) {
+      toast('Unsupported format — Lumio only imports .lumio backup files', '⚠️');
+    } else {
+      toast('Unrecognised file — please choose a .lumio backup file', '⚠️');
+    }
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.lumioFile || !payload.project) {
+        toast('Invalid .lumio file — file may be corrupt or from an incompatible version', '⚠️');
+        return;
+      }
+
+      // Remap IDs to avoid collisions with existing state.
+      const idMap = {};
+      const remap = (oldId, prefix) => {
+        if (!idMap[oldId]) idMap[oldId] = generateUniqueId(prefix);
+        return idMap[oldId];
+      };
+
+      const p = JSON.parse(JSON.stringify(payload.project));
+      const oldProjectId = p.id;
+      p.id = remap(oldProjectId, 'p');
+      p.title = (p.title || 'Imported Project') + ' (Imported)';
+      p.lastAccessed = Date.now();
+      p.deleted = false;
+      p.deletedAt = null;
+      p.ownerId = LumioState.currentUser.id;
+      p.sharedWith = [];
+      p.sharedScope = null;
+      p.sharedPermission = 'view';
+
+      let course = null;
+      if (payload.course) {
+        course = JSON.parse(JSON.stringify(payload.course));
+        course.id = p.id;
+        course.title = p.title;
+
+        (course.lessons || []).forEach(l => { l.id = remap(l.id, 'l'); });
+        (course.assessments || []).forEach(a => { a.id = remap(a.id, 'a'); });
+      }
+
+      const lessons = {};
+      Object.entries(payload.lessons || {}).forEach(([oldId, blocks]) => {
+        const newId = idMap[oldId] || remap(oldId, 'l');
+        lessons[newId] = JSON.parse(JSON.stringify(blocks));
+      });
+
+      // Inject into state.
+      LumioState.projects.unshift(p);
+      if (course) LumioState.courses[p.id] = course;
+      Object.assign(LumioState.lessons, lessons);
+      saveLumioState();
+      renderProjects();
+      toast(`"${payload.project.title}" imported`, '📥');
+    } catch (err) {
+      console.error('Lumio import error', err);
+      toast('Could not import file — it may be corrupt', '⚠️');
+    }
+  };
+  reader.readAsText(file);
 }
 
 /* ---------------- ROUTER ---------------- */

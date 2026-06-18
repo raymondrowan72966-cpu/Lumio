@@ -175,9 +175,13 @@ function canvasStyles() {
       .block-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 6px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); cursor:grab; font-size:11px; text-align:center; color:var(--ink-700); transition:all .12s; }
       .block-tile:hover { border-color:var(--indigo); background:var(--pastel-lavender); transform:translateY(-1px); }
       .block-tile .tile-icon { font-size:18px; }
-      .editable-text { outline:none; cursor:text; border-radius:4px; transition:background-color .12s; }
-      .editable-text:hover { background:rgba(20,20,30,0.025); }
-      .editable-text:focus { background:rgba(20,20,30,0.035); }
+      .editable-text { outline:none; border-radius:4px; transition:background-color .12s; }
+      /* Hover/focus affordances are builder-only — scoped to .canvas-block so
+         they never fire inside the learner preview even though canvasStyles()
+         is shared for the @container quote-layout queries below. */
+      .canvas-block .editable-text { cursor:text; }
+      .canvas-block .editable-text:hover { background:rgba(20,20,30,0.025); }
+      .canvas-block .editable-text:focus { background:rgba(20,20,30,0.035); }
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
 
       /* Document-style insertion points — single reusable component used
@@ -241,6 +245,20 @@ function canvasStyles() {
          Uses a container query (against #lesson-canvas / <main>, which have
          container-type:inline-size) so this responds to the Learner Preview
          device frame width, not just the browser viewport. */
+      @container (max-width: 480px) {
+        .quote3-layout, .quote4-layout { flex-direction:column; align-items:center; text-align:center; }
+        .quote4-layout { padding:18px; }
+        .quote4-layout > div:last-child { border-left:none; border-top:3px solid var(--theme-primary, var(--indigo)); padding-left:0; padding-top:12px; text-align:center; }
+      }
+    </style>
+  `;
+}
+
+/* Styles shared by both the builder canvas AND the learner preview.
+   Only layout/responsive rules live here — no authoring affordances. */
+function sharedLayoutStyles() {
+  return `
+    <style>
       @container (max-width: 480px) {
         .quote3-layout, .quote4-layout { flex-direction:column; align-items:center; text-align:center; }
         .quote4-layout { padding:18px; }
@@ -818,8 +836,8 @@ const CARDLESS_BLOCK_TYPES = new Set([
 ]);
 
 /* Document-flow vertical rhythm for cardless blocks. */
-const FLOW_SPACING = '20px';   // default rhythm between cardless blocks (16-24px range)
-const FLOW_SPACING_TIGHT = '8px'; // tighter spacing for closely-related content
+// FLOW_SPACING / FLOW_SPACING_TIGHT are defined globally in app.js so both
+// the builder and learner preview reference the same spacing tokens.
 
 const HEADING_BLOCK_TYPES = new Set(['heading', 'heading_paragraph']);
 const LIST_BLOCK_TYPES = new Set(['list_numbered', 'list_checkbox', 'list_bullet']);
@@ -864,16 +882,18 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   const cardlessSelectionStyle = isTextAuthoringBlock
     ? `outline:1px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'}; outline-offset:6px; border-radius:4px; transition:outline-color .12s;`
     : `outline:2px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'}; outline-offset:2px; transition:outline-color .12s;`;
+  // Toolbar floats ABOVE the block boundary — overflow:visible lets it escape
+  // the wrapper without needing any padding-top reserve inside the content area.
   const wrapperStyle = treatment === 'cardless'
-    ? `position:relative; border-radius:0; margin-bottom:${cardlessMargin};
+    ? `position:relative; overflow:visible; border-radius:0; margin-bottom:${cardlessMargin};
        ${cardlessSelectionStyle}
        background:transparent; box-shadow:none;`
-    : `position:relative; ${radiusStyle} border:1px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'};
-       margin-bottom:4px; transition:border-color .12s; ${bgStyle || 'background:transparent;'}
+    : `position:relative; overflow:visible; ${radiusStyle} border:1px solid ${isSelected ? SELECTION_OUTLINE_COLOR : 'transparent'};
+       margin-bottom:${FLOW_SPACING}; transition:border-color .12s; ${bgStyle || 'background:transparent;'}
        box-shadow:none;`;
   return `
     <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="${wrapperStyle}"${ariaHidden}>
-      <div class="block-toolbar" style="position:absolute; top:-14px; left:14px; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:5;">
+      <div class="block-toolbar" style="position:absolute; top:-34px; left:0; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:10;">
         <span class="drag-handle" draggable="true" data-index="${index}" title="Drag to reorder"
           style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">⠿ ${blockLabel(block.type)}</span>
         <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✨</button>
@@ -2549,8 +2569,7 @@ function renderTextBlockPanel(block, index) {
       ${segControl('design-bgtype', 'bgType', [{ id: 'light', label: 'Light' }, { id: 'grey', label: 'Grey' }, { id: 'dark', label: 'Dark' }, { id: 'custom', label: 'Custom' }, { id: 'image', label: 'Image' }], ds.bgType || 'light')}
       ${ds.bgType === 'custom' ? `<input type="color" class="input mt-8 text-bg-custom-color" value="${ds.bgColor || '#ffffff'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />` : ''}
       ${ds.bgType === 'image' ? `
-        <input type="file" accept="image/*" class="input mt-8 text-bg-image-upload" />
-        ${ds.bgImage ? `<img src="${ds.bgImage}" style="max-width:100%; height:60px; object-fit:cover; border-radius:var(--r-sm); margin-top:8px;" />` : ''}
+        ${mediaPickerImageField(ds, 'bgImage', 'Background Image')}
         <p class="text-sm text-muted mt-8 mb-8">Image Fit</p>
         ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
       ` : ''}
@@ -2673,8 +2692,7 @@ function renderStatementBlockPanel(block, index) {
       ${segControl('design-bgtype', 'bgType', [{ id: 'theme', label: 'Theme' }, { id: 'light', label: 'Light' }, { id: 'grey', label: 'Grey' }, { id: 'dark', label: 'Dark' }, { id: 'custom', label: 'Custom' }, { id: 'image', label: 'Image' }], ds.bgType || 'theme')}
       ${ds.bgType === 'custom' ? `<input type="color" class="input mt-8 text-bg-custom-color" value="${ds.bgColor || '#ffffff'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />` : ''}
       ${ds.bgType === 'image' ? `
-        <input type="file" accept="image/*" class="input mt-8 text-bg-image-upload" />
-        ${ds.bgImage ? `<img src="${ds.bgImage}" style="max-width:100%; height:60px; object-fit:cover; border-radius:var(--r-sm); margin-top:8px;" />` : ''}
+        ${mediaPickerImageField(ds, 'bgImage', 'Background Image')}
         <p class="text-sm text-muted mt-8 mb-8">Image Fit</p>
         ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
       ` : ''}
@@ -5624,19 +5642,6 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelector('.text-bg-custom-color')?.addEventListener('change', () => {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
-  });
-  app.querySelector('.text-bg-image-upload')?.addEventListener('change', (e) => {
-    const block = blocks[BuilderUI.selected];
-    const file = e.target.files && e.target.files[0];
-    if (!block || !file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      block.design = block.design || {};
-      block.design.bgImage = reader.result;
-      renderLessonBuilder(lesson.id);
-      flashSaveStatus();
-    };
-    reader.readAsDataURL(file);
   });
 
   // Media Picker — generic image field triggers (e.g. Quote avatars, Quote on Image background)
