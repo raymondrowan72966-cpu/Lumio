@@ -177,7 +177,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   outline: none;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22);
 }
-.btn-primary:focus-visible { box-shadow: var(--shadow-soft), 0 0 0 3px rgba(124, 58, 237, 0.22); }
+.btn-primary:focus-visible { box-shadow: var(--elevation-1), 0 0 0 3px rgba(124, 58, 237, 0.22); }
 
 .btn-primary {
   background: linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%);
@@ -275,8 +275,8 @@ button { font-family: var(--font-body); cursor: pointer; }
   padding: 14px;
   text-align: center;
   overflow: hidden;
-  box-shadow: var(--shadow-soft);
-  border: none;
+  box-shadow: none;
+  border: 1px solid var(--border);
 }
 .flip-card-back { transform: rotateY(180deg); }
 .flip-card-flipicon {
@@ -997,7 +997,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-radius: 50%; border: 2px solid #fff;
   color: #fff; font-weight: 700; font-size: 13px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; box-shadow: var(--shadow-soft);
+  cursor: pointer; box-shadow: none;
   transition: transform 0.15s ease;
   padding: 0; line-height: 1;
 }
@@ -1080,7 +1080,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .lumio-scenario-dialogue { color: #fff; }
 .lumio-scenario-dialogue[data-style="card"] {
   background: rgba(255,255,255,0.96); color: var(--ink-900);
-  border-radius: var(--r-lg); padding: 18px 20px; box-shadow: var(--shadow-md);
+  border-radius: var(--r-lg); padding: 18px 20px; box-shadow: none; border: 1px solid rgba(255,255,255,0.6);
   max-width: 560px; margin-left: auto; margin-right: auto;
 }
 .lumio-scenario-dialogue[data-style="banner"] {

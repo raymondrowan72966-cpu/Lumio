@@ -11,6 +11,9 @@ function ensureCourseDesign(course) {
     };
   }
   if (!course.landingLayout) course.landingLayout = 'A';
+  if (!course.language) course.language = 'English';
+  if (!course.publishHistory) course.publishHistory = [];
+  if (!course.publishVersion) course.publishVersion = '1.0';
   ensureHeroDefaults(course);
   ensureThumbnailDefaults(course);
   ensureLandingStyles(course);
@@ -537,49 +540,191 @@ function layoutThumbFrame(layoutId) {
    Publish is a separate workflow from Export Backup (.lumio).
    Output formats listed here are future-planned; none generate output yet.
    ============================================================ */
+/* ============================================================
+   PUBLISH MODAL
+   Architecture foundation — package generation not yet implemented.
+   Sprint 3A: UI, readiness validation, course summary, history model.
+   ============================================================ */
+
+const PUBLISH_FORMATS = [
+  { id: 'scorm12',      label: 'SCORM 1.2',                  icon: '📦', desc: 'Compatible with most Learning Management Systems.' },
+  { id: 'scorm2004_2',  label: 'SCORM 2004 (2nd Edition)',    icon: '📦', desc: 'SCORM 2004 with improved sequencing support.' },
+  { id: 'scorm2004_3',  label: 'SCORM 2004 (3rd Edition)',    icon: '📦', desc: 'SCORM 2004 with enhanced navigation controls.' },
+  { id: 'scorm2004_4',  label: 'SCORM 2004 (4th Edition)',    icon: '📦', desc: 'Latest SCORM 2004 with advanced sequencing and branching.' },
+  { id: 'xapi',         label: 'xAPI (Tin Can)',              icon: '🧩', desc: 'Rich learning data tracking via a Learning Record Store (LRS).' },
+  { id: 'html',         label: 'HTML Web Package',            icon: '🌐', desc: 'Self-contained web package — host on any web server.' },
+  { id: 'pdf',          label: 'PDF Document',                icon: '📄', desc: 'Print-ready document export for offline reference.' },
+];
+
+function getCourseReadinessIssues(course) {
+  const issues = [];
+  if (!course.title || !course.title.trim()) issues.push('Course title is missing');
+  if (!course.description || !course.description.trim()) issues.push('Course description is missing');
+  if (!course.lessons || course.lessons.length === 0) issues.push('At least one lesson is required');
+  return issues;
+}
+
 function openPublishModal(course) {
-  const formats = [
-    { id: 'scorm12',    label: 'SCORM 1.2',          icon: '📦', desc: 'Compatible with most LMS platforms.' },
-    { id: 'scorm2004',  label: 'SCORM 2004 (4th ed)', icon: '📦', desc: 'Modern SCORM with advanced sequencing.' },
-    { id: 'xapi',       label: 'xAPI (Tin Can)',       icon: '🧩', desc: 'Rich data tracking via an LRS.' },
-    { id: 'html',       label: 'HTML Package',         icon: '🌐', desc: 'Self-contained web package.' },
-    { id: 'pdf',        label: 'PDF',                  icon: '📄', desc: 'Print-ready document export.' },
-  ];
+  ensureCourseDesign(course); // ensures publishHistory, publishVersion, language
+  const issues = getCourseReadinessIssues(course);
+  const isReady = issues.length === 0;
+  const totalMinutes = estimateCourseDuration(course);
+  let activeTab = 'publish';
 
-  const overlay = el(`
-    <div class="overlay">
-      <div class="modal" style="width:540px; padding:28px;">
-        <div class="flex items-center justify-between mb-4">
-          <h3 style="font-size:16px;">Publish "${course.title}"</h3>
-          <button class="btn-icon" id="publish-close" style="font-size:18px; color:var(--ink-400);">✕</button>
+  function buildModalHtml() {
+    const readinessBanner = !isReady ? `
+      <div style="background:var(--pastel-warning, #fff8e1); border:1px solid var(--orange); border-radius:var(--r-md); padding:14px 16px; margin-bottom:20px;">
+        <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">⚠️ Course is not ready for publishing</div>
+        <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+          ${issues.map(i => `<li class="text-sm" style="color:var(--ink-700);">${i}</li>`).join('')}
+        </ul>
+      </div>` : '';
+
+    const summaryPanel = `
+      <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:16px 18px; margin-bottom:20px;">
+        <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Course Summary</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;">
+          <div><span class="text-sm text-muted">Title</span><div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title || '—'}</div></div>
+          <div><span class="text-sm text-muted">Language</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.language || 'English'}</div></div>
+          <div><span class="text-sm text-muted">Lessons</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.lessons.length}</div></div>
+          <div><span class="text-sm text-muted">Assessments</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.assessments.length}</div></div>
+          <div><span class="text-sm text-muted">Estimated Duration</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${totalMinutes > 0 ? totalMinutes + ' min' : '—'}</div></div>
+          <div><span class="text-sm text-muted">Version</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.publishVersion}</div></div>
         </div>
-        <p class="text-sm text-muted mb-20">Choose an output format. Publishing is separate from project backups (.lumio).</p>
+      </div>`;
 
-        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:24px;">
-          ${formats.map(f => `
-            <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); opacity:0.7;">
-              <span style="font-size:24px;">${f.icon}</span>
-              <div style="flex:1;">
-                <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
-                <div class="text-sm text-muted">${f.desc}</div>
-              </div>
-              <span class="pill pill-grey" style="font-size:11px;">Coming Soon</span>
+    const formatsHtml = PUBLISH_FORMATS.map(f => `
+      <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady && !(f.id === 'html') ? 'opacity:0.5;' : !isReady ? 'opacity:0.5;' : ''}">
+        <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
+          <div class="text-sm text-muted">${f.desc}</div>
+        </div>
+        ${f.id === 'html' && isReady
+          ? `<button class="btn btn-primary btn-sm" data-publish-html style="font-size:12px; white-space:nowrap;">Publish</button>`
+          : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
+      </div>`).join('');
+
+    const historyRows = course.publishHistory.length === 0
+      ? `<tr><td colspan="4" style="text-align:center; padding:32px 0; color:var(--ink-400); font-size:13px;">No publish history yet.</td></tr>`
+      : course.publishHistory.map(h => `
+        <tr>
+          <td style="padding:10px 12px; font-size:13px;">${new Date(h.date).toLocaleDateString()}</td>
+          <td style="padding:10px 12px; font-size:13px;">${h.format}</td>
+          <td style="padding:10px 12px; font-size:13px;">v${h.version}</td>
+          <td style="padding:10px 12px; font-size:13px;"><span class="pill pill-${h.status === 'success' ? 'teal' : 'grey'}">${h.status}</span></td>
+        </tr>`).join('');
+
+    const publishTabContent = `
+      ${readinessBanner}
+      ${summaryPanel}
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${formatsHtml}
+      </div>`;
+
+    const historyTabContent = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+              <th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Date</th>
+              <th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Format</th>
+              <th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Version</th>
+              <th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${historyRows}</tbody>
+        </table>
+      </div>`;
+
+    return `
+      <div class="overlay" id="publish-overlay">
+        <div class="modal" style="width:600px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; padding:0;">
+          <div class="flex items-center justify-between" style="padding:22px 28px 0; flex-shrink:0;">
+            <div>
+              <h3 style="font-size:18px;">🚀 Publish Course</h3>
+              <p class="text-sm text-muted mt-4">Choose a delivery format. Publishing is separate from project backups (.lumio).</p>
             </div>
-          `).join('')}
+            <button class="btn-icon" id="publish-close" style="font-size:18px; color:var(--ink-400); align-self:flex-start;">✕</button>
+          </div>
+          <div class="tabs" style="padding:0 28px; margin-top:16px; flex-shrink:0;">
+            <div class="tab ${activeTab === 'publish' ? 'active' : ''}" data-tab="publish">Publish</div>
+            <div class="tab ${activeTab === 'history' ? 'active' : ''}" data-tab="history">History${course.publishHistory.length ? ` (${course.publishHistory.length})` : ''}</div>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:20px 28px 24px;" id="publish-tab-body">
+            ${activeTab === 'publish' ? publishTabContent : historyTabContent}
+          </div>
+          <div style="padding:16px 28px; border-top:1px solid var(--border); flex-shrink:0; display:flex; justify-content:flex-end;">
+            <button class="btn btn-ghost" id="publish-close-btn">Close</button>
+          </div>
         </div>
+      </div>`;
+  }
 
-        <div class="flex gap-12" style="justify-content:space-between; align-items:center;">
-          <p class="text-sm text-muted" style="max-width:300px;">Publishing formats will be available in the next major release.</p>
-          <button class="btn btn-ghost" id="publish-close-btn">Close</button>
-        </div>
-      </div>
-    </div>
-  `);
+  const overlay = el(buildModalHtml());
   document.body.appendChild(overlay);
+
   const close = () => overlay.remove();
   overlay.querySelector('#publish-close').addEventListener('click', close);
   overlay.querySelector('#publish-close-btn').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelectorAll('.tab[data-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      activeTab = tab.dataset.tab;
+      overlay.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === activeTab));
+      const body = overlay.querySelector('#publish-tab-body');
+      const totalMinutesInner = estimateCourseDuration(course);
+      const summaryPanelInner = `
+        <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:16px 18px; margin-bottom:20px;">
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Course Summary</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;">
+            <div><span class="text-sm text-muted">Title</span><div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title || '—'}</div></div>
+            <div><span class="text-sm text-muted">Language</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.language || 'English'}</div></div>
+            <div><span class="text-sm text-muted">Lessons</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.lessons.length}</div></div>
+            <div><span class="text-sm text-muted">Assessments</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.assessments.length}</div></div>
+            <div><span class="text-sm text-muted">Estimated Duration</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${totalMinutesInner > 0 ? totalMinutesInner + ' min' : '—'}</div></div>
+            <div><span class="text-sm text-muted">Version</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.publishVersion}</div></div>
+          </div>
+        </div>`;
+      if (activeTab === 'publish') {
+        const readinessBannerInner = !isReady ? `
+          <div style="background:var(--pastel-warning, #fff8e1); border:1px solid var(--orange); border-radius:var(--r-md); padding:14px 16px; margin-bottom:20px;">
+            <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">⚠️ Course is not ready for publishing</div>
+            <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+              ${issues.map(i => `<li class="text-sm" style="color:var(--ink-700);">${i}</li>`).join('')}
+            </ul>
+          </div>` : '';
+        body.innerHTML = readinessBannerInner + summaryPanelInner + `<div style="display:flex; flex-direction:column; gap:8px;">${PUBLISH_FORMATS.map(f => `
+          <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
+            <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
+              <div class="text-sm text-muted">${f.desc}</div>
+            </div>
+            ${f.id === 'html' && isReady
+              ? `<button class="btn btn-primary btn-sm" data-publish-html style="font-size:12px; white-space:nowrap;">Publish</button>`
+              : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
+          </div>`).join('')}</div>`;
+      } else {
+        const rows = course.publishHistory.length === 0
+          ? `<tr><td colspan="4" style="text-align:center; padding:32px 0; color:var(--ink-400); font-size:13px;">No publish history yet.</td></tr>`
+          : course.publishHistory.map(h => `
+            <tr>
+              <td style="padding:10px 12px; font-size:13px;">${new Date(h.date).toLocaleDateString()}</td>
+              <td style="padding:10px 12px; font-size:13px;">${h.format}</td>
+              <td style="padding:10px 12px; font-size:13px;">v${h.version}</td>
+              <td style="padding:10px 12px; font-size:13px;"><span class="pill pill-${h.status === 'success' ? 'teal' : 'grey'}">${h.status}</span></td>
+            </tr>`).join('');
+        body.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border);"><th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Date</th><th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Format</th><th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Version</th><th style="text-align:left; padding:8px 12px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-400); font-weight:600;">Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      }
+    });
+  });
+
+  overlay.addEventListener('click', e => {
+    const btn = e.target.closest('[data-publish-html]');
+    if (btn) publishHtmlPackage(course, btn);
+  });
 }
 
 /* ============================================================

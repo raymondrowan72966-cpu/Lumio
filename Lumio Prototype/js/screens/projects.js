@@ -69,7 +69,7 @@ function renderProjects() {
           <option ${LumioState.typeFilter==='Microlearning'?'selected':''}>Microlearning</option>
         </select>
         <button class="btn btn-ghost" id="import-project-btn" title="Import .lumio backup file">⬆ Import</button>
-        <input type="file" id="import-file-input" accept=".lumio,application/json" style="display:none;">
+        <input type="file" id="import-file-input" accept=".lumio" style="display:none;">
         <button class="btn btn-primary" id="create-new-btn">+ Create New</button>
       </div>
     </header>
@@ -92,15 +92,12 @@ function renderProjects() {
         <div style="display:flex; gap:12px; flex-wrap:wrap;" class="mb-32">
           ${teamProjectsChip()}
           ${LumioState.folders.map(f => folderChip(f)).join('')}
-          <div class="pill" style="background:var(--surface-0); border:1px dashed var(--border); color:var(--ink-400); cursor:pointer; padding:10px 18px;" id="all-projects-chip">
-            🗂️ All Projects
-          </div>
         </div>
         ` : `
         <button class="btn btn-ghost btn-sm mb-16" id="back-to-all">← All Projects</button>
         `}
 
-        <h3 class="mb-16" style="font-size:15px;">${folder ? folder.name : (LumioState.searchQuery ? 'Search Results' : 'All Projects')}</h3>
+        <h3 class="mb-16" style="font-size:15px;">${folder ? folder.name : (LumioState.searchQuery ? 'Search Results' : `All Projects (${LumioState.projects.filter(p => !p.deleted).length})`)}</h3>
         <div id="projects-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px;">
           ${projects.length ? projects.map(p => projectCard(p)).join('') : emptyState()}
         </div>
@@ -142,6 +139,7 @@ function teamProjectsChip() {
     </div>
   `;
 }
+
 
 function folderChip(f) {
   const colorVar = folderColorVar(f.color);
@@ -395,7 +393,7 @@ function bindProjectsEvents() {
   });
   app.querySelector('#create-new-btn')?.addEventListener('click', openCreateNewModal);
   app.querySelector('#empty-create-btn')?.addEventListener('click', openCreateNewModal);
-  app.querySelector('#new-folder-btn')?.addEventListener('click', openNewFolderModal);
+  app.querySelector('#new-folder-btn')?.addEventListener('click', () => openNewFolderModal());
   app.querySelector('#all-projects-chip')?.addEventListener('click', () => {
     LumioState.currentFolder = null; renderProjects();
   });

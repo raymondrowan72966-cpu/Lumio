@@ -44,7 +44,7 @@ function renderLessonBuilder(lessonId) {
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
         <div style="flex:1; min-width:0; overflow-y:auto; background:var(--surface-0); position:relative;" id="lesson-canvas-wrap">
-          <div style="max-width:720px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1; container-type:inline-size;" id="lesson-canvas">
+          <div style="max-width:860px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1; container-type:inline-size;" id="lesson-canvas">
             ${renderCanvasBlocks(blocks)}
           </div>
         </div>
@@ -833,6 +833,8 @@ const CARDLESS_BLOCK_TYPES = new Set([
   'audio', 'video', 'file',
   // Dividers
   'continue', 'numbered_divider', 'line_divider',
+  // Knowledge Checks — flow inline like Heading & Paragraph
+  'kc_multiple_choice', 'kc_multiple_response', 'kc_matching', 'kc_fill_gap', 'kc_ordering',
 ]);
 
 /* Document-flow vertical rhythm for cardless blocks. */
@@ -875,7 +877,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file', 'kc_multiple_choice', 'kc_multiple_response', 'kc_matching', 'kc_fill_gap', 'kc_ordering'].includes(block.type);
   // Selection is a subtle neutral indicator (Notion/Figma-style focus ring),
   // not an accent-coloured frame — kept consistent across card and cardless blocks.
   const SELECTION_OUTLINE_COLOR = 'rgba(20,20,30,0.14)';
@@ -1664,7 +1666,7 @@ function renderBlockContent(block, editable) {
       const rowStyle = variant === 'minimal'
         ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
         : variant === 'boxed'
-          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:var(--shadow-soft); border:1px solid var(--border);`
+          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:1px solid var(--border);`
           : `background:${rowBg}; color:${textColor}; border-radius:${radius};`;
       return `<div class="lumio-accordion" style="display:flex; flex-direction:column; gap:${rowSpacing}px;">
         ${items.map((item, i) => {
@@ -1898,7 +1900,7 @@ function renderBlockContent(block, editable) {
       const colorPreset = ds.colorPreset || 'theme';
       const bg = colorPreset === 'custom' ? (ds.btnBgColor || '#7C3AED') : 'var(--gradient-primary)';
       const textColor = colorPreset === 'custom' ? (ds.btnTextColor || '#ffffff') : '#ffffff';
-      const shadow = ds.shadow !== false ? 'box-shadow:var(--shadow-soft);' : '';
+      const shadow = (editable && ds.shadow !== false) ? 'box-shadow:var(--elevation-1);' : '';
       const widthStyle = ds.btnWidth === 'full' ? 'width:100%;' : '';
       const label = escapeHtml(d.label || 'Button');
       const icon = d.icon ? `${escapeHtml(d.icon)} ` : '';
@@ -4908,7 +4910,7 @@ function renderAIPanel(lesson, blocks) {
     { from: 'ai', text: LumioData.ai.assistantReplies.default }
   ]);
   return `
-    <div style="position:fixed; top:0; right:0; bottom:0; width:340px; background:var(--surface-0); border-left:1px solid var(--border); box-shadow:var(--shadow-md); z-index:60; display:flex; flex-direction:column;" class="fade-in">
+    <div style="position:fixed; top:0; right:0; bottom:0; width:340px; background:var(--surface-0); border-left:1px solid var(--border); box-shadow:var(--elevation-2); z-index:60; display:flex; flex-direction:column;" class="fade-in">
       <div class="flex items-center justify-between" style="padding:14px 16px; border-bottom:1px solid var(--border);">
         <div class="flex items-center gap-8"><div class="ai-spark">✨</div><strong style="font-size:14px;">Lumio AI Assistant</strong></div>
         <button class="btn-icon" id="close-ai">✕</button>

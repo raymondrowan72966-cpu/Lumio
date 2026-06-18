@@ -87,7 +87,9 @@ function lessonDonut(state) {
   </svg>`;
 }
 
-function courseNavSidebar(course, progress, activeLessonId) {
+/* sticky=true → sidebar uses position:sticky so browser-scroll desktop mode works correctly
+   mobileDrawer=true → sidebar renders as an off-screen overlay drawer (for mobile device frame) */
+function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobileDrawer = false) {
   const locked = activeLessonId === null && progress.completedLessons.length === 0;
   const pct = course.lessons.length
     ? Math.round((progress.completedLessons.length / course.lessons.length) * 100) : 0;
@@ -96,8 +98,14 @@ function courseNavSidebar(course, progress, activeLessonId) {
     Object.keys(progress.blockProgress || {}).map(k => k.split(':')[0])
       .filter(id => !progress.completedLessons.includes(id))
   );
+  const stickyStyle = sticky
+    ? `align-self:flex-start; position:sticky; top:57px; max-height:calc(100vh - 57px);`
+    : ``;
+  const drawerStyle = mobileDrawer
+    ? `position:absolute; top:0; left:0; bottom:0; z-index:200; transform:translateX(-100%); transition:transform 0.25s ease; box-shadow:var(--elevation-2);`
+    : ``;
   return `
-    <aside style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0;">
+    <aside ${mobileDrawer ? 'id="lp-mobile-sidebar"' : ''} style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0; ${stickyStyle}${drawerStyle}">
       <div style="margin-bottom:16px;">
         <div class="flex items-center justify-between" style="margin-bottom:6px;">
           <span style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400);">Course Progress</span>
@@ -114,8 +122,8 @@ function courseNavSidebar(course, progress, activeLessonId) {
           const isStarted = !isComplete && startedIds.has(l.id);
           const state = locked ? 'locked' : isComplete ? 'complete' : isStarted ? 'started' : 'not-started';
           return `
-          <div class="card card-pad lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${locked ? 'locked' : ''}" data-lesson="${l.id}"
-            style="display:flex; align-items:center; gap:10px; ${locked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'} ${l.id === activeLessonId ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
+          <div class="lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${locked ? 'locked' : ''}" data-lesson="${l.id}"
+            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${l.id === activeLessonId ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${locked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
             ${locked ? `<span style="font-size:14px;">🔒</span>` : lessonDonut(state)}
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.title}</div>
@@ -132,8 +140,8 @@ function courseNavSidebar(course, progress, activeLessonId) {
           const assessmentLocked = locked || !allLessonsDone;
           const isActive = a.id === activeLessonId;
           return `
-          <div class="card card-pad lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}"
-            style="display:flex; align-items:center; gap:10px; ${assessmentLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'} ${isActive ? 'border-color:var(--theme-primary, var(--indigo));' : ''}">
+          <div class="lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}"
+            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${isActive ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${assessmentLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
             <span>${assessmentLocked ? '🔒' : '📝'}</span>
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.title}</div>
@@ -158,7 +166,7 @@ function learnerDeviceFrameStyle(device) {
   if (device === 'desktop') {
     return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto;`;
   }
-  return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); background:var(--theme-bg-style, var(--surface-0));`;
+  return `width:100%; max-width:${frame.width}; height:100%; margin:0 auto; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--elevation-2); background:var(--theme-bg-style, var(--surface-0));`;
 }
 
 function learnerDeviceSwitcherHtml(device) {
@@ -168,30 +176,205 @@ function learnerDeviceSwitcherHtml(device) {
     </div>`;
 }
 
+/* ---------- LEARNER SHELL ----------
+   Desktop (no device frame): browser window owns vertical scroll.
+     - Outer div: min-height:100vh, no overflow:hidden
+     - Header: position:sticky top:0
+     - Sidebar: position:sticky top:57px (courseNavSidebar sticky=true)
+     - <main>: normal block flow, no overflow constraints
+   Tablet/Mobile (device frame): single in-frame scroll.
+     - Outer div: height:100vh overflow:hidden
+     - Frame wrapper: overflow:hidden (not auto — removes second scrollbar)
+     - <main>: height:100% overflow-y:auto (sole scroll owner)
+   Overview (isOverview:true): no sidebar on any device mode.
+*/
+
+// Wires the mobile sidebar drawer: toggle button, backdrop tap-to-close.
+// Nav item clicks navigate away (causing a full re-render) so no explicit close needed there.
+function wireMobileSidebar(app) {
+  const sidebar = app.querySelector('#lp-mobile-sidebar');
+  const backdrop = app.querySelector('#lp-sidebar-backdrop');
+  const toggle = app.querySelector('#lp-menu-toggle');
+  if (!sidebar) return;
+
+  const open = () => { sidebar.style.transform = 'translateX(0)'; if (backdrop) backdrop.style.display = 'block'; };
+  const close = () => { sidebar.style.transform = 'translateX(-100%)'; if (backdrop) backdrop.style.display = 'none'; };
+
+  toggle?.addEventListener('click', open);
+  backdrop?.addEventListener('click', close);
+}
+
 function learnerShell(course, bodyHtml, opts = {}) {
   const progress = ensureLearnerProgress(course.id);
   const app = document.getElementById('app');
   const device = LearnerUI.previewDevice || 'desktop';
+  const isDesktop = device === 'desktop';
+  const isMobile = device === 'mobile';
   const frameStyle = learnerDeviceFrameStyle(device);
   const reRender = () => renderLearnerPreview(course.id, opts.activeLessonId || null);
+  const isOverview = !!(opts.isOverview);
 
-  // Only restore scroll position when re-rendering the same lesson (e.g.
-  // after a Continue click, KC answer, flashcard flip, etc.). Navigating to
-  // a different lesson, or entering/exiting Preview, should reset scroll.
+  // Preserve scroll across same-lesson re-renders (KC answers, Continue reveals, etc.)
   const activeLessonId = opts.activeLessonId || null;
   const sameLesson = activeLessonId !== null && LearnerUI.lastLessonId === activeLessonId;
-  const prevScroll = sameLesson ? (app.querySelector('main')?.scrollTop || 0) : 0;
+  // Capture before innerHTML wipe
+  const prevScrollEl = (!isDesktop && sameLesson) ? (app.querySelector('main')?.scrollTop || 0) : 0;
+  const prevScrollY  = (isDesktop && sameLesson) ? window.scrollY : 0;
   LearnerUI.lastLessonId = activeLessonId;
 
+  const headerHtml = `
+    <header id="lp-header" class="flex items-center justify-between" style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0; gap:16px; flex-wrap:wrap;">
+      <div class="flex items-center gap-12" style="min-width:0;">
+        <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="lp-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
+        ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Return to Course</button>` : ''}
+        <strong style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
+        <span class="pill pill-indigo">👁️ Learner Preview</span>
+      </div>
+      <div class="flex items-center gap-16" style="flex-wrap:wrap;">
+        ${learnerDeviceSwitcherHtml(device)}
+        <button class="btn btn-secondary btn-sm" id="lp-fullscreen">⛶ Full Screen Preview</button>
+        ${progressBarHtml(course, progress)}
+        <button class="btn btn-secondary btn-sm" id="lp-exit">✕ Exit Preview</button>
+      </div>
+    </header>`;
+
+  const sidebarHtml = isOverview ? '' : isMobile
+    ? courseNavSidebar(course, progress, activeLessonId, false, true)
+    : courseNavSidebar(course, progress, activeLessonId, isDesktop);
+
   if (LearnerUI.fullScreen) {
-    app.innerHTML = `
-      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
-        <div class="flex items-center justify-end" style="padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
-          <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+    if (isDesktop) {
+      // Fullscreen desktop: page scroll, sticky mini-header
+      app.innerHTML = `
+        <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+          <div id="lp-header" style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface-0);">
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+          </div>
+          <div style="display:flex;">
+            ${sidebarHtml}
+            <main style="flex:1; min-width:0; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+          </div>
         </div>
+        ${sharedLayoutStyles()}
+      `;
+    } else if (isMobile) {
+      // Fullscreen mobile: drawer sidebar overlaying device frame
+      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ Lessons</button>` : '';
+      const mobileBodyHtml = !isOverview ? `
+        <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+          ${mobileMenuBtn}
+          ${progressBarHtml(course, progress)}
+        </div>${bodyHtml}` : bodyHtml;
+      app.innerHTML = `
+        <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
+          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+          </div>
+          <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center;">
+            ${sidebarHtml}
+            <div id="lp-sidebar-backdrop" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>
+            <div style="${frameStyle}">
+              <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${mobileBodyHtml}</main>
+            </div>
+          </div>
+        </div>
+        ${sharedLayoutStyles()}
+      `;
+    } else {
+      // Fullscreen tablet: sidebar in flex row beside device frame
+      app.innerHTML = `
+        <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
+          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+          </div>
+          <div style="flex:1; display:flex; min-height:0;">
+            ${sidebarHtml}
+            <div style="flex:1; overflow:hidden; display:flex; justify-content:center; padding:0 0 24px;">
+              <div style="${frameStyle}">
+                <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${sharedLayoutStyles()}
+      `;
+    }
+    app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
+    app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
+      if (elx.classList.contains('locked')) return;
+      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+    });
+    if (isMobile && !isOverview) wireMobileSidebar(app);
+  } else if (isDesktop) {
+    // Normal desktop: browser-level scroll, sticky header + sticky sidebar
+    app.innerHTML = `
+      <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+        ${headerHtml}
+        <div style="display:flex;">
+          ${sidebarHtml}
+          <main style="flex:1; min-width:0; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+        </div>
+      </div>
+      ${sharedLayoutStyles()}
+    `;
+    app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
+    app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-fullscreen').addEventListener('click', () => { LearnerUI.fullScreen = true; reRender(); });
+    app.querySelectorAll('#lp-device-switch button').forEach(btn => btn.addEventListener('click', () => {
+      LearnerUI.previewDevice = btn.dataset.val;
+      reRender();
+    }));
+    app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
+      if (elx.classList.contains('locked')) return;
+      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+    });
+  } else if (isMobile) {
+    // Normal mobile: drawer sidebar overlaying device frame, ☰ Lessons button in-frame
+    const mobileBodyHtml = !isOverview ? `
+      <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ Lessons</button>
+        ${progressBarHtml(course, progress)}
+      </div>${bodyHtml}` : bodyHtml;
+    app.innerHTML = `
+      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+        ${headerHtml}
+        <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center; background:var(--surface-0);">
+          ${sidebarHtml}
+          <div id="lp-sidebar-backdrop" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>
+          <div style="${frameStyle}">
+            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${mobileBodyHtml}</main>
+          </div>
+        </div>
+      </div>
+      ${sharedLayoutStyles()}
+    `;
+    app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
+    app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-fullscreen').addEventListener('click', () => { LearnerUI.fullScreen = true; reRender(); });
+    app.querySelectorAll('#lp-device-switch button').forEach(btn => btn.addEventListener('click', () => {
+      LearnerUI.previewDevice = btn.dataset.val;
+      reRender();
+    }));
+    app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
+      if (elx.classList.contains('locked')) return;
+      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+    });
+    if (!isOverview) wireMobileSidebar(app);
+    // Restore in-frame scroll for same-lesson re-renders
+    if (sameLesson) {
+      const main = app.querySelector('main');
+      if (main) main.scrollTop = prevScrollEl;
+    }
+  } else {
+    // Normal tablet: sidebar in flex row beside device frame
+    app.innerHTML = `
+      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+        ${headerHtml}
         <div style="flex:1; display:flex; min-height:0;">
-          ${courseNavSidebar(course, progress, activeLessonId)}
-          <div style="flex:1; overflow:auto; display:flex; justify-content:center; padding:0 0 24px;">
+          ${sidebarHtml}
+          <div style="flex:1; overflow:hidden; display:flex; justify-content:center; background:var(--surface-0);">
             <div style="${frameStyle}">
               <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
             </div>
@@ -200,62 +383,41 @@ function learnerShell(course, bodyHtml, opts = {}) {
       </div>
       ${sharedLayoutStyles()}
     `;
-    app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
-    // Issue 5: wire both lesson AND assessment nav items in fullscreen mode.
+    app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
+    app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
+    app.querySelector('#lp-fullscreen').addEventListener('click', () => { LearnerUI.fullScreen = true; reRender(); });
+    app.querySelectorAll('#lp-device-switch button').forEach(btn => btn.addEventListener('click', () => {
+      LearnerUI.previewDevice = btn.dataset.val;
+      reRender();
+    }));
     app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
       if (elx.classList.contains('locked')) return;
       elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
     });
+    // Restore in-frame scroll for same-lesson re-renders
     if (sameLesson) {
       const main = app.querySelector('main');
-      if (main) main.scrollTop = prevScroll;
+      if (main) main.scrollTop = prevScrollEl;
     }
-    return;
   }
 
-  app.innerHTML = `
-    <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
-      <header class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0; gap:16px; flex-wrap:wrap;">
-        <div class="flex items-center gap-12" style="min-width:0;">
-          <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="lp-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
-          ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Return to Course</button>` : ''}
-          <strong style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
-          <span class="pill pill-indigo">👁️ Learner Preview</span>
-        </div>
-        <div class="flex items-center gap-16" style="flex-wrap:wrap;">
-          ${learnerDeviceSwitcherHtml(device)}
-          <button class="btn btn-secondary btn-sm" id="lp-fullscreen">⛶ Full Screen Preview</button>
-          ${progressBarHtml(course, progress)}
-          <button class="btn btn-secondary btn-sm" id="lp-exit">✕ Exit Preview</button>
-        </div>
-      </header>
-      <div style="flex:1; display:flex; min-height:0;">
-        ${courseNavSidebar(course, progress, opts.activeLessonId || null)}
-        <div style="flex:1; overflow:auto; display:flex; justify-content:center; background:var(--surface-0);">
-          <div style="${frameStyle}">
-            <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
-          </div>
-        </div>
-      </div>
-    </div>
-    ${sharedLayoutStyles()}
-  `;
-  app.querySelector('#lp-logo').addEventListener('click', () => navigate('#/learner/' + course.id));
-  app.querySelector('#lp-exit').addEventListener('click', exitLearnerPreview);
-  app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
-  app.querySelector('#lp-fullscreen').addEventListener('click', () => { LearnerUI.fullScreen = true; reRender(); });
-  app.querySelectorAll('#lp-device-switch button').forEach(btn => btn.addEventListener('click', () => {
-    LearnerUI.previewDevice = btn.dataset.val;
-    reRender();
-  }));
-  app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
-    if (elx.classList.contains('locked')) return;
-    elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
-  });
+  // Restore browser scroll for same-lesson re-renders on desktop
+  if (isDesktop && sameLesson && prevScrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
+  }
 
-  if (sameLesson) {
-    const main = app.querySelector('main');
-    if (main) main.scrollTop = prevScroll;
+  // Fix sticky sidebar offset to match actual header height (header can wrap).
+  if (isDesktop && !isOverview) {
+    requestAnimationFrame(() => {
+      const hdr = app.querySelector('#lp-header');
+      const aside = app.querySelector('aside');
+      if (hdr && aside) {
+        const h = hdr.offsetHeight;
+        aside.style.top = h + 'px';
+        aside.style.maxHeight = `calc(100vh - ${h}px)`;
+      }
+    });
   }
 }
 
@@ -268,10 +430,9 @@ function renderLearnerCourseOverview(course) {
   const startLesson = firstIncomplete || course.lessons[0];
 
   const totalMinutes = estimateCourseDuration(course);
-  const navTips = LumioData.ai.navigationTips(course.lessons.length, course.assessments.length, totalMinutes + ' min');
 
   const body = `
-    <div style="max-width:760px; margin:0 auto; padding:40px 24px 80px; width:100%;">
+    <div style="max-width:900px; margin:0 auto; padding:56px 40px 80px; width:100%;">
       ${renderHeroSection(course, {
         editable: false,
         ctaId: 'lp-start',
@@ -279,21 +440,16 @@ function renderLearnerCourseOverview(course) {
         ctaDisabled: !course.lessons.length,
       })}
 
-      ${renderObjectivesSection(course, false)}
-
-      ${renderCourseStructureSection(course)}
-
-      ${renderNavTipsSection(course, navTips)}
-
-      ${progress.score.total > 0 ? `
-      <div class="card card-pad mt-24 fade-in" style="text-align:center;">
-        <h3 style="font-size:15px;">Knowledge Check Score</h3>
-        <p class="text-sm text-muted mt-8">${progress.score.correct} / ${progress.score.total} correct so far</p>
+      ${totalMinutes > 0 ? `
+      <div class="flex items-center gap-8 mt-16" style="justify-content:center;">
+        <span class="pill pill-grey">⏱ Estimated duration: ${totalMinutes} min</span>
       </div>` : ''}
+
+      ${renderObjectivesSection(course, false)}
     </div>
   `;
 
-  learnerShell(course, body, { activeLessonId: null });
+  learnerShell(course, body, { activeLessonId: null, isOverview: true });
 
   document.getElementById('lp-start')?.addEventListener('click', () => {
     if (!course.lessons.length) return;
@@ -331,7 +487,7 @@ function renderLearnerLesson(course, lessonId) {
     : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
   const body = `
-    <div style="max-width:860px; margin:0 auto; padding:40px 32px 40px; width:100%; flex:1;">
+    <div style="max-width:1100px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
       <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
         <h2 style="font-size:calc(var(--theme-font-size, 16px) + 4px); font-family:var(--theme-font-display, var(--font-display));">${lesson.title}</h2>
         ${lesson.duration ? `<span class="pill pill-grey">${lesson.duration}</span>` : ''}
@@ -379,7 +535,7 @@ function renderLearnerLesson(course, lessonId) {
 function renderLearnerBlocks(blocks, ctx) {
   if (!blocks.length) {
     return `
-      <div class="card card-pad text-center" style="padding:60px 30px;">
+      <div style="padding:60px 30px; background:var(--surface-0); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:none; text-align:center;">
         <div style="font-size:40px;">📭</div>
         <h3 class="mt-16" style="font-size:16px;">This lesson has no content yet</h3>
       </div>`;
@@ -394,10 +550,12 @@ function renderLearnerBlocks(blocks, ctx) {
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
     const extraStyle = `${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}`;
     const { treatment } = DesignSystem.resolveBlockStyle(block);
+    const nextBlock = blocks[i + 1] || null;
+    const flowMargin = (treatment === 'cardless') ? cardlessFlowMargin(block, nextBlock) : FLOW_SPACING;
     let wrapperStyle;
     if (treatment === 'cardless') {
-      // Cardless: flat page content, no card chrome, consistent spacing token.
-      wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${FLOW_SPACING}; padding:22px; ${extraStyle}`;
+      // Cardless: flat page content, no card chrome. Same spacing logic as builder.
+      wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${flowMargin}; padding:22px; ${extraStyle}`;
     } else {
       // Card-treatment: white background, 1px border, NO shadow (Preview = Published rule).
       const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
@@ -518,7 +676,7 @@ function learnerCarouselBlock(block, index, ctx) {
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
   let slideHtml;
   if (!slide.src) {
-    slideHtml = `<div class="card card-pad" style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender);">
+    slideHtml = `<div style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender); border-radius:var(--r-md); box-shadow:none; border:none; padding:24px;">
         <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.title || slide.description || `Slide ${active + 1}`)}</span>
       </div>`;
   } else if ((slide.imageFit || 'cover') === 'full') {
@@ -552,7 +710,7 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
   const q = quotes[active];
   return `
     <div>
-      <div class="card card-pad" style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender);">
+      <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender); border-radius:var(--r-md); box-shadow:none; padding:20px 24px;">
         ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
         <p class="text-sm"${q.textAlign ? ` style="text-align:${q.textAlign};"` : ''}>${richTextOut(q.text || '')}</p>
         ${q.author ? `<p class="text-sm text-muted mt-8"${q.authorAlign ? ` style="text-align:${q.authorAlign};"` : ''}>${richTextOut(q.author)}</p>` : ''}
