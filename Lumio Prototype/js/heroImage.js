@@ -12,8 +12,21 @@ const HERO_HEIGHT_PRESETS = [
   { id: 'full', label: 'Full Width Hero', px: 480 },
 ];
 
+/* ── Centralized upload limits (single source of truth for all upload pipelines) ── */
+const UPLOAD_LIMITS = {
+  image:    50   * 1024 * 1024,  // 50 MB
+  audio:    250  * 1024 * 1024,  // 250 MB
+  video:    1024 * 1024 * 1024,  // 1 GB
+  document: 100  * 1024 * 1024,  // 100 MB
+};
+
+/* Formats a byte count as a short label for upload limit display ("50 MB", "1 GB"). */
+function _formatUploadLimit(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024 * 1024))} GB`;
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
 const HERO_ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-const HERO_MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 
 function defaultHeroImage() {
   return {
@@ -114,7 +127,7 @@ function renderHeroMedia(course, heightPx, opts = {}) {
     const objectFit = { cover: 'cover', contain: 'contain', fill: '100% 100%' }[hi.displayMode] || 'cover';
     const objectPosition = `${hi.posX || 'center'} ${hi.posY || 'center'}`;
     const scale = (hi.scale || 100) / 100;
-    bgLayer = `<img src="${hi.src}" alt="${course.title || ''} hero image" style="position:absolute; inset:0; width:100%; height:100%; object-fit:${objectFit}; object-position:${objectPosition}; transform:scale(${scale}); transform-origin:${objectPosition};" />`;
+    bgLayer = `<img src="${AssetStore.resolveMediaSrc(hi.src)}" alt="${course.title || ''} hero image" style="position:absolute; inset:0; width:100%; height:100%; object-fit:${objectFit}; object-position:${objectPosition}; transform:scale(${scale}); transform-origin:${objectPosition};" />`;
   } else {
     bgLayer = `<div style="position:absolute; inset:0; background:${heroFallbackGradient(course)};"></div>
       <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:48px; opacity:0.85; z-index:1;">🧠✨</div>`;
@@ -154,6 +167,13 @@ function courseHeroImageSrc(courseId) {
   return (course && course.heroImage && course.heroImage.src) || null;
 }
 
+// Returns the auto-generated thumbnail asset ID for a course's hero image, or null.
+// Thumbnails are created at upload time (400×240 WebP) and stored separately from the hero.
+function courseHeroThumbSrc(courseId) {
+  const course = LumioState.courses && LumioState.courses[courseId];
+  return (course && course.heroImage && course.heroImage._thumbSrc) || null;
+}
+
 /* ---------------- COURSE THUMBNAIL ---------------- */
 // The Course Thumbnail is a separate asset from the Hero Image. It is used on
 // Projects/Recent/search/folder cards; the Hero Image is used on Course
@@ -184,12 +204,13 @@ function courseThumbnailSrc(courseId) {
 // 1) a custom Course Thumbnail, 2) the Hero Image (existing behaviour),
 // 3) the gradient placeholder.
 function cardThumbMedia(p) {
-  const src = courseThumbnailSrc(p.id) || courseHeroImageSrc(p.id);
+  // Priority: user-set thumbnail → auto-generated hero thumbnail (smaller) → full-res hero
+  const src = courseThumbnailSrc(p.id) || courseHeroThumbSrc(p.id) || courseHeroImageSrc(p.id);
   if (src) {
     return {
       heroSrc: src,
       bg: '#0b0b12',
-      img: `<img src="${src}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; z-index:0;" />`,
+      img: `<img src="${AssetStore.resolveMediaSrc(src)}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; z-index:0;" />`,
     };
   }
   return { heroSrc: null, bg: LumioData.thumbGradients[p.thumb], img: '' };
@@ -210,12 +231,28 @@ function readHeroImageFile(file, callback) {
     callback(null, 'Unsupported file type. Please upload a PNG, JPG, JPEG, or WEBP image.');
     return;
   }
-  if (file.size > HERO_MAX_FILE_BYTES) {
-    callback(null, `Image is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 2MB.`);
+  if (file.size > UPLOAD_LIMITS.image) {
+    const fileMb = (file.size / 1024 / 1024).toFixed(1);
+    callback(null, `This image is ${fileMb} MB. Maximum supported image size is ${_formatUploadLimit(UPLOAD_LIMITS.image)}.`);
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => callback({ src: reader.result, fileName: file.name, mimeType: type || 'image/png' }, null);
-  reader.onerror = () => callback(null, 'Could not read the selected file. Please try again.');
-  reader.readAsDataURL(file);
+  AssetStore.put(file).then(async assetId => {
+    await AssetStore.resolveUrl(assetId);
+    // Auto-generate a lightweight thumbnail for use in project/course cards.
+    // Best-effort: never blocks or fails the upload if thumbnail creation errors.
+    let _thumbSrc = null;
+    try {
+      const asset = await AssetStore.get(assetId);
+      if (asset) {
+        const thumb = await generateImageThumbnail(asset.blob, 400, 240, 0.72);
+        if (thumb) {
+          _thumbSrc = await AssetStore.put(thumb);
+          await AssetStore.resolveUrl(_thumbSrc);
+        }
+      }
+    } catch (_) {}
+    callback({ src: assetId, fileName: file.name, mimeType: type || 'image/png', _thumbSrc }, null);
+  }).catch(() => {
+    callback(null, 'Could not store the file. Please try again.');
+  });
 }

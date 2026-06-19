@@ -618,6 +618,7 @@ function openPublishModal(course) {
     const publishTabContent = `
       ${readinessBanner}
       ${summaryPanel}
+      <div id="publish-asset-panel" style="margin-bottom:20px;"><div class="text-sm text-muted" style="padding:4px 0;">Analyzing assets…</div></div>
       <div style="display:flex; flex-direction:column; gap:8px;">
         ${formatsHtml}
       </div>`;
@@ -661,8 +662,47 @@ function openPublishModal(course) {
       </div>`;
   }
 
+  // Async: scan asset refs and populate the Package Contents panel.
+  async function loadAssetPanel() {
+    const panel = overlay.querySelector('#publish-asset-panel');
+    if (!panel) return;
+    const lessonData = {};
+    (course.lessons || []).forEach(l => { if (LumioState.lessons[l.id]) lessonData[l.id] = LumioState.lessons[l.id]; });
+    (course.assessments || []).forEach(a => { if (LumioState.lessons[a.id]) lessonData[a.id] = LumioState.lessons[a.id]; });
+    const analysis = await analyzePublishAssets(course, lessonData);
+    if (!overlay.isConnected) return;
+    if (analysis.entries.length === 0) { panel.innerHTML = ''; return; }
+    const sizeRow = (icon, label, items) => {
+      if (!items.length) return '';
+      const sz = items.reduce((s, a) => s + (a.size || 0), 0);
+      return `<div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid var(--border);">
+        <span class="text-sm" style="color:var(--ink-700);">${icon} ${label}</span>
+        <span class="text-sm" style="font-weight:600; color:var(--ink-900);">${items.length} file${items.length !== 1 ? 's' : ''} · ${formatFileSize(sz)}</span>
+      </div>`;
+    };
+    const warningsHtml = analysis.warnings.length ? `
+      <div style="margin-top:10px; padding:10px 12px; background:rgba(229,72,77,0.06); border:1px solid rgba(229,72,77,0.18); border-radius:var(--r-sm);">
+        <div style="font-size:12px; font-weight:700; color:#E5484D; margin-bottom:4px;">⚠️ Large Asset Warnings</div>
+        ${analysis.warnings.map(w => `<div class="text-sm" style="color:var(--ink-700); margin-top:3px;">${w}</div>`).join('')}
+      </div>` : '';
+    panel.innerHTML = `
+      <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 18px;">
+        <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:8px;">Package Contents</div>
+        ${sizeRow('🖼️', 'Images', analysis.images)}
+        ${sizeRow('🎵', 'Audio', analysis.audio)}
+        ${sizeRow('🎬', 'Video', analysis.video)}
+        ${sizeRow('📎', 'Documents', analysis.docs)}
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0 0;">
+          <span class="text-sm" style="font-weight:600; color:var(--ink-700);">Estimated raw size</span>
+          <span class="text-sm" style="font-weight:700; color:var(--ink-900);">~${formatFileSize(analysis.totalSize)}</span>
+        </div>
+        ${warningsHtml}
+      </div>`;
+  }
+
   const overlay = el(buildModalHtml());
   document.body.appendChild(overlay);
+  loadAssetPanel();
 
   const close = () => overlay.remove();
   overlay.querySelector('#publish-close').addEventListener('click', close);
@@ -695,7 +735,9 @@ function openPublishModal(course) {
               ${issues.map(i => `<li class="text-sm" style="color:var(--ink-700);">${i}</li>`).join('')}
             </ul>
           </div>` : '';
-        body.innerHTML = readinessBannerInner + summaryPanelInner + `<div style="display:flex; flex-direction:column; gap:8px;">${PUBLISH_FORMATS.map(f => `
+        body.innerHTML = readinessBannerInner + summaryPanelInner +
+          `<div id="publish-asset-panel" style="margin-bottom:20px;"><div class="text-sm text-muted" style="padding:4px 0;">Analyzing assets…</div></div>` +
+          `<div style="display:flex; flex-direction:column; gap:8px;">${PUBLISH_FORMATS.map(f => `
           <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
             <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
             <div style="flex:1; min-width:0;">
@@ -706,6 +748,7 @@ function openPublishModal(course) {
               ? `<button class="btn btn-primary btn-sm" data-publish-html style="font-size:12px; white-space:nowrap;">Publish</button>`
               : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
           </div>`).join('')}</div>`;
+        loadAssetPanel();
       } else {
         const rows = course.publishHistory.length === 0
           ? `<tr><td colspan="4" style="text-align:center; padding:32px 0; color:var(--ink-400); font-size:13px;">No publish history yet.</td></tr>`
@@ -816,7 +859,7 @@ function openCourseSettings(course, initialTab) {
           <div class="flex items-center gap-16 mb-16">
             <div style="width:120px; height:72px; border-radius:8px; overflow:hidden; position:relative; flex-shrink:0; background:${LumioData.thumbGradients[0]}; border:1px solid var(--border);">
               ${course.thumbnailImage.src
-                ? `<img src="${course.thumbnailImage.src}" alt="" style="width:100%; height:100%; object-fit:cover;" />`
+                ? `<img src="${AssetStore.resolveMediaSrc(course.thumbnailImage.src)}" alt="" style="width:100%; height:100%; object-fit:cover;" />`
                 : `<div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:22px; opacity:0.85;">📘</div>`}
             </div>
             <div style="flex:1; min-width:0;">
@@ -1091,7 +1134,7 @@ function openCourseSettings(course, initialTab) {
           <div class="flex items-center gap-16 mb-16">
             <div style="width:120px; height:72px; border-radius:8px; overflow:hidden; position:relative; flex-shrink:0; background:${heroFallbackGradient(course)}; border:1px solid var(--border);">
               ${hasImage
-                ? `<img src="${hi.src}" alt="" style="width:100%; height:100%; object-fit:cover;" />`
+                ? `<img src="${AssetStore.resolveMediaSrc(hi.src)}" alt="" style="width:100%; height:100%; object-fit:cover;" />`
                 : `<div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:22px; opacity:0.85;">🧠✨</div>`}
             </div>
             <div style="flex:1; min-width:0;">
@@ -1208,6 +1251,7 @@ function openCourseSettings(course, initialTab) {
           hi.src = result.src;
           hi.fileName = result.fileName;
           hi.mimeType = result.mimeType;
+          hi._thumbSrc = result._thumbSrc || null;
           renderBody();
           renderCourseLanding(course.id);
           toast('Hero image updated', '🖼️');

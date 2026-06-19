@@ -539,6 +539,14 @@ function renderLearnerCourseOverview(course) {
 
   learnerShell(course, body, { activeLessonId: null, isOverview: true });
 
+  // Hydrate hero/thumbnail refs so cardThumbMedia() resolves on re-render.
+  const _heroRef = (course.heroImage || {}).src;
+  const _thumbRef = (course.thumbnailImage || {}).src;
+  const _overviewRefs = [_heroRef, _thumbRef].filter(Boolean);
+  AssetStore.preloadBlocks([], _overviewRefs).then(count => {
+    if (count > 0) renderLearnerCourseOverview(course);
+  });
+
   document.getElementById('lp-start')?.addEventListener('click', () => {
     if (!course.lessons.length) return;
     navigate('#/learner/' + course.id + '/' + startLesson.id);
@@ -591,6 +599,11 @@ function renderLearnerLesson(course, lessonId) {
 
   learnerShell(course, body, { activeLessonId: lessonId, showReturn: true });
   bindLearnerBlockEvents(course, blocks, ctx);
+
+  // Hydrate URL cache for asset:// refs in lesson blocks, then re-render if any were cold.
+  AssetStore.preloadBlocks(blocks).then(count => {
+    if (count > 0) renderLearnerLesson(course, lessonId);
+  });
 
   document.getElementById('lp-prev')?.addEventListener('click', () => {
     if (prevId) navigate('#/learner/' + course.id + '/' + prevId);
@@ -768,10 +781,12 @@ function learnerCarouselBlock(block, index, ctx) {
         <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.title || slide.description || `Slide ${active + 1}`)}</span>
       </div>`;
   } else if ((slide.imageFit || 'cover') === 'full') {
-    slideHtml = `<div class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="position:relative; width:100%; height:200px; border-radius:var(--r-md); overflow:hidden; cursor:zoom-in;"><img src="${slide.src}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+    const rSrc = AssetStore.resolveMediaSrc(slide.src);
+    slideHtml = `<div class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-md); overflow:hidden; cursor:zoom-in;"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
   } else {
     const of = fitMap[slide.imageFit] || 'cover';
-    slideHtml = `<img src="${slide.src}" alt="" class="image-zoom-trigger" data-zoom-src="${slide.src}" data-zoom-alt="" style="width:100%; height:200px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; cursor:zoom-in;" />`;
+    const rSrc = AssetStore.resolveMediaSrc(slide.src);
+    slideHtml = `<img src="${rSrc}" alt="" class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; cursor:zoom-in;" />`;
   }
   const textHtml = `${slide.title ? `<div class="text-sm mt-8" style="font-weight:600; text-align:center;">${escapeHtml(slide.title)}</div>` : ''}${slide.description ? `<div class="text-sm text-muted mt-4" style="text-align:center;">${escapeHtml(slide.description)}</div>` : ''}`;
   return `
@@ -799,7 +814,7 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
   return `
     <div>
       <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender); border-radius:var(--r-md); box-shadow:none; padding:20px 24px;">
-        ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
+        ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
         <p class="text-sm"${q.textAlign ? ` style="text-align:${q.textAlign};"` : ''}>${richTextOut(q.text || '')}</p>
         ${q.author ? `<p class="text-sm text-muted mt-8"${q.authorAlign ? ` style="text-align:${q.authorAlign};"` : ''}>${richTextOut(q.author)}</p>` : ''}
       </div>

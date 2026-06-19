@@ -61,6 +61,13 @@ function renderLessonBuilder(lessonId) {
   if (wrap) wrap.scrollTop = prevScroll;
   const libraryScroll = document.getElementById('block-library-scroll');
   if (libraryScroll) libraryScroll.scrollTop = prevLibraryScroll;
+
+  // Hydrate URL cache for any asset:// refs in this lesson, then re-render
+  // once if new URLs were resolved (handles cold-start page reload).
+  const _avatarRef = (LumioState.currentUser || {}).avatar;
+  AssetStore.preloadBlocks(blocks, _avatarRef ? [_avatarRef] : []).then(count => {
+    if (count > 0) renderLessonBuilder(lessonId);
+  });
 }
 
 /* ============================================================
@@ -408,7 +415,7 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   const placeholder = faceName === 'back' ? 'Back text' : 'Front text';
   if (hasImage && fit === 'full') {
     return `
-      <img src="${face.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
+      <img src="${AssetStore.resolveMediaSrc(face.image)}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
       ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; background:rgba(0,0,0,0.35); color:#fff; padding:8px 12px; border-radius:var(--r-sm); font-weight:600; font-size:14px; max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
       ${flipIcon}
     `;
@@ -416,7 +423,7 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
   const objectFit = fitMap[fit] || 'cover';
   return `
-    ${hasImage ? `<img src="${face.image}" alt="" style="max-width:100%; ${face.text ? 'max-height:70px; margin-bottom:8px;' : 'flex:1; height:100%;'} ${objectFit === 'none' ? 'object-fit:none; object-position:center;' : `object-fit:${objectFit};`} border-radius:var(--r-sm);" />` : ''}
+    ${hasImage ? `<img src="${AssetStore.resolveMediaSrc(face.image)}" alt="" style="max-width:100%; ${face.text ? 'max-height:70px; margin-bottom:8px;' : 'flex:1; height:100%;'} ${objectFit === 'none' ? 'object-fit:none; object-position:center;' : `object-fit:${objectFit};`} border-radius:var(--r-sm);" />` : ''}
     ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="font-weight:600; font-size:14px;">${richTextOut(face.text || '')}</div>` : ''}
     ${flipIcon}
   `;
@@ -612,7 +619,7 @@ function textBlockExtraStyle(block) {
   else if (ds.bgType === 'custom') style += `background:${ds.bgColor || '#ffffff'};`;
   else if (ds.bgType === 'image' && ds.bgImage) {
     const fit = ds.bgFit === 'contain' ? 'contain' : ds.bgFit === 'stretch' ? '100% 100%' : 'cover';
-    style += `background-image:url(${ds.bgImage}); background-size:${fit}; background-position:center; background-repeat:no-repeat;`;
+    style += `background-image:url(${AssetStore.resolveMediaSrc(ds.bgImage)}); background-size:${fit}; background-position:center; background-repeat:no-repeat;`;
   }
   return style;
 }
@@ -629,7 +636,7 @@ function statementBlockExtraStyle(block) {
   else if (ds.bgType === 'custom') style += `background:${ds.bgColor || '#ffffff'};`;
   else if (ds.bgType === 'image' && ds.bgImage) {
     const fit = ds.bgFit === 'contain' ? 'contain' : ds.bgFit === 'stretch' ? '100% 100%' : 'cover';
-    style += `background-image:url(${ds.bgImage}); background-size:${fit}; background-position:center; background-repeat:no-repeat;`;
+    style += `background-image:url(${AssetStore.resolveMediaSrc(ds.bgImage)}); background-size:${fit}; background-position:center; background-repeat:no-repeat;`;
   } else {
     style += `background:color-mix(in srgb, var(--theme-primary, #7C3AED) 6%, var(--surface-0, #ffffff));`;
   }
@@ -1350,7 +1357,7 @@ function renderBlockContent(block, editable) {
       const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
       return `<div style="text-align:center;">
-        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 12px; display:block;" />` : ''}
+        ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 12px; display:block;" />` : ''}
         <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
         <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
       </div>`;
@@ -1360,7 +1367,7 @@ function renderBlockContent(block, editable) {
       const textStyle = `${textTypographyStyle(ds, 22)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
       const authorStyle = `${textTypographyStyle(ds, 14)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
       return `<div style="text-align:center;">
-        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 14px; display:block;" />` : ''}
+        ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 14px; display:block;" />` : ''}
         <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-weight:600; line-height:1.4; ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
         <div class="editable-text mt-12" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="font-weight:600; color:var(--theme-primary, var(--indigo)); ${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
       </div>`;
@@ -1370,7 +1377,7 @@ function renderBlockContent(block, editable) {
       const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : ''}`;
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : ''}`;
       return `<div class="quote3-layout" style="display:flex; gap:16px; align-items:flex-start;">
-        ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
+        ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
         <div style="flex:1; min-width:0;">
           <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
           <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
@@ -1384,7 +1391,7 @@ function renderBlockContent(block, editable) {
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
       return `<div class="quote4-layout" style="display:flex; gap:20px; align-items:center; background:${accentBg}; border-radius:var(--r-md); padding:24px;">
         <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:8px; width:80px;">
-          ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:64px; height:64px; border-radius:50%; object-fit:cover;" />` : ''}
+          ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:64px; height:64px; border-radius:50%; object-fit:cover;" />` : ''}
           <div class="editable-text text-sm text-muted" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
         </div>
         <div style="flex:1; min-width:0; border-left:3px solid var(--theme-primary, var(--indigo)); padding-left:16px;">
@@ -1393,7 +1400,7 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
     case 'quote_image': {
-      const bgStyle = d.background ? `background-image:url('${d.background}'); background-size:cover; background-position:center;` : 'background:var(--gradient-primary);';
+      const bgStyle = d.background ? `background-image:url('${AssetStore.resolveMediaSrc(d.background)}'); background-size:cover; background-position:center;` : 'background:var(--gradient-primary)';
       const overlayOpacity = ds.overlayOpacity ?? 35;
       const overlay = d.background ? `<div class="quote-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)}); border-radius:var(--r-md);"></div>` : '';
       return `<div style="${bgStyle} border-radius:var(--r-md); padding:40px; text-align:center; color:#fff; position:relative; overflow:hidden;">
@@ -1401,7 +1408,7 @@ function renderBlockContent(block, editable) {
         <div style="position:relative; z-index:1;">
           <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; ${textTypographyStyle(ds, 18)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}">${richTextOut(d.text || 'Progress over perfection.')}</div>
           <div class="flex items-center gap-8 mt-12" style="justify-content:center;">
-            ${d.avatar ? `<img src="${d.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
+            ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
             <div class="editable-text text-sm" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : ''}">${richTextOut(d.author || 'Company Values')}</div>
           </div>
         </div>
@@ -1412,7 +1419,7 @@ function renderBlockContent(block, editable) {
       return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
         ${quotes.map((q, i) => `
           <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;">
-            ${q.avatar ? `<img src="${q.avatar}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
+            ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
             <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
             <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
           </div>
@@ -1433,7 +1440,7 @@ function renderBlockContent(block, editable) {
     case 'image': {
       const layout = ds.layout || 'centered';
       const radius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
-      const src = d.src;
+      const src = AssetStore.resolveMediaSrc(d.src);
       const alt = d.alt || d.label || '';
       let imgStyle;
       if (layout === 'full') imgStyle = 'width:100%; height:auto;';
@@ -1454,7 +1461,7 @@ function renderBlockContent(block, editable) {
       const sizeMap = { sm: ['0.8fr', '1.6fr'], md: ['1fr', '1.2fr'], lg: ['1.4fr', '1fr'] };
       const cols = sizeMap[ds.imageSize || 'md'];
       const gridCols = pos === 'right' ? `${cols[1]} ${cols[0]}` : `${cols[0]} ${cols[1]}`;
-      const src = d.src;
+      const src = AssetStore.resolveMediaSrc(d.src);
       const alt = d.alt || d.imageLabel || '';
       const imageBlock = src
         ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="width:100%; height:100%; min-height:140px; object-fit:cover; border-radius:var(--r-md); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
@@ -1468,12 +1475,12 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
     case 'text_on_image': {
-      const src = d.src || d.imageUrl;
+      const src = AssetStore.resolveMediaSrc(d.src || d.imageUrl);
       const overlayOpacity = ds.overlayOpacity ?? 40;
       const textColor = ds.textColor === 'dark' ? '#1a1a1a' : '#ffffff';
       const position = ds.textPosition || 'center';
       const justifyMap = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
-      const bgStyle = src ? `background-image:url('${src}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);';
+      const bgStyle = (d.src || d.imageUrl) ? `background-image:url('${src}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);';
       return `<div style="${bgStyle} border-radius:var(--r-md); min-height:320px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
         ${src ? `<div class="text-on-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)});"></div>` : ''}
         <div style="position:relative; z-index:1; padding:32px; text-align:center; max-width:520px;">
@@ -1489,14 +1496,15 @@ function renderBlockContent(block, editable) {
       return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
         ${items.map((item, i) => {
           const fit = item.imageFit || 'cover';
+          const rSrc = item.src ? AssetStore.resolveMediaSrc(item.src) : null;
           let imageHtml;
           if (!item.src) {
             imageHtml = imagePlaceholder(item.title || item.description || `Slide ${i + 1}`, 160);
           } else if (fit === 'full') {
-            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${item.src}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
           } else {
             const of = fitMap[fit] || 'cover';
-            imageHtml = `<img src="${item.src}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
+            imageHtml = `<img src="${rSrc}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
           }
           return `
           <div class="card card-pad" style="min-width:180px; max-width:220px;">
@@ -1516,7 +1524,7 @@ function renderBlockContent(block, editable) {
           <div class="card card-pad text-center" style="position:relative;">
             ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
             ${item.imageUrl
-              ? `<img src="${item.imageUrl}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.imageUrl}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
+              ? `<img src="${AssetStore.resolveMediaSrc(item.imageUrl)}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${AssetStore.resolveMediaSrc(item.imageUrl)}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
               : imagePlaceholder(item.title || 'Item', 150)}
             <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
@@ -1541,7 +1549,7 @@ function renderBlockContent(block, editable) {
       const showSpeed = audioSettings.showPlaybackSpeed !== false;
       const loop = !!audioSettings.loop;
       const autoplay = !editable && !!audioSettings.autoplay;
-      const src = d.src;
+      const src = AssetStore.resolveMediaSrc(d.src);
 
       const innerContent = src
         ? `<audio class="block-audio-el" controls ${loop ? 'loop' : ''} ${autoplay ? 'autoplay' : ''} ${!allowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; border-radius:${audioRadius};" src="${src}"></audio>
@@ -1589,7 +1597,7 @@ function renderBlockContent(block, editable) {
 
       let videoInner;
       if (uploadedSrc || (embed && embed.type === 'mp4')) {
-        const videoSrc = uploadedSrc || embed.embedUrl;
+        const videoSrc = uploadedSrc ? AssetStore.resolveMediaSrc(uploadedSrc) : embed.embedUrl;
         videoInner = `<video class="block-video-el" controls ${videoLoop ? 'loop' : ''} ${videoAutoplay ? 'autoplay muted' : ''} ${!videoAllowDownload ? 'controlslist="nodownload"' : ''} style="width:100%; display:block; background:#000; border-radius:${videoRadius};" src="${videoSrc}">${trackHtml}</video>
           ${videoShowSpeed ? playbackSpeedSelector('block-video-el') : ''}`;
       } else if (embed && (embed.type === 'youtube' || embed.type === 'vimeo')) {
@@ -1637,7 +1645,7 @@ function renderBlockContent(block, editable) {
               <div style="font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(fileName)}</div>
               <div class="text-sm text-muted">${escapeHtml(fileSize)}</div>
             </div>
-            ${fileSrc ? `<a href="${fileSrc}" download="${escapeHtml(fileName)}" class="btn btn-secondary btn-sm">Download</a>` : ''}
+            ${fileSrc ? `<a href="${AssetStore.resolveMediaSrc(fileSrc)}" download="${escapeHtml(fileName)}" class="btn btn-secondary btn-sm">Download</a>` : ''}
           </div>`
         : `<div class="flex items-center gap-12">
             <span style="font-size:22px;">📎</span>
@@ -1736,7 +1744,7 @@ function renderBlockContent(block, editable) {
       const objectFit = fitMap[ds.imageFit] || 'cover';
       return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto;">
         <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; background:${bg}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
-          ${d.image ? `<img src="${d.image}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
+          ${d.image ? `<img src="${AssetStore.resolveMediaSrc(d.image)}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
           ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor};" data-hindex="${i}"
               onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
               onclick="event.stopPropagation(); lumioHotspotToggle(this, ${i})" aria-label="${escapeHtml(h.title || 'Hotspot ' + (i + 1))}">${markerGlyph(i)}</button>`).join('')}
@@ -1811,12 +1819,12 @@ function renderBlockContent(block, editable) {
       const completionMessage = settings.completionMessage || 'Scenario complete!';
       return `<div class="lumio-scenario" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="0" style="border-radius:${radius}; overflow:hidden;">
         ${scenes.map((scene, i) => `<div class="lumio-scenario-scene ${i === 0 ? 'active' : ''}" data-scene="${i}">
-          <div class="lumio-scenario-bg" style="${scene.backgroundImage ? `background-image:url('${scene.backgroundImage}'); background-size:cover; background-position:center;` : `background:${bg};`}">
-            ${scene.backgroundVideo ? `<video class="lumio-scenario-bgvideo" autoplay muted loop playsinline src="${scene.backgroundVideo}"></video>` : ''}
+          <div class="lumio-scenario-bg" style="${scene.backgroundImage ? `background-image:url('${AssetStore.resolveMediaSrc(scene.backgroundImage)}'); background-size:cover; background-position:center;` : `background:${bg};`}">
+            ${scene.backgroundVideo ? `<video class="lumio-scenario-bgvideo" autoplay muted loop playsinline src="${AssetStore.resolveMediaSrc(scene.backgroundVideo)}"></video>` : ''}
             <div class="lumio-scenario-overlay" style="background:rgba(0,0,0,${overlay / 100});"></div>
-            ${scene.characterImage && charPlacement !== 'none' ? `<img class="lumio-scenario-character pos-${charPlacement}" src="${scene.characterImage}" alt="${escapeHtml(scene.characterName || '')}" />` : ''}
+            ${scene.characterImage && charPlacement !== 'none' ? `<img class="lumio-scenario-character pos-${charPlacement}" src="${AssetStore.resolveMediaSrc(scene.characterImage)}" alt="${escapeHtml(scene.characterName || '')}" />` : ''}
             <div class="lumio-scenario-content">
-              ${scene.backgroundAudio ? `<div class="media-frame" style="margin-bottom:8px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${scene.backgroundAudio}"></audio></div>` : ''}
+              ${scene.backgroundAudio ? `<div class="media-frame" style="margin-bottom:8px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${AssetStore.resolveMediaSrc(scene.backgroundAudio)}"></audio></div>` : ''}
               <div class="lumio-scenario-dialogue" data-style="${dialogueStyle}">
                 ${scene.characterName ? `<div class="lumio-scenario-character-name">${escapeHtml(scene.characterName)}</div>` : ''}
                 <div class="editable-text lumio-scenario-dialogue-text" data-role="body" data-field="sceneDialogue" data-list="scenes" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Dialogue text...">${richTextOut(scene.dialogue || '')}</div>
@@ -4197,7 +4205,7 @@ function surfaceTextColor(ds) { return (ds && (ds.bgStyle === 'dark' || ds.bgSty
 function continueWrapperStyle(ds) {
   const radius = RADIUS_MAP[ds.radius] || RADIUS_MAP.soft;
   if (ds.bgStyle === 'image' && ds.bgImage) {
-    return `background:url('${ds.bgImage}') center/cover; padding:16px; border-radius:${radius};`;
+    return `background:url('${AssetStore.resolveMediaSrc(ds.bgImage)}') center/cover; padding:16px; border-radius:${radius};`;
   }
   if (ds.bgStyle === 'custom') {
     return `background:${ds.customBg || 'transparent'}; padding:16px; border-radius:${radius};`;
@@ -4247,12 +4255,13 @@ function defaultListItem(blockType, listKey) {
 function itemImageHtml(item, h) {
   if (!item.image) return '';
   const fit = item.imageFit || 'cover';
+  const src = AssetStore.resolveMediaSrc(item.image);
   if (fit === 'full') {
-    return `<div style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-md); overflow:hidden; margin-bottom:10px;"><img src="${item.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+    return `<div style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-md); overflow:hidden; margin-bottom:10px;"><img src="${src}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
   }
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
   const of = fitMap[fit] || 'cover';
-  return `<img src="${item.image}" alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; margin-bottom:10px;" />`;
+  return `<img src="${src}" alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; margin-bottom:10px;" />`;
 }
 
 /* Renders an item's video/audio/attachment using the same controls/markup
@@ -4263,16 +4272,16 @@ function itemMediaExtrasHtml(item) {
   if (item.video) {
     const embed = parseVideoEmbedUrl(item.video);
     if (!embed || embed.type === 'mp4') {
-      html += `<div class="media-frame" style="margin-bottom:10px;"><video class="block-video-el" controls playsinline style="width:100%; border-radius:var(--r-md); background:#000; display:block;" src="${item.video}"></video>${playbackSpeedSelector('block-video-el')}</div>`;
+      html += `<div class="media-frame" style="margin-bottom:10px;"><video class="block-video-el" controls playsinline style="width:100%; border-radius:var(--r-md); background:#000; display:block;" src="${AssetStore.resolveMediaSrc(item.video)}"></video>${playbackSpeedSelector('block-video-el')}</div>`;
     } else {
       html += `<div class="media-frame" style="margin-bottom:10px;"><iframe src="${embed.embedUrl}" style="width:100%; aspect-ratio:16/9; border:0; border-radius:var(--r-md);" allowfullscreen></iframe></div>`;
     }
   }
   if (item.audio) {
-    html += `<div class="media-frame" style="margin-bottom:10px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${item.audio}"></audio>${playbackSpeedSelector('block-audio-el')}${item.audioTranscript ? `<details class="mt-8"><summary class="text-sm text-muted" style="cursor:pointer;">Transcript</summary><div class="text-sm mt-4">${escapeHtml(item.audioTranscript)}</div></details>` : ''}</div>`;
+    html += `<div class="media-frame" style="margin-bottom:10px;"><audio class="block-audio-el" controls style="width:100%; display:block;" src="${AssetStore.resolveMediaSrc(item.audio)}"></audio>${playbackSpeedSelector('block-audio-el')}${item.audioTranscript ? `<details class="mt-8"><summary class="text-sm text-muted" style="cursor:pointer;">Transcript</summary><div class="text-sm mt-4">${escapeHtml(item.audioTranscript)}</div></details>` : ''}</div>`;
   }
   if (item.file) {
-    html += `<div class="flex items-center gap-12" style="margin-bottom:10px; padding:10px 12px; background:var(--surface-50); border-radius:var(--r-md);"><span style="font-size:20px;">📎</span><div style="flex:1; min-width:0; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.fileFileName || 'Attachment')}</div><a href="${item.file}" download="${escapeHtml(item.fileFileName || 'download')}" class="btn btn-secondary btn-sm">Download</a></div>`;
+    html += `<div class="flex items-center gap-12" style="margin-bottom:10px; padding:10px 12px; background:var(--surface-50); border-radius:var(--r-md);"><span style="font-size:20px;">📎</span><div style="flex:1; min-width:0; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.fileFileName || 'Attachment')}</div><a href="${AssetStore.resolveMediaSrc(item.file)}" download="${escapeHtml(item.fileFileName || 'download')}" class="btn btn-secondary btn-sm">Download</a></div>`;
   }
   return html;
 }

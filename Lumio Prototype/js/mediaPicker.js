@@ -12,9 +12,10 @@ const MEDIA_PICKER_KINDS = {
     types: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/svg+xml'],
     extRegex: /\.(png|jpe?g|webp|gif|svg)$/i,
     extra: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'],
-    maxBytes: 2 * 1024 * 1024,
+    maxBytes: UPLOAD_LIMITS.image,
     formatsLabel: 'PNG, JPG, JPEG, WEBP, GIF, SVG',
-    maxLabel: '2MB',
+    maxLabel: _formatUploadLimit(UPLOAD_LIMITS.image),
+    noun: 'image',
     icon: '🖼️',
     errorLabel: 'a PNG, JPG, JPEG, WEBP, GIF, or SVG image',
     defaultMime: 'image/png',
@@ -23,9 +24,10 @@ const MEDIA_PICKER_KINDS = {
     types: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mp4', 'audio/x-m4a', 'audio/m4a', 'audio/ogg'],
     extRegex: /\.(mp3|wav|m4a|ogg)$/i,
     extra: ['.mp3', '.wav', '.m4a', '.ogg'],
-    maxBytes: 100 * 1024 * 1024,
+    maxBytes: UPLOAD_LIMITS.audio,
     formatsLabel: 'MP3, WAV, M4A, OGG',
-    maxLabel: '100MB',
+    maxLabel: _formatUploadLimit(UPLOAD_LIMITS.audio),
+    noun: 'audio file',
     icon: '🎵',
     errorLabel: 'an MP3, WAV, M4A, or OGG audio file',
     defaultMime: 'audio/mpeg',
@@ -34,9 +36,10 @@ const MEDIA_PICKER_KINDS = {
     types: ['video/mp4', 'video/webm', 'video/quicktime'],
     extRegex: /\.(mp4|webm|mov)$/i,
     extra: ['.mp4', '.webm', '.mov'],
-    maxBytes: 500 * 1024 * 1024,
+    maxBytes: UPLOAD_LIMITS.video,
     formatsLabel: 'MP4, WEBM, MOV',
-    maxLabel: '500MB',
+    maxLabel: _formatUploadLimit(UPLOAD_LIMITS.video),
+    noun: 'video',
     icon: '🎬',
     errorLabel: 'an MP4, WEBM, or MOV video file',
     defaultMime: 'video/mp4',
@@ -54,9 +57,10 @@ const MEDIA_PICKER_KINDS = {
     ],
     extRegex: /\.(pdf|docx|pptx|xlsx|csv|txt|zip)$/i,
     extra: ['.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.txt', '.zip'],
-    maxBytes: 100 * 1024 * 1024,
+    maxBytes: UPLOAD_LIMITS.document,
     formatsLabel: 'PDF, DOCX, PPTX, XLSX, CSV, TXT, ZIP',
-    maxLabel: '100MB',
+    maxLabel: _formatUploadLimit(UPLOAD_LIMITS.document),
+    noun: 'document',
     icon: '📎',
     errorLabel: 'a PDF, DOCX, PPTX, XLSX, CSV, TXT, or ZIP file',
     defaultMime: 'application/octet-stream',
@@ -93,14 +97,18 @@ function readMediaPickerFile(file, callback, opts) {
     return;
   }
   if (file.size > cfg.maxBytes) {
-    const maxMb = cfg.maxBytes / 1024 / 1024;
-    callback(null, `File is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is ${maxMb}MB.`);
+    const fileMb = file.size / 1024 / 1024;
+    const fileStr = fileMb >= 1024 ? `${(fileMb / 1024).toFixed(1)} GB` : `${fileMb.toFixed(1)} MB`;
+    callback(null, `This ${cfg.noun} is ${fileStr}. Maximum supported ${cfg.noun} size is ${cfg.maxLabel}.`);
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => callback({ src: reader.result, fileName: file.name, mimeType: type || cfg.defaultMime, size: file.size }, null);
-  reader.onerror = () => callback(null, 'Could not read the selected file. Please try again.');
-  reader.readAsDataURL(file);
+  AssetStore.put(file).then(assetId => {
+    return AssetStore.resolveUrl(assetId).then(() => {
+      callback({ src: assetId, fileName: file.name, mimeType: type || cfg.defaultMime, size: file.size }, null);
+    });
+  }).catch(() => {
+    callback(null, 'Could not store the file. Please try again.');
+  });
 }
 
 // Opens the shared Media Picker modal.

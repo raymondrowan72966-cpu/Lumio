@@ -4,6 +4,112 @@
    the existing learner rendering pipeline without modification.
    ============================================================ */
 
+/* ── Media optimization utilities ── */
+
+/**
+ * generateImageThumbnail(blob, maxW?, maxH?, quality?) → Promise<Blob|null>
+ * Downscales a raster image blob to fit within maxW×maxH, re-encodes as WebP.
+ * Returns null if the image cannot be decoded (SVG, corrupt file, etc.).
+ */
+function generateImageThumbnail(blob, maxW = 400, maxH = 240, quality = 0.72) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(thumb => resolve(thumb || null), 'image/webp', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+/**
+ * optimizeImageForPublish(blob, mimeType) → Promise<{ blob, mimeType, ext }>
+ * Re-encodes PNG/JPG/WebP as WebP at quality 0.82 for publish packages.
+ * Returns the original if the WebP output would be larger, or if the type
+ * is SVG/GIF (which must pass through unchanged).
+ * Originals in IndexedDB are never modified.
+ */
+function optimizeImageForPublish(blob, mimeType) {
+  const passThrough = ['image/svg+xml', 'image/gif'];
+  if (passThrough.includes(mimeType)) {
+    return Promise.resolve({ blob, mimeType, ext: _mimeToExt(mimeType) });
+  }
+  const rasterTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+  if (!rasterTypes.includes(mimeType)) {
+    return Promise.resolve({ blob, mimeType, ext: _mimeToExt(mimeType) });
+  }
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      canvas.toBlob(optimized => {
+        if (optimized && optimized.size < blob.size) {
+          resolve({ blob: optimized, mimeType: 'image/webp', ext: 'webp' });
+        } else {
+          resolve({ blob, mimeType, ext: _mimeToExt(mimeType) });
+        }
+      }, 'image/webp', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve({ blob, mimeType, ext: _mimeToExt(mimeType) }); };
+    img.src = url;
+  });
+}
+
+/**
+ * analyzePublishAssets(course, lessonData) → Promise<analysis>
+ * Scans all asset refs in course+lessons, categorises by MIME type, computes sizes,
+ * and generates human-readable warnings for oversized files.
+ */
+async function analyzePublishAssets(course, lessonData) {
+  const refs = _collectProjectAssetRefs(course, lessonData);
+  const entries = await AssetStore.exportAll(refs);
+
+  const images = [], audio = [], video = [], docs = [];
+  for (const a of entries) {
+    const mt = a.mimeType || '';
+    if (mt.startsWith('image/')) images.push(a);
+    else if (mt.startsWith('audio/')) audio.push(a);
+    else if (mt.startsWith('video/')) video.push(a);
+    else docs.push(a);
+  }
+
+  const totalSize = entries.reduce((s, a) => s + (a.size || 0), 0);
+
+  const WARN_IMAGE_BYTES = UPLOAD_LIMITS.image / 2;          // 25 MB
+  const WARN_AUDIO_BYTES = UPLOAD_LIMITS.document;            // 100 MB
+  const WARN_VIDEO_BYTES = UPLOAD_LIMITS.video / 2;          // 512 MB
+
+  const warnings = [];
+  for (const a of entries) {
+    const sz = a.size || 0;
+    const mb = sz / 1024 / 1024;
+    const mt = a.mimeType || '';
+    const name = escapeHtml(a.fileName || 'unknown');
+    if (mt.startsWith('image/') && sz > WARN_IMAGE_BYTES)
+      warnings.push(`Image "${name}" is ${mb.toFixed(1)} MB — consider using a smaller image`);
+    if (mt.startsWith('audio/') && sz > WARN_AUDIO_BYTES)
+      warnings.push(`Audio "${name}" is ${mb.toFixed(1)} MB — this will produce a large publish package`);
+    if (mt.startsWith('video/') && sz > WARN_VIDEO_BYTES)
+      warnings.push(`Video "${name}" is ${mb.toFixed(1)} MB — this will produce a large publish package`);
+  }
+
+  return { refs, entries, images, audio, video, docs, totalSize, warnings };
+}
+
 const PUBLISH_JS_FILES = [
   'js/data.js',
   'js/blocks/families.js',
@@ -15,6 +121,7 @@ const PUBLISH_JS_FILES = [
   'js/blocks/accessibilityRuntime.js',
   'js/blocks/completionEngine.js',
   'js/heroImage.js',
+  'js/assetStore.js',
   'js/app.js',
   'js/mediaPicker.js',
   'js/screens/wizard.js',
@@ -35,14 +142,7 @@ async function publishHtmlPackage(course, triggerBtn) {
   if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
 
   try {
-    const [css, ...jsSources] = await Promise.all([
-      fetch('css/styles.css').then(r => { if (!r.ok) throw new Error('CSS fetch failed'); return r.text(); }),
-      ...PUBLISH_JS_FILES.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(f + ' fetch failed'); return r.text(); })),
-    ]);
-
     // Collect all lessons and assessments belonging to this course.
-    // course.lessons and course.assessments are arrays of objects {id, title, ...},
-    // so we extract .id before using it as a LumioState.lessons key.
     const lessonData = {};
     (course.lessons || []).forEach(l => {
       if (LumioState.lessons[l.id]) lessonData[l.id] = LumioState.lessons[l.id];
@@ -51,10 +151,46 @@ async function publishHtmlPackage(course, triggerBtn) {
       if (LumioState.lessons[a.id]) lessonData[a.id] = LumioState.lessons[a.id];
     });
 
-    const courseDataJson = JSON.stringify({ course, lessons: lessonData });
+    // Collect all asset:// refs from this course and fetch their blobs.
+    const assetRefs = _collectProjectAssetRefs(course, lessonData);
+    const assetEntries = await AssetStore.exportAll(assetRefs);
 
-    // Bootstrap overrides app.js's DOMContentLoaded handler to launch learner mode instead of the Lumio app.
-    // Placed after all JS is defined; window.render is resolved at call time so the override wins.
+    // Build publish-safe path map: { 'asset://hash' → 'assets/hash.ext' }
+    // Images are re-encoded as WebP at publish time; originals in IDB are untouched.
+    const assetMap = {};
+    const zipAssetFiles = [];
+    let savedBytes = 0;
+    for (const a of assetEntries) {
+      let finalBlob = a.blob;
+      let finalMime = a.mimeType;
+      let finalExt = _mimeToExt(a.mimeType);
+
+      if (a.mimeType && a.mimeType.startsWith('image/')) {
+        const opt = await optimizeImageForPublish(a.blob, a.mimeType);
+        finalBlob = opt.blob;
+        finalMime = opt.mimeType;
+        finalExt = opt.ext;
+        savedBytes += Math.max(0, a.blob.size - finalBlob.size);
+      }
+
+      const hexId = a.id.replace('asset://', '');
+      const filePath = `assets/${hexId}.${finalExt}`;
+      assetMap[a.id] = filePath;
+      const buf = await finalBlob.arrayBuffer();
+      zipAssetFiles.push({ name: filePath, content: new Uint8Array(buf) });
+    }
+
+    const [css, ...jsSources] = await Promise.all([
+      fetch('css/styles.css').then(r => { if (!r.ok) throw new Error('CSS fetch failed'); return r.text(); }),
+      ...PUBLISH_JS_FILES.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(f + ' fetch failed'); return r.text(); })),
+    ]);
+
+    const courseDataJson = JSON.stringify({ course, lessons: lessonData });
+    const assetMapJson = JSON.stringify(assetMap);
+
+    // Bootstrap overrides app.js's DOMContentLoaded handler to launch learner mode.
+    // Also patches AssetStore to resolve asset:// refs via the publish-time asset map
+    // instead of IndexedDB, making the published package fully self-contained.
     const bootstrapScript = `(function(){
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
@@ -65,6 +201,10 @@ async function publishHtmlPackage(course, triggerBtn) {
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
   LumioState.learnerPreview={returnTo:''};
   LearnerUI.publishedMode=true;
+  var __am=window.__LUMIO_ASSET_MAP__;
+  AssetStore.resolveMediaSrc=function(src){if(!src)return'';return(__am&&__am[src])||src;};
+  AssetStore.preloadBlocks=async function(){return 0;};
+  AssetStore.resolveUrl=async function(src){return((__am&&__am[src])||src)||null;};
   window.navigate=function(hash){
     if(location.hash===hash){window.render();}
     else{location.hash=hash;}
@@ -95,6 +235,7 @@ async function publishHtmlPackage(course, triggerBtn) {
 <body>
   <div id="app"></div>
   <script>window.__LUMIO_COURSE_DATA__=${courseDataJson};<\/script>
+  <script>window.__LUMIO_ASSET_MAP__=${assetMapJson};<\/script>
 ${jsBlocks}
   <script>${bootstrapScript}<\/script>
 </body>
@@ -105,6 +246,7 @@ ${jsBlocks}
     const zipBytes = buildZip([
       { name: 'index.html', content: html },
       { name: 'course-data.json', content: courseDataPretty },
+      ...zipAssetFiles,
     ]);
 
     const blob = new Blob([zipBytes], { type: 'application/zip' });
@@ -118,7 +260,10 @@ ${jsBlocks}
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: 'HTML Web Package', version: course.publishVersion || '1.0', status: 'success' });
     scheduleLumioSave();
-    toast('HTML package downloaded', '🌐');
+    const assetNote = assetEntries.length > 0
+      ? ` (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''}${savedBytes > 1024 ? `, saved ${formatFileSize(savedBytes)}` : ''})`
+      : '';
+    toast(`HTML package downloaded${assetNote}`, '🌐');
   } catch (err) {
     console.error('[Lumio Publish] HTML publish failed:', err);
     toast('Publish failed — see console', '❌');

@@ -151,7 +151,7 @@ function avatarHtml(user, size) {
   const sizeStyle = size ? `width:${size}px; height:${size}px; font-size:${Math.round(size * 0.38)}px;` : '';
   if (user.avatar) {
     return `<div class="avatar" style="${sizeStyle} background:none; padding:0; overflow:hidden;">
-      <img src="${user.avatar}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;" />
+      <img src="${AssetStore.resolveMediaSrc(user.avatar)}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;" />
     </div>`;
   }
   const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
@@ -487,11 +487,62 @@ function scheduleLumioSave() {
 }
 
 /* ---------------- EXPORT / IMPORT ENGINE ---------------- */
-const LUMIO_FILE_VERSION = 1;
+const LUMIO_FILE_VERSION = 1;    // project.json schema version (unchanged)
+const LUMIO_PACKAGE_VERSION = 2; // .lumio container format version
 
-function exportProject(id) {
+// Maps MIME type to a short file extension used for asset filenames inside the ZIP.
+function _mimeToExt(mime) {
+  const map = {
+    'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif',
+    'audio/mpeg':'mp3','audio/mp3':'mp3','audio/ogg':'ogg','audio/wav':'wav','audio/mp4':'m4a',
+    'video/mp4':'mp4','video/webm':'webm','video/ogg':'ogv',
+    'application/pdf':'pdf',
+  };
+  return map[(mime || '').toLowerCase()] || 'bin';
+}
+
+// Scans all media fields in a course + lessons snapshot and returns every
+// asset:// reference found. Mirrors the field coverage in AssetStore.preloadBlocks.
+function _collectProjectAssetRefs(course, lessons) {
+  const refs = new Set();
+  function collect(val) { if (AssetStore.isAssetRef(val)) refs.add(val); }
+
+  if (course) {
+    collect((course.heroImage || {}).src);
+    collect((course.heroImage || {})._thumbSrc);
+    collect((course.thumbnailImage || {}).src);
+  }
+
+  Object.values(lessons || {}).forEach(blocks => {
+    (Array.isArray(blocks) ? blocks : []).forEach(block => {
+      const d = block.data || {}, ds = block.design || {};
+      collect(d.src); collect(d.imageUrl); collect(d.image);
+      collect(d.background); collect(d.avatar); collect(ds.bgImage);
+      for (const it of (d.items || [])) {
+        collect(it.src); collect(it.imageUrl); collect(it.image);
+        collect(it.audio); collect(it.video); collect(it.file);
+        const f = it.front || {}, b = it.back || {};
+        collect(f.image); collect(f.audio); collect(f.video);
+        collect(b.image); collect(b.audio); collect(b.video);
+      }
+      for (const q of (d.quotes || [])) collect(q.avatar);
+      for (const sc of (d.scenes || [])) {
+        collect(sc.backgroundImage); collect(sc.backgroundVideo);
+        collect(sc.backgroundAudio); collect(sc.characterImage);
+      }
+      for (const h of (d.hotspots || [])) {
+        collect(h.image); collect(h.audio); collect(h.video); collect(h.file);
+      }
+    });
+  });
+
+  return [...refs];
+}
+
+async function exportProject(id) {
   const p = LumioState.projects.find(x => x.id === id);
   if (!p) return;
+
   const course = LumioState.courses[id] ? JSON.parse(JSON.stringify(LumioState.courses[id])) : null;
   const lessonIds = course ? (course.lessons || []).map(l => l.id) : [];
   const assessmentIds = course ? (course.assessments || []).map(a => a.id) : [];
@@ -500,39 +551,113 @@ function exportProject(id) {
     if (LumioState.lessons[lid]) lessons[lid] = JSON.parse(JSON.stringify(LumioState.lessons[lid]));
   });
 
-  const payload = {
+  // Collect and fetch all referenced assets
+  const assetRefs = _collectProjectAssetRefs(course, lessons);
+  const assetEntries = await AssetStore.exportAll(assetRefs);
+
+  // Build asset manifest entries (id → path inside ZIP)
+  const assetManifest = assetEntries.map(a => ({
+    id: a.id,
+    file: `assets/${a.id.replace('asset://', '')}.${_mimeToExt(a.mimeType)}`,
+    mimeType: a.mimeType,
+    fileName: a.fileName,
+    size: a.size,
+  }));
+
+  const zip = new JSZip();
+
+  zip.file('manifest.json', JSON.stringify({
+    packageVersion: LUMIO_PACKAGE_VERSION,
+    exportedAt: Date.now(),
+    projectId: p.id,
+    assetCount: assetEntries.length,
+    assets: assetManifest,
+  }, null, 2));
+
+  zip.file('project.json', JSON.stringify({
     lumioFile: LUMIO_FILE_VERSION,
     exportedAt: Date.now(),
     project: JSON.parse(JSON.stringify(p)),
     course,
     lessons,
-  };
+  }, null, 2));
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = (p.title || 'project').replace(/[^a-z0-9 _-]/gi, '_') + '.lumio';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const idToMeta = Object.fromEntries(assetManifest.map(m => [m.id, m]));
+  for (const a of assetEntries) {
+    zip.file(idToMeta[a.id].file, a.blob);
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const url = URL.createObjectURL(zipBlob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = (p.title || 'project').replace(/[^a-z0-9 _-]/gi, '_') + '.lumio';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
-  toast(`"${p.title}" backup exported`, '📦');
+  toast(`"${p.title}" exported (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, '📦');
 }
 
 function importProject(file) {
-  // Validate file extension before reading — reject unsupported formats clearly.
   const name = (file.name || '').toLowerCase();
   if (!name.endsWith('.lumio')) {
     const unsupported = ['.zip','.story','.scorm','.xapi'].some(ext => name.endsWith(ext));
-    if (unsupported) {
-      toast('Unsupported format — Lumio only imports .lumio backup files', '⚠️');
-    } else {
-      toast('Unrecognised file — please choose a .lumio backup file', '⚠️');
-    }
+    toast(unsupported
+      ? 'Unsupported format — Lumio only imports .lumio backup files'
+      : 'Unrecognised file — please choose a .lumio backup file', '⚠️');
     return;
   }
 
+  // Detect v2 ZIP (magic bytes PK\x03\x04) vs v1 plain JSON
+  const headReader = new FileReader();
+  headReader.onload = async (e) => {
+    const bytes = new Uint8Array(e.target.result);
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04;
+    if (isZip) {
+      await _importProjectV2(file);
+    } else {
+      _importProjectV1(file);
+    }
+  };
+  headReader.readAsArrayBuffer(file.slice(0, 4));
+}
+
+async function _importProjectV2(file) {
+  try {
+    const zip = await JSZip.loadAsync(file);
+
+    const manifestFile = zip.file('manifest.json');
+    if (!manifestFile) { toast('Invalid .lumio file — missing manifest', '⚠️'); return; }
+    const manifest = JSON.parse(await manifestFile.async('text'));
+    if (manifest.packageVersion !== LUMIO_PACKAGE_VERSION) {
+      toast('Unsupported package version — please use a newer version of Lumio', '⚠️'); return;
+    }
+
+    const projectFile = zip.file('project.json');
+    if (!projectFile) { toast('Invalid .lumio file — missing project data', '⚠️'); return; }
+    const payload = JSON.parse(await projectFile.async('text'));
+    if (!payload.project) { toast('Invalid .lumio file — corrupt project data', '⚠️'); return; }
+
+    // Restore assets into AssetStore before restoring project data
+    const assetEntries = [];
+    for (const meta of (manifest.assets || [])) {
+      const assetFile = zip.file(meta.file);
+      if (!assetFile) continue;
+      const buf = await assetFile.async('arraybuffer');
+      const blob = new Blob([buf], { type: meta.mimeType || 'application/octet-stream' });
+      assetEntries.push({ id: meta.id, blob, mimeType: meta.mimeType, fileName: meta.fileName, size: meta.size });
+    }
+    if (assetEntries.length > 0) await AssetStore.importAll(assetEntries);
+
+    _restoreProjectPayload(payload);
+  } catch (err) {
+    console.error('Lumio v2 import error', err);
+    toast('Could not import file — it may be corrupt', '⚠️');
+  }
+}
+
+function _importProjectV1(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
@@ -541,55 +666,54 @@ function importProject(file) {
         toast('Invalid .lumio file — file may be corrupt or from an incompatible version', '⚠️');
         return;
       }
-
-      // Remap IDs to avoid collisions with existing state.
-      const idMap = {};
-      const remap = (oldId, prefix) => {
-        if (!idMap[oldId]) idMap[oldId] = generateUniqueId(prefix);
-        return idMap[oldId];
-      };
-
-      const p = JSON.parse(JSON.stringify(payload.project));
-      const oldProjectId = p.id;
-      p.id = remap(oldProjectId, 'p');
-      p.title = (p.title || 'Imported Project') + ' (Imported)';
-      p.lastAccessed = Date.now();
-      p.deleted = false;
-      p.deletedAt = null;
-      p.ownerId = LumioState.currentUser.id;
-      p.sharedWith = [];
-      p.sharedScope = null;
-      p.sharedPermission = 'view';
-
-      let course = null;
-      if (payload.course) {
-        course = JSON.parse(JSON.stringify(payload.course));
-        course.id = p.id;
-        course.title = p.title;
-
-        (course.lessons || []).forEach(l => { l.id = remap(l.id, 'l'); });
-        (course.assessments || []).forEach(a => { a.id = remap(a.id, 'a'); });
-      }
-
-      const lessons = {};
-      Object.entries(payload.lessons || {}).forEach(([oldId, blocks]) => {
-        const newId = idMap[oldId] || remap(oldId, 'l');
-        lessons[newId] = JSON.parse(JSON.stringify(blocks));
-      });
-
-      // Inject into state.
-      LumioState.projects.unshift(p);
-      if (course) LumioState.courses[p.id] = course;
-      Object.assign(LumioState.lessons, lessons);
-      saveLumioState();
-      renderProjects();
-      toast(`"${payload.project.title}" imported`, '📥');
+      _restoreProjectPayload(payload);
     } catch (err) {
-      console.error('Lumio import error', err);
+      console.error('Lumio v1 import error', err);
       toast('Could not import file — it may be corrupt', '⚠️');
     }
   };
   reader.readAsText(file);
+}
+
+function _restoreProjectPayload(payload) {
+  const idMap = {};
+  const remap = (oldId, prefix) => {
+    if (!idMap[oldId]) idMap[oldId] = generateUniqueId(prefix);
+    return idMap[oldId];
+  };
+
+  const p = JSON.parse(JSON.stringify(payload.project));
+  p.id = remap(p.id, 'p');
+  p.title = (p.title || 'Imported Project') + ' (Imported)';
+  p.lastAccessed = Date.now();
+  p.deleted = false;
+  p.deletedAt = null;
+  p.ownerId = LumioState.currentUser.id;
+  p.sharedWith = [];
+  p.sharedScope = null;
+  p.sharedPermission = 'view';
+
+  let course = null;
+  if (payload.course) {
+    course = JSON.parse(JSON.stringify(payload.course));
+    course.id = p.id;
+    course.title = p.title;
+    (course.lessons || []).forEach(l => { l.id = remap(l.id, 'l'); });
+    (course.assessments || []).forEach(a => { a.id = remap(a.id, 'a'); });
+  }
+
+  const lessons = {};
+  Object.entries(payload.lessons || {}).forEach(([oldId, blocks]) => {
+    const newId = idMap[oldId] || remap(oldId, 'l');
+    lessons[newId] = JSON.parse(JSON.stringify(blocks));
+  });
+
+  LumioState.projects.unshift(p);
+  if (course) LumioState.courses[p.id] = course;
+  Object.assign(LumioState.lessons, lessons);
+  saveLumioState();
+  renderProjects();
+  toast(`"${payload.project.title}" imported`, '📥');
 }
 
 /* ---------------- ROUTER ---------------- */
