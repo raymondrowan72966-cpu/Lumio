@@ -884,53 +884,23 @@ const LumioData = {
         rationale: 'Based on your answers, Microlearning works best — your goal is focused on one or two topics, and learners will get the most value from a short, targeted experience.'
       };
     },
+    // Delegates to LumioAI (js/lumioAI.js) — the single source of truth for
+    // all generated content. Kept here so existing call sites (wizard.js,
+    // courseLanding.js, learnerPreview.js) don't need to change.
     generateDescription(title) {
-      return `A practical, engaging look at ${title.toLowerCase()} — built to help learners build real confidence they can apply right away.`;
+      return LumioAI.generateDescription(title);
     },
     suggestObjectives(title, audience) {
-      return [
-        { verb: 'Identify', text: `the key concepts covered in ${title}` },
-        { verb: 'Explain', text: `how ${title.toLowerCase()} applies to day-to-day work` },
-        { verb: 'Demonstrate', text: `the core skill taught in ${title.toLowerCase()}` },
-      ];
+      return LumioAI.generateObjectives({ title, audience });
     },
     blueprintFromObjectives(objectives) {
-      const interactionTypes = ['Scenario', 'Accordion', 'Flashcard Grid', 'Process', 'Tabs'];
-      const lessons = objectives.map((o, i) => ({
-        id: 'bl' + i,
-        title: `Lesson ${i + 1}: ${o.text.replace(/^[A-Za-z]+\s/, '').replace(/^./, c => c.toUpperCase())}`,
-        objectiveIndex: i,
-        duration: ['8 min', '10 min', '7 min', '6 min', '5 min'][i % 5],
-      }));
-      const assessments = objectives.map((o, i) => ({
-        id: 'ba' + i,
-        title: `Knowledge Check: ${o.text.replace(/^[A-Za-z]+\s/, '').replace(/^./, c => c.toUpperCase())}`,
-        type: ['Multiple Choice', 'Multiple Response', 'Ordering', 'Matching', 'Fill the Gap'][i % 5],
-        objectiveIndex: i,
-      }));
-      const interactions = objectives.map((o, i) => ({
-        id: 'bi' + i,
-        type: interactionTypes[i % interactionTypes.length],
-        objectiveIndex: i,
-      }));
-      const totalMinutes = lessons.reduce((sum, l) => sum + parseInt(l.duration), 0) + assessments.length * 3;
-      return { lessons, assessments, interactions, estimatedDuration: `${totalMinutes}-${totalMinutes + 10} min` };
+      return LumioAI.blueprintFromObjectives(objectives);
     },
     rewriteOutcomes(objectives) {
-      return objectives.map(o => {
-        const map = {
-          'Identify': 'know how to spot',
-          'Explain': 'be able to explain',
-          'Demonstrate': 'be able to demonstrate',
-          'List': 'be able to list',
-          'Describe': 'be able to describe',
-        };
-        const phrase = map[o.verb] || 'be able to apply';
-        return `You’ll ${phrase} ${o.text.replace(/^[A-Za-z]+\s/, '')}`;
-      });
+      return LumioAI.rewriteOutcomes(objectives);
     },
     navigationTips(lessonCount, assessmentCount, duration) {
-      return `This course has ${lessonCount} lesson${lessonCount === 1 ? '' : 's'}${assessmentCount ? ' and ' + assessmentCount + ' assessment' + (assessmentCount === 1 ? '' : 's') : ''}, and takes about ${duration} to complete. You can move through lessons in order, and revisit any lesson at any time using the course menu.`;
+      return LumioAI.generateNavigationTips({ lessonCount, assessmentCount, duration });
     },
     assistantReplies: {
       default: "I'm Lumio AI — I can help you draft content, suggest blocks, generate knowledge checks, or explain instructional design concepts. Try asking me something like “draft this lesson” or “suggest a knowledge check”.",

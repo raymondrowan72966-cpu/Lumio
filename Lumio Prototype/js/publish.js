@@ -112,6 +112,7 @@ async function analyzePublishAssets(course, lessonData) {
 
 const PUBLISH_JS_FILES = [
   'js/data.js',
+  'js/lumioAI.js',
   'js/blocks/families.js',
   'js/blocks/capabilities.js',
   'js/blocks/schema.js',
@@ -194,9 +195,46 @@ async function publishHtmlPackage(course, triggerBtn) {
     const bootstrapScript = `(function(){
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
-  window.loadLumioState=function(){return null;};
-  window.saveLumioState=function(){};
-  window.scheduleLumioSave=function(){};
+  // Learner-only persistence, isolated per published course — never the full
+  // author lumio.state. Only learnerProfile, resume, this course's own
+  // learnerProgress/interactionHistory entries, and this course's own
+  // assessment attempts are read/written. No projects/courses/assets/author
+  // data ever touch this key.
+  var __lk='lumio-learner-'+cid;
+  var __assessmentIds=(__cd.course.assessments||[]).map(function(a){return a.id;});
+  function __loadLearnerState(){
+    try{
+      var raw=localStorage.getItem(__lk);
+      if(!raw)return;
+      var rec=JSON.parse(raw);
+      if(rec.learnerProfile)LumioState.learnerProfile=rec.learnerProfile;
+      if(rec.resume)LumioState.resume=rec.resume;
+      if(rec.learnerProgress){if(!LumioState.learnerProgress)LumioState.learnerProgress={};LumioState.learnerProgress[cid]=rec.learnerProgress;}
+      if(rec.interactionHistory){if(!LumioState.interactionHistory)LumioState.interactionHistory={};LumioState.interactionHistory[cid]=rec.interactionHistory;}
+      if(rec.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};Object.assign(LumioState.assessmentAttempts,rec.assessmentAttempts);}
+    }catch(e){}
+  }
+  function __saveLearnerState(){
+    try{
+      var assessmentAttempts={};
+      __assessmentIds.forEach(function(id){
+        if((LumioState.assessmentAttempts||{})[id])assessmentAttempts[id]=LumioState.assessmentAttempts[id];
+      });
+      var rec={
+        learnerProfile:LumioState.learnerProfile,
+        resume:LumioState.resume,
+        learnerProgress:(LumioState.learnerProgress||{})[cid],
+        interactionHistory:(LumioState.interactionHistory||{})[cid],
+        assessmentAttempts:assessmentAttempts,
+      };
+      localStorage.setItem(__lk,JSON.stringify(rec));
+    }catch(e){}
+  }
+  var __saveTimer=null;
+  window.loadLumioState=function(){__loadLearnerState();return null;};
+  window.saveLumioState=__saveLearnerState;
+  window.scheduleLumioSave=function(){if(__saveTimer)clearTimeout(__saveTimer);__saveTimer=setTimeout(__saveLearnerState,400);};
+  window.addEventListener('beforeunload',__saveLearnerState);
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
   LumioState.learnerPreview={returnTo:''};

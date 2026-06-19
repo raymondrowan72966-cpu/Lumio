@@ -41,8 +41,27 @@ const LumioState = {
   currentLessonId: 'l1',
 
   // learner preview runtime state
-  learnerProgress: {}, // courseId -> { completedLessons, kcAnswers, score }
+  learnerProgress: {}, // courseId -> { completedLessons, kcAnswers, score, courseStatus, ... }
   learnerPreview: null, // { returnTo } — set when entering preview, used by Exit Preview
+
+  // learner identity — who is taking courses in this browser/session. Generated
+  // locally until a real LMS/SCORM/xAPI launch supplies a real identity.
+  learnerProfile: null, // { learnerId, learnerName, startedAt, lastAccessedAt }
+
+  // last-known learner position, independent of any single course's progress
+  // record — used to resume "where they left off" across sessions.
+  resume: null, // { courseId, lessonId, blockIndex, scrollY, timestamp }
+
+  // Append-only interaction ledger — every knowledge check submission adds a
+  // new entry here; nothing is ever overwritten. courseId -> lessonId ->
+  // blockId -> [{ timestamp, attemptNumber, interactionType, learnerResponse,
+  // correctResponse, result, score }]. blockId is currently "lessonId:index"
+  // (blocks have no stable id yet — see Interaction History audit).
+  interactionHistory: {},
+
+  // Append-only per-assessment attempt ledger. assessmentId ->
+  // [{ attemptNumber, timestamp, score, maxScore, passed, answers }]
+  assessmentAttempts: {},
 
   // signed-in user profile + account security
   currentUser: {
@@ -181,6 +200,38 @@ function normalizeKcRight(d) {
 function normalizeKcItems(d) {
   return Array.isArray(d.items) && d.items.length ? d.items : ['Step 1', 'Step 2', 'Step 3'];
 }
+/* ── Interaction/assessment history analytics helpers ──
+   Operate on any plain array of attempt-like records — used for both
+   interactionHistory[courseId][lessonId][blockId] entries
+   ({ score: { raw, max } }) and assessmentAttempts[assessmentId] entries
+   ({ score, maxScore }). Single source of truth — no duplicate logic
+   anywhere else computes "best"/"first"/"latest"/"count". */
+function _attemptRatio(entry) {
+  if (!entry) return 0;
+  if (entry.score && typeof entry.score === 'object' && typeof entry.score.max === 'number' && entry.score.max > 0) {
+    return entry.score.raw / entry.score.max;
+  }
+  if (typeof entry.score === 'number' && typeof entry.maxScore === 'number' && entry.maxScore > 0) {
+    return entry.score / entry.maxScore;
+  }
+  if (typeof entry.passed === 'boolean') return entry.passed ? 1 : 0;
+  if (entry.result) return entry.result === 'correct' ? 1 : entry.result === 'partial' ? 0.5 : 0;
+  return 0;
+}
+function getFirstAttempt(history) {
+  return (Array.isArray(history) && history.length) ? history[0] : null;
+}
+function getLatestAttempt(history) {
+  return (Array.isArray(history) && history.length) ? history[history.length - 1] : null;
+}
+function getBestAttempt(history) {
+  if (!Array.isArray(history) || !history.length) return null;
+  return history.reduce((best, h) => (_attemptRatio(h) > _attemptRatio(best) ? h : best));
+}
+function getAttemptCount(history) {
+  return Array.isArray(history) ? history.length : 0;
+}
+
 function normalizeKcAnswers(d) {
   if (Array.isArray(d.answers) && d.answers.length) return [...d.answers];
   if (d.answer) return d.answer.split('|').map(s => s.trim()).filter(Boolean);
@@ -201,7 +252,7 @@ function generateUniqueId(prefix) {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 10;
+const LUMIO_STATE_VERSION = 12;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts. */
@@ -212,9 +263,34 @@ const FLOW_SPACING_TIGHT = '8px';
 const LUMIO_PERSISTED_KEYS = [
   'projects', 'folders', 'currentFolder', 'searchQuery', 'typeFilter',
   'wizard', 'courses', 'lessons', 'currentCourseId', 'currentLessonId',
-  'learnerProgress', 'learnerPreview',
+  'learnerProgress', 'learnerPreview', 'learnerProfile', 'resume',
+  'interactionHistory', 'assessmentAttempts',
   'currentUser', 'workspace', 'adminUsers', 'invitations',
 ];
+
+// Generates a stable local learner identifier in the form "local-xxxxxxxx".
+// Used until a real LMS/SCORM/xAPI launch supplies an authoritative identity
+// (at which point LumioLMS.initialize() will overwrite learnerId/learnerName).
+function generateLearnerId() {
+  return 'local-' + Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+}
+
+// Lazily creates LumioState.learnerProfile if it doesn't exist yet, and
+// always refreshes lastAccessedAt. Safe to call on every learner render.
+function ensureLearnerProfile() {
+  if (!LumioState.learnerProfile) {
+    const now = Date.now();
+    LumioState.learnerProfile = {
+      learnerId: generateLearnerId(),
+      learnerName: null,
+      startedAt: now,
+      lastAccessedAt: now,
+    };
+  } else {
+    LumioState.learnerProfile.lastAccessedAt = Date.now();
+  }
+  return LumioState.learnerProfile;
+}
 
 function saveLumioState() {
   try {
@@ -414,6 +490,50 @@ function migrateLumioState(record) {
       if (!f.color) f.color = 'purple';
     });
     version = 10;
+  }
+
+  if (version < 11) {
+    // v11 introduces learner identity + resume foundation: learnerProfile and
+    // resume are new top-level slots (nullable — created lazily on first
+    // learner render via ensureLearnerProfile()/recordResume()). Existing
+    // learnerProgress records gain courseStatus/courseCompletedAt/
+    // lessonCompletedAt/lastLessonId/lastBlockIndex/lastAccessedAt, inferred
+    // from the existing completedLessons array so nothing is lost.
+    if (state.learnerProfile === undefined) state.learnerProfile = null;
+    if (state.resume === undefined) state.resume = null;
+    Object.entries(state.learnerProgress || {}).forEach(([courseId, progress]) => {
+      if (!progress) return;
+      const completed = Array.isArray(progress.completedLessons) ? progress.completedLessons : [];
+      const course = (state.courses || {})[courseId];
+      const totalLessons = course && Array.isArray(course.lessons) ? course.lessons.length : 0;
+      if (progress.courseStatus === undefined) {
+        progress.courseStatus = completed.length === 0 ? 'not_started'
+          : (totalLessons && completed.length >= totalLessons ? 'completed' : 'in_progress');
+      }
+      if (progress.courseCompletedAt === undefined) {
+        progress.courseCompletedAt = progress.courseStatus === 'completed' ? Date.now() : null;
+      }
+      if (progress.lessonCompletedAt === undefined) {
+        const map = {};
+        completed.forEach(id => { map[id] = null; }); // unknown historical timestamp
+        progress.lessonCompletedAt = map;
+      }
+      if (progress.lastLessonId === undefined) progress.lastLessonId = completed[completed.length - 1] || null;
+      if (progress.lastBlockIndex === undefined) progress.lastBlockIndex = 0;
+      if (progress.lastAccessedAt === undefined) progress.lastAccessedAt = null;
+    });
+    version = 11;
+  }
+
+  if (version < 12) {
+    // v12 introduces the interaction history + assessment attempt ledgers.
+    // Both are append-only and brand new — there is no prior per-attempt
+    // detail to backfill (kcAnswers only ever kept the latest attempt), so
+    // existing saves simply start with empty ledgers going forward. Nothing
+    // in learnerProgress/kcAnswers is touched or removed.
+    if (state.interactionHistory === undefined) state.interactionHistory = {};
+    if (state.assessmentAttempts === undefined) state.assessmentAttempts = {};
+    version = 12;
   }
 
   return state;
@@ -798,7 +918,10 @@ function toast(msg, icon) {
   if (existing) existing.remove();
   const t = el(`<div class="toast">${icon ? `<span>${icon}</span>` : ''}<span>${msg}</span></div>`);
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2600);
+  setTimeout(() => {
+    t.classList.add('toast-leaving');
+    t.addEventListener('animationend', () => t.remove(), { once: true });
+  }, 2600);
 }
 
 // Applies a course's theme CSS variables to the #app root so that global

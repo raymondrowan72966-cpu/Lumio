@@ -198,7 +198,7 @@ function wizardStepContent(stepKey, w) {
             <button class="btn btn-secondary" id="wiz-hero-upload">${w.heroImage && w.heroImage.src ? '🔄 Replace Image' : '📤 Upload Image'}</button>
             ${w.heroImage && w.heroImage.src ? `<button class="btn btn-ghost" id="wiz-hero-remove">🗑️ Remove Image</button>` : ''}
           </div>
-          <div class="text-sm text-muted mt-16 text-center">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
+          <div class="text-sm text-muted mt-16 text-center">Supported formats: PNG, JPG, JPEG, WEBP · Max size ${_formatUploadLimit(UPLOAD_LIMITS.image)}.</div>
           <div id="wiz-hero-error" class="text-sm mt-8 text-center" style="color:#E5484D; display:none;"></div>
         </div>
       `;

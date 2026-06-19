@@ -207,12 +207,15 @@ button { font-family: var(--font-body); cursor: pointer; }
   background: #E5484D;
   color: #fff;
   border: none;
+  box-shadow: 0 8px 24px rgba(229, 72, 77, 0.10); /* same elevation pattern as .btn-primary, red-tinted */
 }
-.btn-danger:hover { background: #C93237; box-shadow: var(--shadow-lift); }
+.btn-danger:hover { background: #C93237; box-shadow: 0 16px 40px rgba(229, 72, 77, 0.22); }
 .btn-danger:focus-visible { box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.3); }
 
+/* Sizes: small / medium (default) / large — share the same radius token,
+   only padding/font-size scale between them. */
 .btn-sm { padding: 8px 16px; font-size: calc(var(--theme-font-size, 16px) - 3px); }
-.btn-lg { padding: 14px 30px; font-size: calc(var(--theme-font-size, 16px) - 1px); border-radius: var(--theme-radius, var(--r-lg)); }
+.btn-lg { padding: 14px 30px; font-size: calc(var(--theme-font-size, 16px) - 1px); }
 
 .btn-icon {
   display: inline-flex;
@@ -228,7 +231,31 @@ button { font-family: var(--font-body); cursor: pointer; }
   outline: none;
 }
 .btn-icon:hover { color: var(--theme-primary, var(--indigo)); border-color: var(--theme-primary, var(--indigo)); background: var(--pastel-lavender); }
+.btn-icon:active { transform: scale(0.94); }
 .btn-icon.danger:hover { color: #E5484D; border-color: #E5484D; background: #FEECEC; }
+/* Toggle/active state — shared by any icon button representing an on/off
+   formatting state (bold/italic/underline, etc.), so call sites no longer
+   need inline conditional background/color styling per instance. */
+.btn-icon.active,
+.btn-icon[aria-pressed="true"] {
+  background: var(--theme-primary, var(--indigo));
+  color: #fff;
+  border-color: var(--theme-primary, var(--indigo));
+}
+.btn-icon.active:hover,
+.btn-icon[aria-pressed="true"]:hover {
+  background: var(--theme-primary, var(--indigo));
+  color: #fff;
+  border-color: var(--theme-primary, var(--indigo));
+}
+/* Compact icon-button size — small reorder/move controls that don't need
+   the standard 36px footprint. Shares the same radius scale as the rest of
+   the icon-button system rather than an arbitrary one-off value. */
+.btn-icon-xs { width: 22px; height: 22px; border-radius: 4px; }
+/* Dark icon-button variant — used where an icon button sits on a light
+   card but needs a filled, high-contrast affordance (e.g. list reordering). */
+.btn-icon-dark { background: var(--ink-900); color: #fff; border: none; }
+.btn-icon-dark:hover { background: var(--ink-900); filter: brightness(1.2); color: #fff; border-color: transparent; }
 
 .menu-item:hover { background: var(--pastel-lavender); }
 .menu-item.danger:hover { background: #FEECEC; }
@@ -905,7 +932,6 @@ button { font-family: var(--font-body); cursor: pointer; }
   position: fixed;
   bottom: 24px;
   left: 50%;
-  transform: translateX(-50%);
   background: var(--ink-900);
   color: #fff;
   padding: 12px 22px;
@@ -915,7 +941,25 @@ button { font-family: var(--font-body); cursor: pointer; }
   box-shadow: var(--shadow-md);
   z-index: 200;
   display: flex; align-items: center; gap: 10px;
-  animation: fadeInUp 0.3s ease-out;
+  max-width: calc(100vw - 32px);
+  animation: toastIn 0.3s ease-out forwards;
+}
+.toast.toast-leaving {
+  animation: toastOut 0.22s ease-in forwards;
+}
+/* The horizontal centering transform (translateX(-50%)) is baked into every
+   keyframe stop, not just the resting state — a plain CSS `transform`
+   animation replaces the whole property for its duration, so leaving it out
+   of the keyframes (as a fadeInUp reuse previously did) causes the toast to
+   render flush-left against `left:50%` for the entire entrance animation,
+   only snapping to centred once the animation finishes. */
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to   { opacity: 0; transform: translate(-50%, 10px); }
 }
 
 @media (max-width: 640px) {

@@ -594,8 +594,8 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
       marker = renderCheckboxMarker(ds, checked, i, opts.key);
     }
     const controls = editable ? `<div class="flex gap-4 list-item-controls" style="flex-shrink:0;">
-        <button class="btn-icon list-item-move-up" data-itemindex="${i}" title="Move item up" aria-label="Move item up" ${i === 0 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === 0 ? '0.4' : '1'};">↑</button>
-        <button class="btn-icon list-item-move-down" data-itemindex="${i}" title="Move item down" aria-label="Move item down" ${i === items.length - 1 ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${i === items.length - 1 ? '0.4' : '1'};">↓</button>
+        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-up" data-itemindex="${i}" title="Move item up" aria-label="Move item up" ${i === 0 ? 'disabled' : ''} style="opacity:${i === 0 ? '0.4' : '1'};">↑</button>
+        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-down" data-itemindex="${i}" title="Move item down" aria-label="Move item down" ${i === items.length - 1 ? 'disabled' : ''} style="opacity:${i === items.length - 1 ? '0.4' : '1'};">↓</button>
         <button class="btn-icon list-item-remove" data-itemindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="width:22px; height:22px; background:rgba(0,0,0,0.08); border:none; border-radius:4px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>
       </div>` : '';
     return `<div class="list-item-row flex items-start gap-4" data-itemindex="${i}" role="listitem" style="margin-bottom:8px;">
@@ -2550,9 +2550,9 @@ function renderTextBlockPanel(block, index) {
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Text Formatting</p>
       <div class="flex gap-8">
-        <button class="btn-icon text-fmt-btn" data-fmt="bold" style="width:32px; height:32px; font-weight:700; ${ds.bold ? 'background:var(--indigo); color:#fff;' : ''}">B</button>
-        <button class="btn-icon text-fmt-btn" data-fmt="italic" style="width:32px; height:32px; font-style:italic; ${ds.italic ? 'background:var(--indigo); color:#fff;' : ''}">I</button>
-        <button class="btn-icon text-fmt-btn" data-fmt="underline" style="width:32px; height:32px; text-decoration:underline; ${ds.underline ? 'background:var(--indigo); color:#fff;' : ''}">U</button>
+        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;">B</button>
+        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;">I</button>
+        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;">U</button>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Theme Font</p>
       <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
@@ -2662,9 +2662,9 @@ function renderStatementBlockPanel(block, index) {
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Text Formatting</p>
       <div class="flex gap-8">
-        <button class="btn-icon text-fmt-btn" data-fmt="bold" style="width:32px; height:32px; font-weight:700; ${ds.bold ? 'background:var(--indigo); color:#fff;' : ''}">B</button>
-        <button class="btn-icon text-fmt-btn" data-fmt="italic" style="width:32px; height:32px; font-style:italic; ${ds.italic ? 'background:var(--indigo); color:#fff;' : ''}">I</button>
-        <button class="btn-icon text-fmt-btn" data-fmt="underline" style="width:32px; height:32px; text-decoration:underline; ${ds.underline ? 'background:var(--indigo); color:#fff;' : ''}">U</button>
+        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;">B</button>
+        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;">I</button>
+        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;">U</button>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Theme Font</p>
       <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
@@ -6785,7 +6785,7 @@ function aiDraftLesson(lesson, blocks) {
       { type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore and why it matters.' } },
       { type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation of the core idea, paired with a supporting visual.', imageLabel: 'Supporting image' } },
       { type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
-      { type: 'kc_multiple_choice', data: {} }
+      { type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
     );
     renderLessonBuilder(lesson.id);
     toast('✨ Drafted a starting structure — feel free to edit any block', '✨');
@@ -6803,11 +6803,11 @@ function sendChatMessage(text, lesson, blocks) {
       { type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore.' } },
       { type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation paired with a supporting visual.', imageLabel: 'Supporting image' } },
       { type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
-      { type: 'kc_multiple_choice', data: {} }
+      { type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
     );
   }
   if (key === 'suggest a knowledge check') {
-    blocks.push({ type: 'kc_multiple_choice', data: {} });
+    blocks.push({ type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
   }
 
   renderLessonBuilder(lesson.id);

@@ -26,10 +26,40 @@ function ensureLearnerProgress(courseId) {
       kcAnswers: {},
       score: { correct: 0, total: 0 },
       blockProgress: {},
+      courseStatus: 'not_started',     // 'not_started' | 'in_progress' | 'completed'
+      courseCompletedAt: null,
+      lessonCompletedAt: {},            // lessonId -> Unix timestamp
+      lastLessonId: null,
+      lastBlockIndex: 0,
+      lastAccessedAt: null,
     };
   }
-  if (!LumioState.learnerProgress[courseId].blockProgress) LumioState.learnerProgress[courseId].blockProgress = {};
-  return LumioState.learnerProgress[courseId];
+  const p = LumioState.learnerProgress[courseId];
+  if (!p.blockProgress) p.blockProgress = {};
+  if (p.courseStatus === undefined) p.courseStatus = p.completedLessons.length ? 'in_progress' : 'not_started';
+  if (p.courseCompletedAt === undefined) p.courseCompletedAt = null;
+  if (p.lessonCompletedAt === undefined) p.lessonCompletedAt = {};
+  if (p.lastLessonId === undefined) p.lastLessonId = null;
+  if (p.lastBlockIndex === undefined) p.lastBlockIndex = 0;
+  if (p.lastAccessedAt === undefined) p.lastAccessedAt = null;
+  return p;
+}
+
+// Records "where the learner currently is" in both the cross-course `resume`
+// pointer and the per-course progress record, then schedules a save. Called
+// on lesson entry and on scroll settle (debounced) — never estimated, always
+// from the actual rendered block index.
+function recordResume(courseId, lessonId, blockIndex, scrollY) {
+  ensureLearnerProfile();
+  const progress = ensureLearnerProgress(courseId);
+  const now = Date.now();
+
+  LumioState.resume = { courseId, lessonId, blockIndex, scrollY, timestamp: now };
+  progress.lastLessonId = lessonId;
+  progress.lastBlockIndex = blockIndex;
+  progress.lastAccessedAt = now;
+
+  scheduleLumioSave();
 }
 
 function shuffleArray(arr) {
@@ -42,6 +72,8 @@ function shuffleArray(arr) {
 }
 
 function exitLearnerPreview() {
+  if (LearnerUI._scrollHandler) { window.removeEventListener('scroll', LearnerUI._scrollHandler); LearnerUI._scrollHandler = null; }
+  if (LearnerUI._headerResizeObserver) { LearnerUI._headerResizeObserver.disconnect(); LearnerUI._headerResizeObserver = null; }
   const returnTo = (LumioState.learnerPreview && LumioState.learnerPreview.returnTo) || '#/projects';
   LumioState.learnerPreview = null;
   navigate(returnTo);
@@ -495,17 +527,27 @@ function learnerShell(course, bodyHtml, opts = {}) {
     requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
   }
 
-  // Fix sticky sidebar offset to match actual header height (header can wrap).
+  // Keep the sticky sidebar's top/max-height in sync with the header's actual
+  // height (header can wrap to two lines, change with theme font size, etc.).
+  // A one-shot requestAnimationFrame fix only catches the height at that one
+  // instant — if the header changes size afterward (font load, wrap, resize)
+  // the sidebar silently falls out of sync and stops reaching the bottom of
+  // the viewport. A ResizeObserver keeps it correct for the life of this render.
+  if (LearnerUI._headerResizeObserver) { LearnerUI._headerResizeObserver.disconnect(); LearnerUI._headerResizeObserver = null; }
   if (isDesktop && !isOverview) {
-    requestAnimationFrame(() => {
-      const hdr = app.querySelector('#lp-header');
-      const aside = app.querySelector('aside');
-      if (hdr && aside) {
+    const hdr = app.querySelector('#lp-header');
+    const aside = app.querySelector('aside');
+    if (hdr && aside) {
+      const syncSidebarOffset = () => {
         const h = hdr.offsetHeight;
         aside.style.top = h + 'px';
         aside.style.maxHeight = `calc(100vh - ${h}px)`;
-      }
-    });
+      };
+      syncSidebarOffset();
+      const observer = new ResizeObserver(syncSidebarOffset);
+      observer.observe(hdr);
+      LearnerUI._headerResizeObserver = observer;
+    }
   }
 }
 
@@ -515,7 +557,16 @@ function renderLearnerCourseOverview(course) {
   const firstIncomplete = course.lessons.find(l => !progress.completedLessons.includes(l.id));
   const hasProgress = progress.completedLessons.length > 0;
   const startLabel = !hasProgress ? 'Start Course' : (firstIncomplete ? 'Continue Course' : 'Restart Course');
-  const startLesson = firstIncomplete || course.lessons[0];
+
+  // Continue Course resume priority: 1) resume.lessonId (if it points at this
+  // course), 2) progress.lastLessonId, 3) first incomplete lesson, 4) first lesson.
+  const resumeLessonId = (LumioState.resume && LumioState.resume.courseId === course.id) ? LumioState.resume.lessonId : null;
+  const resumeLesson = (resumeLessonId && course.lessons.find(l => l.id === resumeLessonId))
+    || (progress.lastLessonId && course.lessons.find(l => l.id === progress.lastLessonId))
+    || null;
+  // Resume position only applies while there's still an incomplete lesson
+  // ("Continue Course"); a fully-complete course restarts from lesson 1.
+  const startLesson = (firstIncomplete && resumeLesson) || firstIncomplete || course.lessons[0];
 
   const totalMinutes = estimateCourseDuration(course);
   const navTips = LumioData.ai.navigationTips(course.lessons.length, course.assessments.length, totalMinutes + ' min');
@@ -556,6 +607,8 @@ function renderLearnerCourseOverview(course) {
 /* ---------------- LESSON PLAYBACK ---------------- */
 function renderLearnerLesson(course, lessonId) {
   const progress = ensureLearnerProgress(course.id);
+  ensureLearnerProfile();
+  if (progress.courseStatus === 'not_started') progress.courseStatus = 'in_progress';
 
   // Check if this is an assessment (not a regular lesson).
   const assessmentIdx = (course.assessments || []).findIndex(a => a.id === lessonId);
@@ -605,15 +658,54 @@ function renderLearnerLesson(course, lessonId) {
     if (count > 0) renderLearnerLesson(course, lessonId);
   });
 
+  // Resume restoration: if we just navigated to the exact lesson the learner
+  // was last on, restore their scroll/block position once render has settled.
+  // Only ever fires once per navigation (consumes the pending flag), and never
+  // on the initial 0,0 navigate() scroll reset for unrelated lessons.
+  const isResumeTarget = LumioState.resume && LumioState.resume.courseId === course.id && LumioState.resume.lessonId === lessonId;
+  if (isResumeTarget && LumioState.resume.scrollY) {
+    const targetY = LumioState.resume.scrollY;
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, targetY)));
+  }
+
+  // Block-level bookmarking: track the actual rendered block closest to the
+  // top of the viewport as the learner scrolls (debounced), using the real
+  // data-lp-index DOM positions — never estimated.
+  if (LearnerUI._scrollHandler) window.removeEventListener('scroll', LearnerUI._scrollHandler);
+  let resumeScrollTimer = null;
+  function captureScrollPosition() {
+    const nodes = document.querySelectorAll(`[data-lp-lesson="${lessonId}"][data-lp-index]`);
+    let closestIndex = 0;
+    let closestDist = Infinity;
+    nodes.forEach(node => {
+      const dist = Math.abs(node.getBoundingClientRect().top);
+      if (dist < closestDist) { closestDist = dist; closestIndex = parseInt(node.dataset.lpIndex, 10); }
+    });
+    recordResume(course.id, lessonId, closestIndex, window.scrollY);
+  }
+  LearnerUI._scrollHandler = () => {
+    if (resumeScrollTimer) clearTimeout(resumeScrollTimer);
+    resumeScrollTimer = setTimeout(captureScrollPosition, 400);
+  };
+  window.addEventListener('scroll', LearnerUI._scrollHandler, { passive: true });
+  // Record the entry position immediately so a resume exists even if the
+  // learner never scrolls (e.g. a short lesson).
+  recordResume(course.id, lessonId, 0, window.scrollY);
+
   document.getElementById('lp-prev')?.addEventListener('click', () => {
     if (prevId) navigate('#/learner/' + course.id + '/' + prevId);
   });
   document.getElementById('lp-next')?.addEventListener('click', () => {
     if (!isAssessment && !progress.completedLessons.includes(lessonId)) {
       progress.completedLessons.push(lessonId);
+      progress.lessonCompletedAt[lessonId] = Date.now();
     }
     if (isAssessment) {
+      recordAssessmentAttempt(lessonId, lessonId, blocks, progress);
       if (isLastAssessment) {
+        progress.courseStatus = 'completed';
+        progress.courseCompletedAt = Date.now();
+        scheduleLumioSave();
         navigate('#/learner/' + course.id);
         setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
       } else {
@@ -623,6 +715,9 @@ function renderLearnerLesson(course, lessonId) {
       if (nextAfterLastLesson) {
         navigate('#/learner/' + course.id + '/' + nextAfterLastLesson);
       } else {
+        progress.courseStatus = 'completed';
+        progress.courseCompletedAt = Date.now();
+        scheduleLumioSave();
         navigate('#/learner/' + course.id);
         setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
       }
@@ -1173,6 +1268,138 @@ function submitKc(ctx, key, type, blocks) {
   }
 
   ctx.progress.kcAnswers[key] = ans;
+
+  // Append (never overwrite) a new interaction history entry — this is the
+  // record kcAnswers itself can no longer provide once a retake happens.
+  recordInteraction(ctx, blockIndex, type, ans, scoreResult, d);
+}
+
+/* ---------------- INTERACTION HISTORY ---------------- */
+
+// Maps Lumio's internal KC type tags onto the requested SCORM/xAPI-facing
+// vocabulary (multiple_choice, true_false, reflection, matching, fill_in).
+// 'ordering' has no clean match in that vocabulary — kept literal rather
+// than forced into a misleading bucket; a future adapter can decide how to
+// represent it for a given LMS/xAPI profile.
+function _mapInteractionType(rawType, d) {
+  if (rawType === 'mc') {
+    const opts = normalizeKcOptions(d).map(o => (o || '').trim().toLowerCase());
+    if (opts.length === 2 && opts.includes('true') && opts.includes('false')) return 'true_false';
+    return 'multiple_choice';
+  }
+  if (rawType === 'response') return 'multiple_choice';
+  if (rawType === 'matching') return 'matching';
+  if (rawType === 'fill_gap') return 'fill_in';
+  return rawType; // 'ordering', or any future type, passes through as-is
+}
+
+// Snapshots the learner's actual response in a stable, human-readable shape
+// (not the internal ans.* indices alone) so history remains meaningful even
+// if block content is edited later.
+function _snapshotResponse(rawType, ans, d) {
+  if (rawType === 'mc') {
+    const opts = normalizeKcOptions(d);
+    return opts[ans.selected] ?? ans.selected ?? null;
+  }
+  if (rawType === 'response') {
+    const opts = normalizeKcOptions(d);
+    return (ans.selected || []).map(i => opts[i] ?? i);
+  }
+  if (rawType === 'matching') {
+    const left = normalizeKcLeft(d), right = normalizeKcRight(d);
+    const pairs = ans.pairs || {};
+    return left.map((l, i) => ({ left: l, right: right[pairs[i]] ?? null }));
+  }
+  if (rawType === 'ordering') {
+    const items = normalizeKcItems(d);
+    return (ans.order || []).map(i => items[i]);
+  }
+  if (rawType === 'fill_gap') return ans.response ?? '';
+  return null;
+}
+
+function _snapshotCorrectResponse(rawType, d) {
+  if (rawType === 'mc') {
+    const opts = normalizeKcOptions(d);
+    return opts[d.correct ?? 0] ?? null;
+  }
+  if (rawType === 'response') {
+    const opts = normalizeKcOptions(d);
+    return Array.isArray(d.correct) ? d.correct.map(i => opts[i] ?? i) : [];
+  }
+  if (rawType === 'matching') {
+    const left = normalizeKcLeft(d), right = normalizeKcRight(d);
+    return left.map((l, i) => ({ left: l, right: right[i] ?? null }));
+  }
+  if (rawType === 'ordering') return normalizeKcItems(d);
+  if (rawType === 'fill_gap') {
+    const answers = normalizeKcAnswers(d);
+    return answers[0] || '';
+  }
+  return null;
+}
+
+// Appends one entry to LumioState.interactionHistory[courseId][lessonId][blockId].
+// blockId is "lessonId:index" today — blocks have no stable id yet (flagged
+// in the architecture audit); reordering a lesson's blocks would misattribute
+// history captured before the reorder, same caveat as kcAnswers/blockProgress.
+function recordInteraction(ctx, blockIndex, rawType, ans, scoreResult, d) {
+  if (!LumioState.interactionHistory) LumioState.interactionHistory = {};
+  const byCourse = LumioState.interactionHistory;
+  if (!byCourse[ctx.courseId]) byCourse[ctx.courseId] = {};
+  if (!byCourse[ctx.courseId][ctx.lessonId]) byCourse[ctx.courseId][ctx.lessonId] = {};
+  const blockId = ctx.lessonId + ':' + blockIndex;
+  const history = byCourse[ctx.courseId][ctx.lessonId][blockId] || (byCourse[ctx.courseId][ctx.lessonId][blockId] = []);
+
+  const result = scoreResult.correct === null ? 'ungraded'
+    : scoreResult.correct === true ? 'correct'
+    : (scoreResult.score > 0 && scoreResult.score < scoreResult.total) ? 'partial'
+    : 'incorrect';
+
+  history.push({
+    timestamp: Date.now(),
+    attemptNumber: history.length + 1,
+    interactionType: _mapInteractionType(rawType, d),
+    learnerResponse: _snapshotResponse(rawType, ans, d),
+    correctResponse: _snapshotCorrectResponse(rawType, d),
+    result,
+    score: { raw: scoreResult.score, max: scoreResult.total },
+  });
+
+  scheduleLumioSave();
+}
+
+// Appends one entry to LumioState.assessmentAttempts[assessmentId], summarizing
+// every KC block in that assessment's blocks at the moment the learner leaves
+// it (clicks Next/Finish) — the natural "submission" event for an assessment.
+function recordAssessmentAttempt(assessmentId, lessonId, blocks, progress) {
+  if (!LumioState.assessmentAttempts) LumioState.assessmentAttempts = {};
+  const history = LumioState.assessmentAttempts[assessmentId] || (LumioState.assessmentAttempts[assessmentId] = []);
+
+  let score = 0, maxScore = 0, allPassed = true, anyKc = false;
+  const answers = [];
+  blocks.forEach((block, i) => {
+    if (!block.type || !block.type.startsWith('kc_')) return;
+    anyKc = true;
+    const key = lessonId + ':' + i;
+    const ans = progress.kcAnswers[key];
+    const partial = ans && ans.partialScore;
+    if (partial) { score += partial.score || 0; maxScore += partial.total || 0; }
+    if (!ans || !ans.passed) allPassed = false;
+    answers.push({ blockIndex: i, type: block.type, response: ans ? (ans.selected ?? ans.response ?? ans.order ?? ans.pairs ?? null) : null, passed: !!(ans && ans.passed) });
+  });
+  if (!anyKc) return; // nothing to record for an assessment with no KC blocks
+
+  history.push({
+    attemptNumber: history.length + 1,
+    timestamp: Date.now(),
+    score,
+    maxScore,
+    passed: allPassed,
+    answers,
+  });
+
+  scheduleLumioSave();
 }
 
 /* ---------------- EVENT BINDING ---------------- */

@@ -97,7 +97,7 @@ function renderProjects() {
         <button class="btn btn-ghost btn-sm mb-16" id="back-to-all">← All Projects</button>
         `}
 
-        <h3 class="mb-16" style="font-size:15px;">${folder ? folder.name : (LumioState.searchQuery ? 'Search Results' : `All Projects (${LumioState.projects.filter(p => !p.deleted).length})`)}</h3>
+        <h3 class="mb-16" style="font-size:15px;">${folder ? folder.name : (LumioState.searchQuery ? 'Search Results' : 'All Projects')}</h3>
         <div id="projects-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px;">
           ${projects.length ? projects.map(p => projectCard(p)).join('') : emptyState()}
         </div>
