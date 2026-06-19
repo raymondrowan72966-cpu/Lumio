@@ -518,6 +518,7 @@ function renderLearnerCourseOverview(course) {
   const startLesson = firstIncomplete || course.lessons[0];
 
   const totalMinutes = estimateCourseDuration(course);
+  const navTips = LumioData.ai.navigationTips(course.lessons.length, course.assessments.length, totalMinutes + ' min');
 
   const body = `
     <div style="max-width:900px; margin:0 auto; padding:56px 40px 80px; width:100%;">
@@ -528,12 +529,11 @@ function renderLearnerCourseOverview(course) {
         ctaDisabled: !course.lessons.length,
       })}
 
-      ${totalMinutes > 0 ? `
-      <div class="flex items-center gap-8 mt-16" style="justify-content:center;">
-        <span class="pill pill-grey">⏱ Estimated duration: ${totalMinutes} min</span>
-      </div>` : ''}
-
       ${renderObjectivesSection(course, false)}
+
+      ${renderCourseStructureSection(course)}
+
+      ${renderNavTipsSection(course, navTips)}
     </div>
   `;
 
@@ -575,7 +575,7 @@ function renderLearnerLesson(course, lessonId) {
     : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
   const body = `
-    <div style="max-width:1100px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
+    <div style="max-width:1360px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
       <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
         <h2 style="font-size:calc(var(--theme-font-size, 16px) + 4px); font-family:var(--theme-font-display, var(--font-display));">${lesson.title}</h2>
         ${lesson.duration ? `<span class="pill pill-grey">${lesson.duration}</span>` : ''}

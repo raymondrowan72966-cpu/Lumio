@@ -15,6 +15,9 @@
 
   /* Brand Spectrum */
   --violet: #7C3AED;
+  --violet-tint: rgba(124,58,237,0.04);
+  --violet-tint-md: rgba(124,58,237,0.06);
+  --violet-border: rgba(124,58,237,0.25);
   --indigo: #4F46E5;
   --cyan: #06B6D4;
   --teal: #14B8A6;
@@ -226,6 +229,9 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .btn-icon:hover { color: var(--theme-primary, var(--indigo)); border-color: var(--theme-primary, var(--indigo)); background: var(--pastel-lavender); }
 .btn-icon.danger:hover { color: #E5484D; border-color: #E5484D; background: #FEECEC; }
+
+.menu-item:hover { background: var(--pastel-lavender); }
+.menu-item.danger:hover { background: #FEECEC; }
 
 /* Social sign-in buttons — official brand SVG marks, fixed size so they
    align consistently regardless of screen density or theme. */

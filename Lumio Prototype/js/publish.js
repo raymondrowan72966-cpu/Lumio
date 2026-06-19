@@ -40,13 +40,15 @@ async function publishHtmlPackage(course, triggerBtn) {
       ...PUBLISH_JS_FILES.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(f + ' fetch failed'); return r.text(); })),
     ]);
 
-    // Collect all lessons and assessments belonging to this course
+    // Collect all lessons and assessments belonging to this course.
+    // course.lessons and course.assessments are arrays of objects {id, title, ...},
+    // so we extract .id before using it as a LumioState.lessons key.
     const lessonData = {};
-    (course.lessons || []).forEach(lid => {
-      if (LumioState.lessons[lid]) lessonData[lid] = LumioState.lessons[lid];
+    (course.lessons || []).forEach(l => {
+      if (LumioState.lessons[l.id]) lessonData[l.id] = LumioState.lessons[l.id];
     });
-    (course.assessments || []).forEach(aid => {
-      if (LumioState.lessons[aid]) lessonData[aid] = LumioState.lessons[aid];
+    (course.assessments || []).forEach(a => {
+      if (LumioState.lessons[a.id]) lessonData[a.id] = LumioState.lessons[a.id];
     });
 
     const courseDataJson = JSON.stringify({ course, lessons: lessonData });

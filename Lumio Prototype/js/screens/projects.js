@@ -346,7 +346,7 @@ function confirmDeleteForever(id) {
         <p class="text-sm text-muted mt-8">This project will be permanently removed and cannot be restored.</p>
         <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
           <button class="btn btn-ghost" id="cancel-del">Cancel</button>
-          <button class="btn" style="background:#E5484D; color:#fff; border-radius:var(--r-pill); padding:12px 22px; font-weight:600; border:none;" id="confirm-del">Delete Forever</button>
+          <button class="btn btn-danger" id="confirm-del">Delete Forever</button>
         </div>
       </div>
     </div>
@@ -394,9 +394,6 @@ function bindProjectsEvents() {
   app.querySelector('#create-new-btn')?.addEventListener('click', openCreateNewModal);
   app.querySelector('#empty-create-btn')?.addEventListener('click', openCreateNewModal);
   app.querySelector('#new-folder-btn')?.addEventListener('click', () => openNewFolderModal());
-  app.querySelector('#all-projects-chip')?.addEventListener('click', () => {
-    LumioState.currentFolder = null; renderProjects();
-  });
   app.querySelector('#import-project-btn')?.addEventListener('click', openImportModal);
   app.querySelector('#import-file-input')?.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
@@ -472,24 +469,20 @@ function popoverAt(btn, itemsHtml) {
 }
 
 function menuItem(label, icon, danger) {
-  return `<div class="menu-item" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; color:${danger ? '#E5484D' : 'var(--ink-700)'};"
-    onmouseover="this.style.background='${danger ? '#FEECEC' : 'var(--pastel-lavender)'}'" onmouseout="this.style.background='transparent'">
+  return `<div class="menu-item${danger ? ' danger' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; color:${danger ? '#E5484D' : 'var(--ink-700)'};">
     <span>${icon}</span><span>${label}</span></div>`;
 }
 
 function openProjectMenu(btn, id) {
   const p = LumioState.projects.find(x => x.id === id);
-  const folderOptions = LumioState.folders.map(f => `<div class="menu-item move-to" data-folder="${f.id}" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;"
-      onmouseover="this.style.background='var(--pastel-lavender)'" onmouseout="this.style.background='transparent'">${f.name}</div>`).join('')
-    + `<div class="menu-item move-to" data-folder="" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;"
-      onmouseover="this.style.background='var(--pastel-lavender)'" onmouseout="this.style.background='transparent'">Uncategorized</div>`;
+  const folderOptions = LumioState.folders.map(f => `<div class="menu-item move-to" data-folder="${f.id}" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;">${f.name}</div>`).join('')
+    + `<div class="menu-item move-to" data-folder="" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;">Uncategorized</div>`;
 
   const menu = popoverAt(btn, `
     <div data-action="rename">${menuItem('Rename', '✏️')}</div>
     <div data-action="duplicate">${menuItem('Duplicate', '⧉')}</div>
     <div data-action="share">${menuItem('Share', '🔗')}</div>
-    <div class="move-parent" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;"
-      onmouseover="this.style.background='var(--pastel-lavender)'" onmouseout="this.style.background='transparent'">
+    <div class="menu-item move-parent" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;">
       <span>📁</span><span>Move to...</span>
     </div>
     <div class="move-options" style="display:none;">${folderOptions}</div>
@@ -574,7 +567,7 @@ function confirmDeleteProject(id) {
         <p class="text-sm text-muted mt-8">This will move the project to Trash. You can restore it within 30 days.</p>
         <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
           <button class="btn btn-ghost" id="cancel-del">Cancel</button>
-          <button class="btn" style="background:#E5484D; color:#fff; border-radius:var(--r-pill); padding:12px 22px; font-weight:600; border:none;" id="confirm-del">Delete</button>
+          <button class="btn btn-danger" id="confirm-del">Delete</button>
         </div>
       </div>
     </div>
@@ -620,7 +613,7 @@ function confirmDeleteFolder(folderId) {
         </p>
         <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
           <button class="btn btn-ghost" id="cancel-del">Cancel</button>
-          <button class="btn" style="background:#E5484D; color:#fff; border-radius:var(--r-pill); padding:12px 22px; font-weight:600; border:none;" id="confirm-del">Delete Folder</button>
+          <button class="btn btn-danger" id="confirm-del">Delete Folder</button>
         </div>
       </div>
     </div>
@@ -753,7 +746,7 @@ function openCreateNewModal() {
             <h3 style="font-size:15px; margin-top:12px;">Microlearning</h3>
             <p class="text-sm text-muted mt-8">Short, focused content on a single topic — best for 3-10 minutes.</p>
           </div>
-          <div class="card card-pad create-option" data-type="ai" style="cursor:pointer; text-align:center; border:1px solid rgba(124,58,237,0.25); background:linear-gradient(135deg, rgba(124,58,237,0.04), rgba(6,182,212,0.04));">
+          <div class="card card-pad create-option" data-type="ai" style="cursor:pointer; text-align:center; border:1px solid var(--violet-border); background:linear-gradient(135deg, var(--violet-tint), rgba(6,182,212,0.04));">
             <div class="ai-spark" style="margin:0 auto;">✨</div>
             <h3 style="font-size:15px; margin-top:12px;">Help Me Decide</h3>
             <p class="text-sm text-muted mt-8">Answer 2 quick questions and Lumio will recommend the best format.</p>
@@ -906,14 +899,14 @@ function openShareModal(id) {
         <p class="text-sm text-muted mb-20">Control who can access this project.</p>
 
         <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
-          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeTeam ? 'var(--violet)' : 'var(--border)'}; background:${scopeTeam ? 'rgba(124,58,237,0.04)' : 'var(--surface-0)'};" id="scope-team-label">
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeTeam ? 'var(--violet)' : 'var(--border)'}; background:${scopeTeam ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-team-label">
             <input type="radio" name="share-scope" value="team" ${scopeTeam ? 'checked' : ''} style="margin-top:2px;">
             <div>
               <div style="font-weight:600; font-size:13px;">👥 Share with Team</div>
               <div class="text-sm text-muted mt-4">Visible to all workspace members.</div>
             </div>
           </label>
-          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeIndividual ? 'var(--violet)' : 'var(--border)'}; background:${scopeIndividual ? 'rgba(124,58,237,0.04)' : 'var(--surface-0)'};" id="scope-individual-label">
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeIndividual ? 'var(--violet)' : 'var(--border)'}; background:${scopeIndividual ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-individual-label">
             <input type="radio" name="share-scope" value="individual" ${scopeIndividual ? 'checked' : ''} style="margin-top:2px;">
             <div style="flex:1;">
               <div style="font-weight:600; font-size:13px;">👤 Share with Individual</div>
@@ -934,7 +927,7 @@ function openShareModal(id) {
           <div class="text-sm text-muted mb-8">Permission</div>
           <div style="display:flex; gap:8px;">
             ${['view','comment','edit'].map(perm => `
-              <label style="flex:1; text-align:center; cursor:pointer; padding:10px 8px; border-radius:var(--r-md); border:2px solid ${currentPermission===perm ? 'var(--violet)' : 'var(--border)'}; background:${currentPermission===perm ? 'rgba(124,58,237,0.06)' : 'var(--surface-0)'}; font-size:13px; font-weight:${currentPermission===perm ? '600' : '400'};" class="perm-label" data-perm="${perm}">
+              <label style="flex:1; text-align:center; cursor:pointer; padding:10px 8px; border-radius:var(--r-md); border:2px solid ${currentPermission===perm ? 'var(--violet)' : 'var(--border)'}; background:${currentPermission===perm ? 'var(--violet-tint-md)' : 'var(--surface-0)'}; font-size:13px; font-weight:${currentPermission===perm ? '600' : '400'};" class="perm-label" data-perm="${perm}">
                 <input type="radio" name="share-perm" value="${perm}" ${currentPermission===perm ? 'checked' : ''} style="display:none;">
                 ${{ view:'👁️ View', comment:'💬 Comment', edit:'✏️ Edit' }[perm]}
               </label>
@@ -960,9 +953,9 @@ function openShareModal(id) {
       const isTeam = radio.value === 'team';
       const isIndiv = radio.value === 'individual';
       overlay.querySelector('#scope-team-label').style.borderColor = isTeam ? 'var(--violet)' : 'var(--border)';
-      overlay.querySelector('#scope-team-label').style.background = isTeam ? 'rgba(124,58,237,0.04)' : 'var(--surface-0)';
+      overlay.querySelector('#scope-team-label').style.background = isTeam ? 'var(--violet-tint)' : 'var(--surface-0)';
       overlay.querySelector('#scope-individual-label').style.borderColor = isIndiv ? 'var(--violet)' : 'var(--border)';
-      overlay.querySelector('#scope-individual-label').style.background = isIndiv ? 'rgba(124,58,237,0.04)' : 'var(--surface-0)';
+      overlay.querySelector('#scope-individual-label').style.background = isIndiv ? 'var(--violet-tint)' : 'var(--surface-0)';
       overlay.querySelector('#individual-picker').style.display = isIndiv ? 'block' : 'none';
     });
   });
@@ -973,7 +966,7 @@ function openShareModal(id) {
       overlay.querySelectorAll('.perm-label').forEach(l => {
         const active = l.dataset.perm === lbl.dataset.perm;
         l.style.borderColor = active ? 'var(--violet)' : 'var(--border)';
-        l.style.background = active ? 'rgba(124,58,237,0.06)' : 'var(--surface-0)';
+        l.style.background = active ? 'var(--violet-tint-md)' : 'var(--surface-0)';
         l.style.fontWeight = active ? '600' : '400';
       });
     });
