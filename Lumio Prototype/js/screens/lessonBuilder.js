@@ -1474,7 +1474,7 @@ function renderBlockContent(block, editable) {
       const position = ds.textPosition || 'center';
       const justifyMap = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
       const bgStyle = src ? `background-image:url('${src}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);';
-      return `<div style="${bgStyle} border-radius:var(--r-md); min-height:240px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
+      return `<div style="${bgStyle} border-radius:var(--r-md); min-height:320px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
         ${src ? `<div class="text-on-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)});"></div>` : ''}
         <div style="position:relative; z-index:1; padding:32px; text-align:center; max-width:520px;">
           <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Bold headline on image" style="color:${textColor}; ${textTypographyStyle(ds, 20)}">${richTextOut(d.heading || '')}</h3>
@@ -1491,12 +1491,12 @@ function renderBlockContent(block, editable) {
           const fit = item.imageFit || 'cover';
           let imageHtml;
           if (!item.src) {
-            imageHtml = imagePlaceholder(item.title || item.description || `Slide ${i + 1}`, 120);
+            imageHtml = imagePlaceholder(item.title || item.description || `Slide ${i + 1}`, 160);
           } else if (fit === 'full') {
-            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="position:relative; width:100%; height:120px; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${item.src}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${item.src}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
           } else {
             const of = fitMap[fit] || 'cover';
-            imageHtml = `<img src="${item.src}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="width:100%; height:120px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
+            imageHtml = `<img src="${item.src}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${item.src}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
           }
           return `
           <div class="card card-pad" style="min-width:180px; max-width:220px;">
@@ -1516,8 +1516,8 @@ function renderBlockContent(block, editable) {
           <div class="card card-pad text-center" style="position:relative;">
             ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
             ${item.imageUrl
-              ? `<img src="${item.imageUrl}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.imageUrl}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; height:80px; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
-              : imagePlaceholder(item.title || 'Item', 80)}
+              ? `<img src="${item.imageUrl}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${item.imageUrl}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
+              : imagePlaceholder(item.title || 'Item', 150)}
             <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
             ${editable ? `<div class="flex items-center justify-center gap-8 mt-8">
@@ -1835,14 +1835,13 @@ function renderBlockContent(block, editable) {
     case 'flashcard_grid': {
       const items = normalizeFlashcardItems(d);
       const flipHint = ds.flipHint !== false;
-      const sizeMap = { sm: 110, md: 150, lg: 190 };
+      const sizeMap = { sm: 140, md: 180, lg: 220 };
       const cardH = sizeMap[ds.cardSize] || sizeMap.md;
       const cols = ds.cardSize === 'lg' ? 2 : 3;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      const colWidth = Math.round(cardH * 1.3);
       return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
-        <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; max-width:100%;">
+        <div style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:12px; width:100%;">
           ${items.map((item, i) => `
             <div>
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
@@ -1867,10 +1866,10 @@ function renderBlockContent(block, editable) {
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
-        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:320px; max-width:100%;" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
+        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
-              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:180px; cursor:pointer;">
+              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:220px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -2571,7 +2570,7 @@ function renderTextBlockPanel(block, index) {
       ${segControl('design-bgtype', 'bgType', [{ id: 'light', label: 'Light' }, { id: 'grey', label: 'Grey' }, { id: 'dark', label: 'Dark' }, { id: 'custom', label: 'Custom' }, { id: 'image', label: 'Image' }], ds.bgType || 'light')}
       ${ds.bgType === 'custom' ? `<input type="color" class="input mt-8 text-bg-custom-color" value="${ds.bgColor || '#ffffff'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />` : ''}
       ${ds.bgType === 'image' ? `
-        ${mediaPickerImageField(ds, 'bgImage', 'Background Image')}
+        ${mediaPickerImageField(ds, 'bgImage', 'Background Image', 'Background Image', false, 'design')}
         <p class="text-sm text-muted mt-8 mb-8">Image Fit</p>
         ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
       ` : ''}
@@ -2694,7 +2693,7 @@ function renderStatementBlockPanel(block, index) {
       ${segControl('design-bgtype', 'bgType', [{ id: 'theme', label: 'Theme' }, { id: 'light', label: 'Light' }, { id: 'grey', label: 'Grey' }, { id: 'dark', label: 'Dark' }, { id: 'custom', label: 'Custom' }, { id: 'image', label: 'Image' }], ds.bgType || 'theme')}
       ${ds.bgType === 'custom' ? `<input type="color" class="input mt-8 text-bg-custom-color" value="${ds.bgColor || '#ffffff'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />` : ''}
       ${ds.bgType === 'image' ? `
-        ${mediaPickerImageField(ds, 'bgImage', 'Background Image')}
+        ${mediaPickerImageField(ds, 'bgImage', 'Background Image', 'Background Image', false, 'design')}
         <p class="text-sm text-muted mt-8 mb-8">Image Fit</p>
         ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
       ` : ''}
@@ -3715,7 +3714,8 @@ function quoteAvatarOnlyFields(block) {
 
 /* Generic rectangular image field using the shared Media Picker — for
    Image, Image & Text, and Text on Image blocks. */
-function mediaPickerImageField(d, target, title, label, noBorder) {
+function mediaPickerImageField(d, target, title, label, noBorder, namespace) {
+  const ns = namespace || 'data';
   return `
     <div class="prop-section" ${noBorder ? 'style="border-bottom:none;"' : ''}>
       <div class="prop-section-title">${label}</div>
@@ -3724,8 +3724,8 @@ function mediaPickerImageField(d, target, title, label, noBorder) {
           ${d[target] ? `<img src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}" data-namespace="${ns}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" data-namespace="${ns}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -4248,11 +4248,11 @@ function itemImageHtml(item, h) {
   if (!item.image) return '';
   const fit = item.imageFit || 'cover';
   if (fit === 'full') {
-    return `<div style="position:relative; width:100%; height:${h}px; border-radius:var(--r-md); overflow:hidden; margin-bottom:10px;"><img src="${item.image}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+    return `<div style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-md); overflow:hidden; margin-bottom:10px;"><img src="${item.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
   }
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
   const of = fitMap[fit] || 'cover';
-  return `<img src="${item.image}" alt="" style="width:100%; height:${h}px; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; margin-bottom:10px;" />`;
+  return `<img src="${item.image}" alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; margin-bottom:10px;" />`;
 }
 
 /* Renders an item's video/audio/attachment using the same controls/markup
@@ -5652,29 +5652,28 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     const target = btn.dataset.target;
     const kind = btn.dataset.kind || 'image';
+    const useDesign = btn.dataset.namespace === 'design';
+    const store = useDesign ? (block.design || (block.design = {})) : (block.data || (block.data = {}));
     openMediaPicker({
       title: btn.dataset.title || 'Image',
       kind,
-      currentSrc: block.data && block.data[target],
-      currentFileName: block.data && block.data[target + 'FileName'],
+      currentSrc: store[target],
+      currentFileName: store[target + 'FileName'],
       onInsert: (result) => {
-        block.data = block.data || {};
-        block.data[target] = result.src;
+        store[target] = result.src;
         if (kind === 'audio' || kind === 'video' || kind === 'file') {
-          block.data[target + 'FileName'] = result.fileName;
-          block.data[target + 'MimeType'] = result.mimeType;
-          block.data[target + 'FileSize'] = result.size;
+          store[target + 'FileName'] = result.fileName;
+          store[target + 'MimeType'] = result.mimeType;
+          store[target + 'FileSize'] = result.size;
         }
         renderLessonBuilder(lesson.id);
         flashSaveStatus();
       },
       onRemove: () => {
-        if (block.data) {
-          delete block.data[target];
-          delete block.data[target + 'FileName'];
-          delete block.data[target + 'MimeType'];
-          delete block.data[target + 'FileSize'];
-        }
+        delete store[target];
+        delete store[target + 'FileName'];
+        delete store[target + 'MimeType'];
+        delete store[target + 'FileSize'];
         renderLessonBuilder(lesson.id);
         flashSaveStatus();
       },
@@ -5682,12 +5681,14 @@ function bindBuilderEvents(course, lesson, blocks) {
   }));
   app.querySelectorAll('.media-picker-remove').forEach(btn => btn.addEventListener('click', () => {
     const block = blocks[BuilderUI.selected];
-    if (!block || !block.data) return;
+    if (!block) return;
     const target = btn.dataset.target;
-    delete block.data[target];
-    delete block.data[target + 'FileName'];
-    delete block.data[target + 'MimeType'];
-    delete block.data[target + 'FileSize'];
+    const useDesign = btn.dataset.namespace === 'design';
+    const store = useDesign ? (block.design || {}) : (block.data || {});
+    delete store[target];
+    delete store[target + 'FileName'];
+    delete store[target + 'MimeType'];
+    delete store[target + 'FileSize'];
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));

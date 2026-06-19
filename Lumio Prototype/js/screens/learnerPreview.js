@@ -575,7 +575,7 @@ function renderLearnerLesson(course, lessonId) {
     : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
   const body = `
-    <div style="max-width:1360px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
+    <div style="max-width:1100px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
       <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
         <h2 style="font-size:calc(var(--theme-font-size, 16px) + 4px); font-family:var(--theme-font-display, var(--font-display));">${lesson.title}</h2>
         ${lesson.duration ? `<span class="pill pill-grey">${lesson.duration}</span>` : ''}
