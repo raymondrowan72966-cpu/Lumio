@@ -179,7 +179,13 @@ const AssetStore = (() => {
 
     if (!(file instanceof Blob)) throw new Error('[AssetStore] put() requires a File or Blob');
 
-    const blob     = file instanceof File ? file.slice() : file; // normalise to Blob
+    // Normalise to Blob — MUST pass contentType through explicitly: Blob.slice()
+    // called with no arguments drops the MIME type (resulting blob.type === '').
+    // That stored, typeless blob is exactly what URL.createObjectURL() later
+    // wraps for every <img>/<video>/<audio> tag rendered from this asset, so a
+    // dropped type meant every upload silently failed to render as an image —
+    // the actual root cause behind "Media Picker shows no preview" reports.
+    const blob     = file instanceof File ? file.slice(0, file.size, file.type) : file;
     const fullHash = await _sha256Hex(blob);
     const assetId  = _idFromHash(fullHash);
 

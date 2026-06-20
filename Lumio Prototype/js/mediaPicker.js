@@ -139,7 +139,23 @@ function openMediaPicker(opts) {
     let preview;
     if (state.src) {
       if (isImage) {
-        preview = `<img src="${state.src}" alt="" class="mp-preview-img" />`;
+        // state.src is frequently an opaque asset:// reference (every real
+        // upload goes through AssetStore.put, not a directly-renderable
+        // URL) — must resolve to a real blob URL before use as <img src>,
+        // exactly like every other image renderer in the app does via
+        // AssetStore.resolveMediaSrc(). Without this the preview was
+        // silently blank for every real upload (only direct data:/blob:
+        // URLs, e.g. from a test harness, happened to render).
+        const resolvedSrc = AssetStore.resolveMediaSrc(state.src) || state.src;
+        // Critical Correction Sprint: positioning/cropping removed entirely
+        // per explicit instruction — this is now a plain, large confirmation
+        // preview only. It fills the frame (object-fit:contain keeps the
+        // whole image visible/undistorted, since there is no crop to judge
+        // anymore) so the author can simply confirm the right file was
+        // selected before inserting.
+        preview = `<div style="width:100%; min-height:280px; max-height:360px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:var(--r-sm); background:var(--surface-50);">
+          <img src="${resolvedSrc}" alt="" style="max-width:100%; max-height:360px; object-fit:contain; display:block;" />
+        </div>`;
       } else if (kind === 'audio') {
         preview = `<div class="mp-audio-preview" style="padding:16px; text-align:center;">
              <div style="font-size:32px;">${cfg.icon}</div>

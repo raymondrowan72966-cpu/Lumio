@@ -304,7 +304,7 @@ function acceptInvitation(token, password) {
   inv.acceptedAt = Date.now();
 
   scheduleLumioSave();
-  return user;
+  return legacyUser;
 }
 
 function bindWorkspaceUsersTab() {

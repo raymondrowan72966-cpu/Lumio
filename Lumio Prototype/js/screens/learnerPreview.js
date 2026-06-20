@@ -5,6 +5,52 @@
    interactive knowledge checks. No authoring tools are shown here.
    ============================================================ */
 
+/* ============================================================
+   VIDEO EMBED RELIABILITY — YouTube embedding-disabled detection.
+   A YouTube embed that the publisher has blocked doesn't fail to load —
+   the iframe loads fine and renders YOUTUBE'S OWN "Video unavailable"
+   page inside it, which our code has no visibility into via onerror. The
+   only reliable signal is the YouTube IFrame Player API's onError event
+   (codes 101/150 = embedding disabled). This loads that API once, attaches
+   a player to every YouTube embed on the page, and swaps the iframe for
+   the sibling fallback card (rendered by videoEmbedFallbackCard() in
+   lessonBuilder.js, present in the DOM but hidden) the moment that fires —
+   so a blocked video degrades to a professional "Watch on YouTube" card
+   instead of looking like the course itself is broken. Runs in Preview and,
+   since publish.js bundles this file verbatim, in Published HTML/SCORM/xAPI too.
+   ============================================================ */
+let _ytApiLoadPromise = null;
+function _loadYouTubeIframeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (_ytApiLoadPromise) return _ytApiLoadPromise;
+  _ytApiLoadPromise = new Promise((resolve) => {
+    const prevCallback = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prevCallback) prevCallback(); resolve(); };
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+  });
+  return _ytApiLoadPromise;
+}
+function bindVideoEmbedFallbacks(app) {
+  const wraps = app.querySelectorAll('.lumio-video-embed-wrap[data-embed-type="youtube"]');
+  if (!wraps.length) return;
+  _loadYouTubeIframeApi().then(() => {
+    wraps.forEach(wrap => {
+      const iframe = wrap.querySelector('iframe');
+      const fallback = wrap.nextElementSibling;
+      if (!iframe || !fallback || !fallback.classList.contains('lumio-video-fallback')) return;
+      try {
+        new YT.Player(iframe, {
+          events: {
+            onError: () => { wrap.style.display = 'none'; fallback.style.display = 'block'; },
+          },
+        });
+      } catch (e) { /* YT API unavailable (offline SCORM runtime, etc.) — embed stays as-is */ }
+    });
+  });
+}
+
 // Transient per-view UI state (not persisted) for accordions, tabs,
 // flashcards and "Continue" reveals within the learner runtime.
 const LearnerUI = {
@@ -155,14 +201,21 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
       </div>
       <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:8px;">Lessons</h4>
       <div class="flex-col gap-8">
-        ${course.lessons.length ? course.lessons.map(l => {
+        ${course.lessons.length ? course.lessons.map((l, li) => {
           const isComplete = progress.completedLessons.includes(l.id);
           const isStarted = !isComplete && startedIds.has(l.id);
-          const state = locked ? 'locked' : isComplete ? 'complete' : isStarted ? 'started' : 'not-started';
+          // Sequential lock: lesson li is reachable only once every PRIOR
+          // lesson is complete — closes the sidebar bypass where a learner
+          // could jump straight to lesson 3 without finishing 1/2. Same
+          // rule, same single source of truth (progress.completedLessons),
+          // as the assessment lock just below.
+          const sequentiallyLocked = li > 0 && !course.lessons.slice(0, li).every(prev => progress.completedLessons.includes(prev.id));
+          const lessonLocked = locked || sequentiallyLocked;
+          const state = lessonLocked ? 'locked' : isComplete ? 'complete' : isStarted ? 'started' : 'not-started';
           return `
-          <div class="lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${locked ? 'locked' : ''}" data-lesson="${l.id}"
-            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${l.id === activeLessonId ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${locked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
-            ${locked ? `<span style="font-size:14px;">🔒</span>` : lessonDonut(state)}
+          <div class="lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${lessonLocked ? 'locked' : ''}" data-lesson="${l.id}" data-locked="${lessonLocked}"
+            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${l.id === activeLessonId ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${lessonLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
+            ${lessonLocked ? `<span style="font-size:14px;">🔒</span>` : lessonDonut(state)}
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.title}</div>
               <div class="text-sm text-muted">${l.duration || ''}</div>
@@ -178,7 +231,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
           const assessmentLocked = locked || !allLessonsDone;
           const isActive = a.id === activeLessonId;
           return `
-          <div class="lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}"
+          <div class="lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}" data-locked="${assessmentLocked}"
             style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${isActive ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${assessmentLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
             <span>${assessmentLocked ? '🔒' : '📝'}</span>
             <div style="flex:1; min-width:0;">
@@ -305,7 +358,10 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
   app.querySelector('#lp-return')?.addEventListener('click', () => navigate('#/learner/' + course.id));
   app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
     if (elx.classList.contains('locked')) return;
-    elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+    elx.addEventListener('click', () => {
+      if (elx.dataset.locked === 'true') return;
+      navigate('#/learner/' + course.id + '/' + elx.dataset.lesson);
+    });
   });
   if (!isOverview) wireMobileSidebar(app);
 
@@ -428,7 +484,13 @@ function learnerShell(course, bodyHtml, opts = {}) {
     app.querySelector('#lp-fullscreen-exit').addEventListener('click', () => { LearnerUI.fullScreen = false; reRender(); });
     app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
       if (elx.classList.contains('locked')) return;
-      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+      elx.addEventListener('click', () => {
+        // Defense in depth — re-check the gate from the element's own
+        // data-locked attribute rather than trusting only "was a listener
+        // attached", same pattern as the Next button's click handler.
+        if (elx.dataset.locked === 'true') return;
+        navigate('#/learner/' + course.id + '/' + elx.dataset.lesson);
+      });
     });
     if (isMobile && !isOverview) wireMobileSidebar(app);
   } else if (isDesktop) {
@@ -453,7 +515,13 @@ function learnerShell(course, bodyHtml, opts = {}) {
     }));
     app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
       if (elx.classList.contains('locked')) return;
-      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+      elx.addEventListener('click', () => {
+        // Defense in depth — re-check the gate from the element's own
+        // data-locked attribute rather than trusting only "was a listener
+        // attached", same pattern as the Next button's click handler.
+        if (elx.dataset.locked === 'true') return;
+        navigate('#/learner/' + course.id + '/' + elx.dataset.lesson);
+      });
     });
   } else if (isMobile) {
     // Normal mobile: drawer sidebar overlaying device frame, ☰ Lessons button in-frame
@@ -485,7 +553,13 @@ function learnerShell(course, bodyHtml, opts = {}) {
     }));
     app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
       if (elx.classList.contains('locked')) return;
-      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+      elx.addEventListener('click', () => {
+        // Defense in depth — re-check the gate from the element's own
+        // data-locked attribute rather than trusting only "was a listener
+        // attached", same pattern as the Next button's click handler.
+        if (elx.dataset.locked === 'true') return;
+        navigate('#/learner/' + course.id + '/' + elx.dataset.lesson);
+      });
     });
     if (!isOverview) wireMobileSidebar(app);
     // Restore in-frame scroll for same-lesson re-renders
@@ -519,7 +593,13 @@ function learnerShell(course, bodyHtml, opts = {}) {
     }));
     app.querySelectorAll('.lp-nav-lesson, .lp-nav-assessment').forEach(elx => {
       if (elx.classList.contains('locked')) return;
-      elx.addEventListener('click', () => navigate('#/learner/' + course.id + '/' + elx.dataset.lesson));
+      elx.addEventListener('click', () => {
+        // Defense in depth — re-check the gate from the element's own
+        // data-locked attribute rather than trusting only "was a listener
+        // attached", same pattern as the Next button's click handler.
+        if (elx.dataset.locked === 'true') return;
+        navigate('#/learner/' + course.id + '/' + elx.dataset.lesson);
+      });
     });
     // Restore in-frame scroll for same-lesson re-renders
     if (sameLesson) {
@@ -624,6 +704,34 @@ function renderLearnerLesson(course, lessonId) {
   const lessonIdx = isAssessment ? -1 : course.lessons.findIndex(l => l.id === lessonId);
   if (!isAssessment && lessonIdx === -1) { navigate('#/learner/' + course.id); return; }
 
+  // Gating root-cause fix: the sidebar already hides/disables locked
+  // assessment links, but that's just one entry point — direct URL hash
+  // navigation, browser back/forward, and the Continue-Working/course
+  // overview cards all reach this function too. Enforcing the lock HERE,
+  // where every entry point converges, is the only way to guarantee no
+  // bypass path exists. An assessment is reachable only once every lesson
+  // in the course has been marked complete.
+  if (isAssessment) {
+    const allLessonsDone = course.lessons.length === 0 || course.lessons.every(l => progress.completedLessons.includes(l.id));
+    if (!allLessonsDone) {
+      const firstIncomplete = course.lessons.find(l => !progress.completedLessons.includes(l.id));
+      navigate('#/learner/' + course.id + (firstIncomplete ? '/' + firstIncomplete.id : ''));
+      return;
+    }
+  } else {
+    // Same enforcement for sequential LESSON locking — a lesson is
+    // reachable only once every prior lesson is complete. Without this,
+    // jumping straight to lesson 3's URL/sidebar entry/Continue-Working
+    // card skipped lessons 1-2 entirely.
+    const priorLessons = course.lessons.slice(0, lessonIdx);
+    const allPriorDone = priorLessons.every(l => progress.completedLessons.includes(l.id));
+    if (!allPriorDone) {
+      const firstIncomplete = priorLessons.find(l => !progress.completedLessons.includes(l.id));
+      navigate('#/learner/' + course.id + (firstIncomplete ? '/' + firstIncomplete.id : ''));
+      return;
+    }
+  }
+
   const lesson = isAssessment ? course.assessments[assessmentIdx] : course.lessons[lessonIdx];
   const blocks = LumioState.lessons[lessonId] || [];
   const ctx = { courseId: course.id, lessonId, progress };
@@ -709,6 +817,11 @@ function renderLearnerLesson(course, lessonId) {
     if (prevId) navigate('#/learner/' + course.id + '/' + prevId);
   });
   document.getElementById('lp-next')?.addEventListener('click', () => {
+    // Defense in depth: re-check the gate inside the handler itself rather
+    // than trusting only the HTML `disabled` attribute set at render time —
+    // closes any bypass via devtools/programmatic dispatch, matching the
+    // "single source of truth, no bypass path" requirement.
+    if (!CompletionEngine.isLessonReadyForNext(blocks, ctx, LearnerUI.revealedContinues[lessonId] || new Set())) return;
     if (!isAssessment && !progress.completedLessons.includes(lessonId)) {
       progress.completedLessons.push(lessonId);
       progress.lessonCompletedAt[lessonId] = Date.now();
@@ -1557,6 +1670,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
       refreshNextButtonState(ctx);
     });
   });
+  bindVideoEmbedFallbacks(app);
   // YouTube/Vimeo embeds have no reliable in-page "ended" signal — the
   // manual fallback rendered in learnerVideoBlock() is handled here.
   app.querySelectorAll('.lp-mark-watched').forEach(btn => btn.addEventListener('click', () => {

@@ -222,15 +222,27 @@ const CompletionEngine = (function () {
     return ruleOptionsFor(type).length > 0;
   }
 
-  // Whether this specific block is required for the Next-button gate:
-  // the type must be requirable AND the author must have explicitly
-  // turned on "Required for Lesson Completion" in the Design Panel.
-  // Default is Optional — a block with no `settings.completionRequired`
-  // (every block in every project saved before this sprint) never blocks
-  // Next, regardless of type.
+  // Whether this specific block is required for the Next-button gate.
+  // Failed Acceptance Criteria Correction Sprint: interactive/assessed
+  // content (knowledge checks, accordions, scenarios, etc. — anything
+  // BLOCKING_STRATEGIES already treats as completable for Continue-block
+  // gating) is REQUIRED BY DEFAULT — an author has to explicitly opt OUT
+  // (`completionRequired: false`) to let the Next button skip it. This is
+  // the single source of truth the Next button, the assessment-launch
+  // gate, and the learner sidebar all read from; "no required block left
+  // incomplete" is the one rule, checked in one place, regardless of
+  // entry point. Purely 'viewed' content (paragraphs, images, statements)
+  // stays optional by default, as before — an author has to opt IN
+  // (`completionRequired: true`) for a viewed block to gate Next, since
+  // requiring every paragraph to be "viewed" by default would make nearly
+  // all existing lesson content block progression.
   function isRequiredForNext(block) {
     if (!block || !isRequirable(block.type)) return false;
-    return !!(block.settings && block.settings.completionRequired === true);
+    const explicit = block.settings && block.settings.completionRequired;
+    if (explicit === true) return true;
+    if (explicit === false) return false;
+    const cap = BlockCapabilities.COMPLETION[block.type];
+    return !!(cap && BLOCKING_STRATEGIES.includes(cap.strategy));
   }
 
   function itemRuleCount(rule, opened, all) {

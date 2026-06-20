@@ -460,11 +460,36 @@ function closePopovers() {
 }
 document.addEventListener('click', closePopovers);
 
-function popoverAt(btn, itemsHtml) {
+// Single shared popover primitive — every 3-dot/folder/context menu
+// platform-wide goes through this function, so fixing positioning here
+// once fixes all of them. Renders off-DOM first to measure real height
+// (menus vary: 2 items vs 6), then clamps against all four viewport edges
+// and flips above the anchor when there isn't room below.
+function popoverAt(btn, itemsHtml, opts) {
   closePopovers();
+  const width = (opts && opts.width) || 200;
+  const margin = 8;
   const rect = btn.getBoundingClientRect();
-  const menu = el(`<div class="popover-menu card" style="position:fixed; z-index:300; min-width:190px; padding:6px; top:${rect.bottom + 6}px; left:${Math.min(rect.left, window.innerWidth - 210)}px;">${itemsHtml}</div>`);
+  const menu = el(`<div class="popover-menu card" style="position:fixed; z-index:300; min-width:${width}px; max-width:${width}px; padding:6px; visibility:hidden;">${itemsHtml}</div>`);
   document.body.appendChild(menu);
+
+  const menuRect = menu.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  let left = Math.min(rect.left, window.innerWidth - width - margin);
+  left = Math.max(margin, left);
+  if (top + menuRect.height > window.innerHeight - margin) {
+    // No room below — flip above the anchor; if that also overflows the
+    // top, clamp to the top edge rather than letting it run off-screen.
+    const above = rect.top - 6 - menuRect.height;
+    top = above >= margin ? above : margin;
+  }
+  if (top + menuRect.height > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - margin - menuRect.height);
+  }
+
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+  menu.style.visibility = 'visible';
   menu.addEventListener('click', (e) => e.stopPropagation());
   return menu;
 }

@@ -14,6 +14,15 @@ const BuilderUI = {
   expanded: {},
   dragIndex: null,
   insertZoneIndex: null, // drop-index of the active "insertion zone", or null
+  // Stabilisation fix (nested-item builder render defect): which item(s)
+  // are expanded/active per nested-item block, keyed by the block's STABLE
+  // id (never a positional index — survives reorder). Without this, every
+  // re-render (e.g. after a media-picker upload) recomputed "open" purely
+  // from position (item 0 only), silently re-collapsing whatever the
+  // author had open and hiding the very image they just attached. Read by
+  // accordion/tabs/process/labelled_graphic render branches below, written
+  // by lumioAccordionToggle/lumioTabSwitch/lumioProcessNav/lumioHotspotToggle.
+  openItemState: {},
 };
 
 // Resolves the course + lesson/assessment object for a given lessonId.
@@ -919,8 +928,8 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   const alignStyle = ds.align ? `text-align:${ds.align};` : '';
   const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
   const moveButtons = `
-        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" aria-label="Move block up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===0?'0.4':'1'};">↑</button>
-        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" aria-label="Move block down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
+        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" aria-label="Move block up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===0?'0.4':'1'};">↑</button>
+        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" aria-label="Move block down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
   const { treatment } = DesignSystem.resolveBlockStyle(block);
   // Pure visual dividers carry no content for assistive technology to announce.
   const DECORATIVE_DIVIDER_TYPES = new Set(['line_divider', 'numbered_divider']);
@@ -949,13 +958,13 @@ function renderBlockWrapper(block, index, total, nextBlock) {
        margin-bottom:${FLOW_SPACING}; transition:border-color .12s; ${bgStyle || 'background:transparent;'}
        box-shadow:none;`;
   return `
-    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" style="${wrapperStyle}"${ariaHidden}>
+    <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" data-block-id="${block.id || ''}" style="${wrapperStyle}"${ariaHidden}>
       <div class="block-toolbar" style="position:absolute; top:-34px; left:0; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:10;">
         <span class="drag-handle" draggable="true" data-index="${index}" title="Drag to reorder"
           style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">⠿ ${blockLabel(block.type)}</span>
-        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✨</button>
-        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">⧉</button>
-        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none;">✕</button>${moveButtons}
+        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">✨</button>
+        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">⧉</button>
+        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">✕</button>${moveButtons}
       </div>
       <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
@@ -1333,8 +1342,9 @@ function positionRichTextToolbar() {
   if (!blockEl) { hideRichTextToolbar(); return; }
   const rect = blockEl.getBoundingClientRect();
   toolbar.style.display = 'flex';
-  const left = Math.max(8, rect.left + rect.width / 2 - toolbar.offsetWidth / 2);
-  const top = rect.bottom + 8;
+  const left = Math.max(8, Math.min(rect.left + rect.width / 2 - toolbar.offsetWidth / 2, window.innerWidth - toolbar.offsetWidth - 8));
+  let top = rect.bottom + 8;
+  if (top + toolbar.offsetHeight > window.innerHeight - 8) top = Math.max(8, rect.top - toolbar.offsetHeight - 8); // flip above if no room below
   toolbar.style.left = `${left}px`;
   toolbar.style.top = `${top}px`;
 }
@@ -1650,9 +1660,25 @@ function renderBlockContent(block, editable) {
           ${videoShowSpeed ? playbackSpeedSelector('block-video-el') : ''}`;
       } else if (embed && (embed.type === 'youtube' || embed.type === 'vimeo')) {
         const autoplayParam = videoAutoplay ? (embed.type === 'youtube' ? '?autoplay=1&mute=1' : '?autoplay=1&muted=1') : '';
-        videoInner = `<div style="position:relative; width:100%; padding-top:56.25%; background:#000; border-radius:${videoRadius}; overflow:hidden;">
-          <iframe src="${embed.embedUrl}${autoplayParam}" title="Video" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-        </div>`;
+        // Linked Video delivery mode: author has explicitly chosen not to
+        // embed at all (e.g. for videos they know block embedding) — go
+        // straight to the fallback card, no iframe attempted.
+        const linkedMode = videoSettings.deliveryMode === 'linked';
+        const fallbackCard = videoEmbedFallbackCard(embed, d);
+        if (linkedMode) {
+          videoInner = fallbackCard;
+        } else {
+          // Embed first; for YouTube, a real embedding-disabled error (the
+          // "Video unavailable" case) is only detectable via the IFrame
+          // Player API's onError event at runtime — bindVideoEmbedFallbacks()
+          // (learnerPreview.js, also bundled into publish.js) swaps the
+          // iframe for the sibling fallback card on that event. The iframe
+          // and its fallback both exist in markup; only one is visible at a time.
+          videoInner = `<div class="lumio-video-embed-wrap" data-embed-type="${embed.type}" style="position:relative; width:100%; padding-top:56.25%; background:#000; border-radius:${videoRadius}; overflow:hidden;">
+            <iframe id="ytembed-${block.id}" class="lumio-video-iframe" src="${embed.embedUrl}${autoplayParam}" title="Video" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          </div>
+          <div class="lumio-video-fallback" style="display:none;">${fallbackCard}</div>`;
+        }
       } else {
         videoInner = `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file or add an embed URL.' : 'Video unavailable.'}</div></div>`;
       }
@@ -1724,11 +1750,20 @@ function renderBlockContent(block, editable) {
         : variant === 'boxed'
           ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:1px solid var(--border);`
           : `background:${rowBg}; color:${textColor}; border-radius:${radius};`;
+      // Editable canvas only: which rows are open persists across
+      // re-renders (keyed by stable block.id), so attaching media to a
+      // collapsed-by-default row doesn't immediately hide it again.
+      // Preview/published output keeps the original expandFirst-only rule.
+      let openRows = editable ? BuilderUI.openItemState[block.id] : null;
+      if (editable && !openRows) {
+        openRows = new Set(expandFirst ? [0] : []);
+        BuilderUI.openItemState[block.id] = openRows;
+      }
       return `<div class="lumio-accordion" style="display:flex; flex-direction:column; gap:${rowSpacing}px;">
         ${items.map((item, i) => {
-          const open = expandFirst && i === 0;
+          const open = editable ? openRows.has(i) : (expandFirst && i === 0);
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
-            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')) lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
+            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(${open?'true':'false'} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
               <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px;">${richTextOut(item.title || '')}</${headingTag}></span>
               <span class="lumio-accordion-chevron" data-style="${ds.chevronStyle || 'chevron'}"></span>
             </div>
@@ -1750,7 +1785,10 @@ function renderBlockContent(block, editable) {
         { title: 'FAQ', body: 'FAQ content...' },
       ]);
       const settings = block.settings || {};
-      let active = settings.defaultTab || 0;
+      // Builder-only: prefer the persisted active tab (see lumioTabSwitch)
+      // over the author's default so re-renders don't jump back to tab 0.
+      const persistedActive = editable ? BuilderUI.openItemState[block.id] : undefined;
+      let active = typeof persistedActive === 'number' ? persistedActive : (settings.defaultTab || 0);
       if (active < 0 || active >= items.length) active = 0;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
@@ -1760,7 +1798,7 @@ function renderBlockContent(block, editable) {
       const animate = settings.animation !== false;
       return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
-          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')) lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
+          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(${i}===${active} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
         <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
           ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
@@ -1825,11 +1863,15 @@ function renderBlockContent(block, editable) {
       const textColor = surfaceTextColor(ds);
       const indicatorStyle = ds.indicatorStyle || 'dots';
       const swipe = settings.enableSwipe !== false;
-      return `<div class="lumio-process" data-current="0" data-swipe="${swipe ? '1' : '0'}" tabindex="0"
+      // Builder-only: prefer the persisted current step (see
+      // lumioProcessGoto) so re-renders don't jump back to step 0.
+      const persistedStep = editable ? BuilderUI.openItemState[block.id] : undefined;
+      const currentStep = (typeof persistedStep === 'number' && persistedStep < items.length) ? persistedStep : 0;
+      return `<div class="lumio-process" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0"
           onkeydown="if(event.key==='ArrowLeft')lumioProcessNav(this,-1); if(event.key==='ArrowRight')lumioProcessNav(this,1);"
           ontouchstart="lumioProcessTouchStart(event,this)" ontouchend="lumioProcessTouchEnd(event,this)">
         <div class="lumio-process-panel" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
-          ${items.map((item, i) => `<div class="lumio-process-step ${i === 0 ? 'active' : ''}" data-step="${i}">
+          ${items.map((item, i) => `<div class="lumio-process-step ${i === currentStep ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
             ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
             <${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step ${i + 1}" style="margin:4px 0 6px;">${richTextOut(item.title || (editable ? '' : 'Step ' + (i + 1)))}</${headingTag}>
@@ -2060,10 +2102,29 @@ function imagePlaceholder(label, height, width) {
 function parseVideoEmbedUrl(url) {
   if (!url) return null;
   const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return { type: 'youtube', embedUrl: `https://www.youtube.com/embed/${yt[1]}` };
+  if (yt) return { type: 'youtube', embedUrl: `https://www.youtube.com/embed/${yt[1]}`, id: yt[1], watchUrl: `https://www.youtube.com/watch?v=${yt[1]}`, thumbnailUrl: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
   const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (vimeo) return { type: 'vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}` };
+  if (vimeo) return { type: 'vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}`, id: vimeo[1], watchUrl: `https://vimeo.com/${vimeo[1]}`, thumbnailUrl: null };
   return { type: 'mp4', embedUrl: url };
+}
+
+// Video Embed Reliability fix: a professional fallback shown either when the
+// author explicitly picks "Linked Video" delivery, or at runtime when a
+// YouTube embed reports embedding-disabled (see bindVideoEmbedFallbacks in
+// learnerPreview.js) — replaces the bare "Video unavailable" text that made
+// a perfectly fine course look broken.
+function videoEmbedFallbackCard(embed, d) {
+  const title = escapeHtml(d.caption || 'Video');
+  const thumb = embed.thumbnailUrl
+    ? `<div style="width:100%; aspect-ratio:16/9; background:#000 url('${embed.thumbnailUrl}') center/cover; border-radius:var(--r-lg) var(--r-lg) 0 0; position:relative;"><span style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:48px; color:#fff; opacity:0.9; text-shadow:0 2px 8px rgba(0,0,0,0.5);">▶</span></div>`
+    : `<div style="width:100%; aspect-ratio:16/9; background:var(--ink-900); border-radius:var(--r-lg) var(--r-lg) 0 0; display:flex; align-items:center; justify-content:center; font-size:48px;">🎬</div>`;
+  return `<div class="card" style="overflow:hidden; max-width:560px; margin:0 auto;">
+    ${thumb}
+    <div style="padding:16px; text-align:center;">
+      <div style="font-weight:600; margin-bottom:10px;">${title}</div>
+      <a href="${embed.watchUrl}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">▶ Watch Video</a>
+    </div>
+  </div>`;
 }
 
 /* Converts SRT subtitle text to WebVTT (passes WebVTT text through unchanged). */
@@ -3805,7 +3866,7 @@ function quoteImageUploadFields(block) {
       <div class="prop-section-title">Background Image</div>
       <div class="flex items-center gap-12 mt-8">
         <div class="media-thumb" style="width:48px; height:36px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d.background ? `<img src="${d.background}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d.background ? `<img src="${AssetStore.resolveMediaSrc(d.background)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="background" data-title="Background Image">${d.background ? '🔄 Replace Background' : '📤 Upload Background'}</button>
         ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="background" style="color:#E5484D;">🗑️ Remove</button>` : ''}
@@ -3820,7 +3881,7 @@ function mediaPickerAvatarField(d, target, title, label, noBorder) {
       <div class="prop-section-title">${label}</div>
       <div class="flex items-center gap-12 mt-8">
         <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d[target] ? `<img src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
         ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
@@ -3844,7 +3905,7 @@ function mediaPickerImageField(d, target, title, label, noBorder, namespace) {
       <div class="prop-section-title">${label}</div>
       <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
         <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d[target] ? `<img src="${d[target]}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}" data-namespace="${ns}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
@@ -4008,6 +4069,14 @@ function renderVideoBlockPanel(block, index) {
       <div class="field">
         <label>Block ID</label>
         <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Delivery</div>
+        <select class="input settings-select-str" data-field="deliveryMode">
+          <option value="embed" ${s.deliveryMode === 'linked' ? '' : 'selected'}>Embedded Video</option>
+          <option value="linked" ${s.deliveryMode === 'linked' ? 'selected' : ''}>External Linked Video</option>
+        </select>
+        <p class="text-sm text-muted mt-8">Embedded plays in the lesson. Linked shows a thumbnail card with a "Watch Video" button — use this for videos you know the publisher has blocked from embedding. Embedded YouTube videos also fall back to this card automatically if YouTube reports the embed is blocked.</p>
       </div>
       <div class="prop-section">
         <div class="prop-section-title">Playback</div>
@@ -4239,7 +4308,7 @@ function flashcardContentPanel(block, d) {
     { id: 'full', label: 'Full Card' },
   ];
   const iconBtn = (cls, findex, title, disabled, label) =>
-    `<button class="btn-icon ${cls}" data-findex="${findex}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+    `<button class="btn-icon ${cls}" data-findex="${findex}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
@@ -4424,7 +4493,7 @@ function itemMediaContentFields(item, listKey, i) {
 /* Move-up/move-down/duplicate/delete toolbar for a list item. */
 function itemManageToolbar(listKey, i, count) {
   const iconBtn = (cls, title, disabled, label) =>
-    `<button class="btn-icon ${cls}" data-list="${listKey}" data-iindex="${i}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+    `<button class="btn-icon ${cls}" data-list="${listKey}" data-iindex="${i}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   return `<div class="flex gap-4">
     ${iconBtn('lumio-item-move-up', 'Move up', i === 0, '↑')}
     ${iconBtn('lumio-item-move-down', 'Move down', i === count - 1, '↓')}
@@ -4687,7 +4756,7 @@ function scenarioContentPanel(block, d) {
     { title: 'Scene 2', dialogue: 'The customer feels heard and asks what happens next.', characterName: '', backgroundImage: null, backgroundVideo: null, backgroundAudio: null, characterImage: null, choices: [] },
   ]);
   const iconBtn = (cls, sindex, title, disabled, label, cindex) =>
-    `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+    `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   const mediaBtn = (sindex, field, kind, title, current) => `
     <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `🔄 Change ${title}` : `📤 Add ${title}`}</button>
     ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove" data-sindex="${sindex}" data-field="${field}" style="color:#E5484D;">Remove</button>` : ''}`;
@@ -4782,6 +4851,18 @@ function lumioAccordionToggle(header, single, animate) {
   const wrap = row.closest('.lumio-accordion');
   const body = row.querySelector('.lumio-accordion-body');
   const willOpen = !row.classList.contains('open');
+  const canvasBlock = row.closest('.canvas-block');
+  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  const rowIndex = Array.from(wrap.children).indexOf(row);
+  // Builder-only: mirror open/closed state into BuilderUI.openItemState so
+  // the NEXT full re-render (e.g. triggered by attaching an image via the
+  // media picker) doesn't silently re-collapse this row — see the
+  // 'accordion' render case and BuilderUI.openItemState's definition.
+  if (blockId && BuilderUI.openItemState[blockId]) {
+    if (single && willOpen) BuilderUI.openItemState[blockId].clear();
+    if (willOpen) BuilderUI.openItemState[blockId].add(rowIndex);
+    else BuilderUI.openItemState[blockId].delete(rowIndex);
+  }
   if (single && willOpen) {
     wrap.querySelectorAll('.lumio-accordion-row.open').forEach(r => {
       if (r === row) return;
@@ -4800,7 +4881,7 @@ function lumioAccordionToggle(header, single, animate) {
     row.classList.add('open');
     header.setAttribute('aria-expanded', 'true');
     body.style.maxHeight = animate ? (body.scrollHeight + 'px') : 'none';
-    lumioRecordProgress(row, 'opened', Array.from(wrap.children).indexOf(row));
+    lumioRecordProgress(row, 'opened', rowIndex);
   } else {
     row.classList.remove('open');
     header.setAttribute('aria-expanded', 'false');
@@ -4822,6 +4903,11 @@ function lumioTabSwitch(btn, i) {
   });
   wrap.querySelectorAll('.lumio-tab-panel').forEach((p, idx) => p.classList.toggle('active', idx === i));
   lumioRecordProgress(wrap, 'visited', i);
+  // Builder-only: persist which tab is active so re-rendering after a
+  // media-picker upload doesn't snap back to the default tab and hide it.
+  const canvasBlock = wrap.closest('.canvas-block');
+  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  if (blockId) BuilderUI.openItemState[blockId] = i;
 }
 
 /* Process — jump to / step through a given step, updating indicators and
@@ -4838,6 +4924,11 @@ function lumioProcessGoto(wrap, idx) {
   if (prev) prev.disabled = idx === 0;
   if (next) next.disabled = idx === steps.length - 1;
   lumioRecordProgress(wrap, 'visited', idx);
+  // Builder-only: persist current step so re-rendering after a media-picker
+  // upload doesn't snap back to step 0 and hide it.
+  const canvasBlock = wrap.closest('.canvas-block');
+  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  if (blockId) BuilderUI.openItemState[blockId] = idx;
 }
 function lumioProcessNav(wrap, dir) {
   const current = parseInt(wrap.dataset.current || '0', 10);
@@ -5176,6 +5267,18 @@ function bindBuilderEvents(course, lesson, blocks) {
 
     const idx = parseInt(b.dataset.index);
     const editableTarget = e.target.closest('.editable-text[contenteditable="true"]');
+    // Failed Acceptance Criteria Correction Sprint (Issue 4): every
+    // nested-item block's own interaction control (tab buttons, accordion
+    // headers, process nav/dots, hotspot markers/panels) has its own
+    // dedicated inline onclick handler that already ran during bubbling.
+    // Without this check, this delegated block-selection handler treated
+    // that same click as "click an already-selected block again" and
+    // toggled it CLOSED — collapsing the block (and its toolbar/right
+    // panel) the instant the author tried to switch tabs/accordion items,
+    // making every tab past the first effectively unreachable.
+    const interactiveControlTarget = e.target.closest(
+      '.lumio-tab-btn, .lumio-accordion-header, .lumio-process-nav, .lumio-process-dot, .lumio-hotspot, .lumio-hotspot-panel'
+    );
 
     // Clicking a block while an insertion zone is active cancels the zone.
     if (BuilderUI.insertZoneIndex !== null) {
@@ -5185,6 +5288,12 @@ function bindBuilderEvents(course, lesson, blocks) {
     // If the block is already selected/expanded, let a click on its text
     // place the cursor natively — don't re-render and lose focus.
     if (editableTarget && BuilderUI.selected === idx && BuilderUI.expandedBlocks.has(idx)) {
+      return;
+    }
+    // Same idea for interactive controls: if the block is already selected,
+    // its own handler (lumioTabSwitch/lumioAccordionToggle/etc.) is the
+    // sole effect of this click — don't also toggle the block's selection.
+    if (interactiveControlTarget && BuilderUI.selected === idx && BuilderUI.expandedBlocks.has(idx)) {
       return;
     }
 
