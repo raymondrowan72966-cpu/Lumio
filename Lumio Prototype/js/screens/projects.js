@@ -7,9 +7,11 @@ const TYPE_BADGE = {
   Microlearning: 'pill-orange',
 };
 const STATUS_BADGE = {
-  Draft: 'pill-grey',
-  'In Review': 'pill-cyan',
-  Published: 'pill-teal',
+  draft: 'pill-grey',
+  in_review: 'pill-cyan',
+  approved: 'pill-indigo',
+  published: 'pill-teal',
+  archived: 'pill-grey',
 };
 
 const FOLDER_COLORS = {
@@ -163,7 +165,7 @@ function projectCard(p) {
         ${thumb.img}
         ${thumb.heroSrc ? '' : '<div class="mesh-bg" style="opacity:0.35;"></div>'}
         <span class="pill ${TYPE_BADGE[p.type]}" style="position:absolute; top:10px; left:10px; z-index:1;">${p.type}</span>
-        <span class="pill ${STATUS_BADGE[p.status]}" style="position:absolute; top:10px; right:10px; z-index:1;">${p.status}</span>
+        <span class="pill ${STATUS_BADGE[p.status]}" style="position:absolute; top:10px; right:10px; z-index:1;">${PROJECT_STATUS_LABELS[p.status] || p.status}</span>
         ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1;">${p.type === 'Course' ? '📘' : '⚡'}</span>`}
         <button class="btn-icon dup-icon" data-dup="${p.id}" title="Duplicate"
           style="position:absolute; bottom:10px; right:10px; opacity:0; transition:opacity .15s; background:rgba(255,255,255,0.9); z-index:1;">⧉</button>
@@ -478,19 +480,46 @@ function openProjectMenu(btn, id) {
   const folderOptions = LumioState.folders.map(f => `<div class="menu-item move-to" data-folder="${f.id}" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;">${f.name}</div>`).join('')
     + `<div class="menu-item move-to" data-folder="" style="padding:9px 12px 9px 30px; border-radius:var(--r-sm); font-size:13px; cursor:pointer;">Uncategorized</div>`;
 
+  const viewOnly = isProjectViewOnly(p);
+  const workflowItems = [];
+  if (!viewOnly && p.status === 'draft' && canSubmitForReview(p)) {
+    workflowItems.push(`<div data-action="submit_for_review">${menuItem('Submit For Review', '📤')}</div>`);
+  }
+  if (p.status === 'in_review' && canApproveReject()) {
+    workflowItems.push(`<div data-action="approve">${menuItem('Approve', '✅')}</div>`);
+    workflowItems.push(`<div data-action="reject">${menuItem('Reject', '↩️')}</div>`);
+  }
+  if (p.status === 'published' && canArchiveProject()) {
+    workflowItems.push(`<div data-action="archive">${menuItem('Archive', '🗄️')}</div>`);
+  }
+  if (p.status === 'archived' && canRestoreProject()) {
+    workflowItems.push(`<div data-action="restore">${menuItem('Restore to Draft', '↩️')}</div>`);
+  }
+
   const menu = popoverAt(btn, `
-    <div data-action="rename">${menuItem('Rename', '✏️')}</div>
+    ${!viewOnly ? `<div data-action="rename">${menuItem('Rename', '✏️')}</div>` : ''}
     <div data-action="duplicate">${menuItem('Duplicate', '⧉')}</div>
-    <div data-action="share">${menuItem('Share', '🔗')}</div>
+    ${!viewOnly ? `<div data-action="share">${menuItem('Share', '🔗')}</div>` : ''}
+    ${!viewOnly ? `
     <div class="menu-item move-parent" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;">
       <span>📁</span><span>Move to...</span>
     </div>
-    <div class="move-options" style="display:none;">${folderOptions}</div>
+    <div class="move-options" style="display:none;">${folderOptions}</div>` : ''}
     <div data-action="preview">${menuItem('Open Learner Preview', '👁️')}</div>
     <div data-action="export">${menuItem('Export Backup (.lumio)', '📦')}</div>
-    <div style="height:1px; background:var(--border); margin:4px 0;"></div>
-    <div data-action="delete">${menuItem('Delete', '🗑️', true)}</div>
+    ${workflowItems.length ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div>${workflowItems.join('')}` : ''}
+    ${!viewOnly ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div><div data-action="delete">${menuItem('Delete', '🗑️', true)}</div>` : ''}
   `);
+
+  ['submit_for_review', 'approve', 'reject', 'archive', 'restore'].forEach(action => {
+    menu.querySelector(`[data-action="${action}"]`)?.addEventListener('click', () => {
+      closePopovers();
+      const result = transitionProjectStatus(p, action);
+      if (!result.ok) { toast(result.reason, '⚠️'); return; }
+      renderProjects();
+      toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, '✅');
+    });
+  });
 
   menu.querySelector('.move-parent').addEventListener('click', () => {
     const opts = menu.querySelector('.move-options');

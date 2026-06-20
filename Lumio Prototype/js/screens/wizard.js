@@ -675,7 +675,7 @@ function createCourseFromWizard(blueprint) {
   // create matching project entry
   LumioState.projects.unshift({
     id, title: course.title, type: w.type === 'Microlearning' ? 'Microlearning' : 'Course',
-    folder: null, modified: 'Edited just now', status: 'Draft',
+    folder: null, modified: 'Edited just now', status: 'draft',
     thumb: Math.floor(Math.random()*LumioData.thumbGradients.length),
     health: 60,
     lastAccessed: Date.now(),
@@ -683,6 +683,7 @@ function createCourseFromWizard(blueprint) {
     sharedWith: [],
     sharedScope: null,
     sharedPermission: 'view',
+    reviewStatus: null, reviewedBy: null, reviewedAt: null, reviewComments: null, submittedBy: null, submittedAt: null,
   });
 
   // seed empty lesson content for created lessons

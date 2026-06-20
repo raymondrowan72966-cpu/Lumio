@@ -118,6 +118,111 @@ function canAccessWorkspaceSettings() { return isWorkspaceOwner(); }
 function canManageUsers() { return isWorkspaceOwner(); }
 function canInviteAdministrators() { return isWorkspaceOwner(); }
 
+/* ============================================================
+   PROJECT STATUS LIFECYCLE
+   draft -> in_review -> approved -> published -> archived
+   Rejection: in_review -> draft
+   Restore: archived -> draft
+   Single source of truth — every UI surface (Projects list,
+   Course Landing, Lesson Builder, Workspace Settings review queue,
+   publish.js) reads/writes status only through these functions.
+   ============================================================ */
+const PROJECT_STATUS_LABELS = {
+  draft: 'Draft',
+  in_review: 'In Review',
+  approved: 'Approved',
+  published: 'Published',
+  archived: 'Archived',
+};
+
+// Allowed transitions: { fromStatus: { action: toStatus } }
+const PROJECT_STATUS_TRANSITIONS = {
+  draft:      { submit_for_review: 'in_review' },
+  in_review:  { approve: 'approved', reject: 'draft' },
+  approved:   { publish: 'published' },
+  published:  { republish: 'published', archive: 'archived' },
+  archived:   { restore: 'draft' },
+};
+
+function isProjectOwner(project) {
+  return !!(project && project.ownerId === LumioState.currentUser.id);
+}
+
+// Owner of the project, or the Workspace Owner (who bypasses sharing
+// restrictions entirely per the approved architecture).
+function hasFullProjectAccess(project) {
+  return isProjectOwner(project) || isWorkspaceOwner();
+}
+
+// Whether the current user can edit this project's content at all —
+// owner, Workspace Owner, or shared with 'edit' permission (individual
+// share naming this user, or a team-wide share).
+function canEditProject(project) {
+  if (!project) return false;
+  if (hasFullProjectAccess(project)) return true;
+  const uid = LumioState.currentUser.id;
+  const sharedToMe = project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
+  return sharedToMe && project.sharedPermission === 'edit';
+}
+
+// Whether the current user only has read access — shared with this user
+// (directly or via team) but without edit permission, and not the owner
+// or Workspace Owner. Drives "View Only" UI across Course Landing and
+// Lesson Builder.
+function isProjectViewOnly(project) {
+  if (!project) return false;
+  if (hasFullProjectAccess(project)) return false;
+  const uid = LumioState.currentUser.id;
+  const sharedToMe = project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
+  return sharedToMe && project.sharedPermission !== 'edit';
+}
+
+function canSubmitForReview(project) { return canEditProject(project); }
+function canApproveReject() { return isWorkspaceOwner(); }
+function canArchiveProject() { return isWorkspaceOwner(); }
+function canRestoreProject() { return isWorkspaceOwner(); }
+
+// Whether `project` can publish right now, per the approved status matrix:
+// draft/in_review/archived cannot publish; approved/published can.
+function canPublishProjectStatus(project) {
+  return !!project && (project.status === 'approved' || project.status === 'published');
+}
+
+// Attempts a status transition. Returns { ok: true } or { ok: false, reason }.
+// Never trusts the caller's UI to only offer valid actions — re-validates
+// the transition table and the actor's permission every time.
+function transitionProjectStatus(project, action) {
+  if (!project) return { ok: false, reason: 'Project not found.' };
+  const allowed = PROJECT_STATUS_TRANSITIONS[project.status];
+  const toStatus = allowed && allowed[action];
+  if (!toStatus) return { ok: false, reason: `Cannot ${action.replace(/_/g, ' ')} from status "${PROJECT_STATUS_LABELS[project.status] || project.status}".` };
+
+  if (action === 'submit_for_review' && !canSubmitForReview(project)) return { ok: false, reason: 'You do not have permission to submit this project for review.' };
+  if ((action === 'approve' || action === 'reject') && !canApproveReject()) return { ok: false, reason: 'Only the Workspace Owner can approve or reject submissions.' };
+  if (action === 'archive' && !canArchiveProject()) return { ok: false, reason: 'Only the Workspace Owner can archive projects.' };
+  if (action === 'restore' && !canRestoreProject()) return { ok: false, reason: 'Only the Workspace Owner can restore archived projects.' };
+  if ((action === 'publish' || action === 'republish') && !canEditProject(project)) return { ok: false, reason: 'You do not have permission to publish this project.' };
+
+  const now = Date.now();
+  if (action === 'submit_for_review') {
+    project.reviewStatus = 'pending';
+    project.submittedBy = LumioState.currentUser.id;
+    project.submittedAt = now;
+    project.reviewComments = null;
+  } else if (action === 'approve') {
+    project.reviewStatus = 'approved';
+    project.reviewedBy = LumioState.currentUser.id;
+    project.reviewedAt = now;
+  } else if (action === 'reject') {
+    project.reviewStatus = 'rejected';
+    project.reviewedBy = LumioState.currentUser.id;
+    project.reviewedAt = now;
+  }
+  project.status = toStatus;
+  scheduleLumioSave();
+  return { ok: true };
+}
+
 /* ---------------- AUTHENTICATION SERVICE STUBS ---------------- */
 // These are the only two integration points that need real implementations
 // when Microsoft/Google OAuth is connected. Replace each stub body with the
@@ -252,7 +357,7 @@ function generateUniqueId(prefix) {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 12;
+const LUMIO_STATE_VERSION = 13;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts. */
@@ -534,6 +639,28 @@ function migrateLumioState(record) {
     if (state.interactionHistory === undefined) state.interactionHistory = {};
     if (state.assessmentAttempts === undefined) state.assessmentAttempts = {};
     version = 12;
+  }
+
+  if (version < 13) {
+    // v13 introduces the real status lifecycle (draft/in_review/approved/
+    // published/archived) and the review data model. Existing projects only
+    // ever had the 3 old display-cased values — map them onto the new
+    // lowercase enum 1:1; 'approved'/'archived' are new statuses only ever
+    // reached going forward via the workflow, so no existing project needs
+    // to map onto them. Review fields are brand new — null for every
+    // existing project, no data loss, nothing inferred.
+    const OLD_STATUS_MAP = { 'Draft': 'draft', 'In Review': 'in_review', 'Published': 'published' };
+    (state.projects || []).forEach(p => {
+      if (OLD_STATUS_MAP[p.status]) p.status = OLD_STATUS_MAP[p.status];
+      else if (!['draft', 'in_review', 'approved', 'published', 'archived'].includes(p.status)) p.status = 'draft';
+      if (p.reviewStatus === undefined) p.reviewStatus = null;
+      if (p.reviewedBy === undefined) p.reviewedBy = null;
+      if (p.reviewedAt === undefined) p.reviewedAt = null;
+      if (p.reviewComments === undefined) p.reviewComments = null;
+      if (p.submittedBy === undefined) p.submittedBy = null;
+      if (p.submittedAt === undefined) p.submittedAt = null;
+    });
+    version = 13;
   }
 
   return state;

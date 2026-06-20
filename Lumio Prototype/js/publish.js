@@ -133,6 +133,21 @@ const PUBLISH_JS_FILES = [
 ];
 
 async function publishHtmlPackage(course, triggerBtn) {
+  // Status gate: only approved/published projects may publish (draft/
+  // in_review/archived cannot). Re-checked here regardless of what the UI
+  // already hid, so publishing never depends solely on a button being
+  // absent — the same rule that hides the Publish button in courseLanding.js.
+  const project = LumioState.projects.find(p => p.id === course.id);
+  if (!canPublishProjectStatus(project)) {
+    const statusLabel = project ? (PROJECT_STATUS_LABELS[project.status] || project.status) : 'unknown';
+    toast(`Cannot publish — project status is "${statusLabel}". It must be Approved first.`, '⚠️');
+    return;
+  }
+  if (project && !canEditProject(project)) {
+    toast('You do not have permission to publish this project.', '⚠️');
+    return;
+  }
+
   const issues = getCourseReadinessIssues(course);
   if (issues.length > 0) {
     toast('Course not ready: ' + issues[0], '⚠️');

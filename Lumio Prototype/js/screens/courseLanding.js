@@ -25,28 +25,38 @@ function renderCourseLanding(courseId) {
   if (!course) { navigate('#/projects'); return; }
   LumioState.currentCourseId = courseId;
 
+  const project = LumioState.projects.find(p => p.id === courseId);
+  const viewOnly = isProjectViewOnly(project);
+
   if (!course.mode) course.mode = 'edit'; // 'edit' | 'preview'
+  if (viewOnly) course.mode = 'preview'; // view-only users never get the editing surface
   ensureCourseDesign(course);
   applyThemeVars(course);
   const theme = LumioData.themes.find(t => t.id === course.theme) || LumioData.themes[0];
 
   const totalMinutes = estimateCourseDuration(course);
   const navTips = LumioData.ai.navigationTips(course.lessons.length, course.assessments.length, totalMinutes + ' min');
+  const statusBadge = project
+    ? `<span class="pill ${STATUS_BADGE[project.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[project.status] || project.status}</span>`
+    : '';
 
   const content = `
     <header class="app-topbar">
       <div class="flex items-center gap-12">
         <button class="btn btn-ghost btn-sm" id="back-projects">← Projects</button>
         <h2 style="font-size:18px;">${course.title}</h2>
-        <span class="pill pill-grey">Draft</span>
+        ${statusBadge}
+        ${viewOnly ? `<span class="pill pill-grey" title="You have view-only access to this project">👁️ View Only</span>` : ''}
       </div>
       <div class="flex items-center gap-12">
+        ${!viewOnly ? `
         <div class="tabs" style="border-bottom:none;">
           <div class="tab ${course.mode==='edit'?'active':''}" data-mode="edit">✏️ Editing</div>
           <div class="tab ${course.mode==='preview'?'active':''}" data-mode="preview">👁️ Preview as Learner</div>
         </div>
         <button class="btn btn-secondary btn-sm" id="course-settings">⚙️ Settings</button>
-        <button class="btn btn-primary btn-sm" id="course-publish">🚀 Publish</button>
+        ${canPublishProjectStatus(project) ? `<button class="btn btn-primary btn-sm" id="course-publish">🚀 Publish</button>` : `<button class="btn btn-secondary btn-sm" disabled title="This project must be Approved before it can be published.">🚀 Publish</button>`}
+        ` : `<span class="text-sm text-muted">👁️ Preview as Learner</span>`}
       </div>
     </header>
     <main class="app-content">
@@ -67,13 +77,13 @@ function renderCourseLanding(courseId) {
         <!-- Navigation Tips -->
         ${renderNavTipsSection(course, navTips)}
 
-        ${course.mode === 'edit' ? renderAddContent(course, totalMinutes) : ''}
+        ${course.mode === 'edit' && !viewOnly ? renderAddContent(course, totalMinutes) : ''}
 
       </div>
     </main>
   `;
   renderShell('projects', content, { largeLogo: true });
-  bindCourseLandingEvents(course);
+  bindCourseLandingEvents(course, viewOnly);
 }
 
 function renderHeroSection(course, opts = {}) {
@@ -222,7 +232,7 @@ function openContentMenu(btn, course, kind, id) {
     ${isLesson ? `
       <div data-action="up" style="${idx <= 0 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Up', '↑')}</div>
       <div data-action="down" style="${idx >= list.length - 1 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Down', '↓')}</div>
-    ` : ''}
+    ` : `<div data-action="assessment-settings">${menuItem('Assessment Settings', '⚙️')}</div>`}
     <div style="height:1px; background:var(--border); margin:4px 0;"></div>
     <div data-action="delete">${menuItem(isLesson ? 'Delete Lesson' : 'Delete Assessment', '🗑️', true)}</div>
   `);
@@ -270,6 +280,91 @@ function openContentMenu(btn, course, kind, id) {
     closePopovers();
     confirmDeleteContentItem(course, kind, id);
   });
+
+  menu.querySelector('[data-action="assessment-settings"]')?.addEventListener('click', () => {
+    closePopovers();
+    openAssessmentSettingsModal(course, list[idx]);
+  });
+}
+
+// normalizeAssessmentSettings() is defined once, in learnerPreview.js
+// (single source of truth — both this settings modal and the runtime
+// enforcement in recordAssessmentAttempt()/isAssessmentLocked() read the
+// same defaults). Note its default passingScore is null (legacy "every KC
+// must pass" behaviour) until an author explicitly sets one here.
+function openAssessmentSettingsModal(course, assessment) {
+  const s = normalizeAssessmentSettings(assessment);
+  const attVal = s.attemptsAllowed === 0 ? 'unlimited' : [1, 2, 3, 5].includes(s.attemptsAllowed) ? String(s.attemptsAllowed) : 'custom';
+  const isCustom = attVal === 'custom';
+
+  const overlay = el(`
+    <div class="overlay">
+      <div class="modal" style="width:440px; padding:28px;">
+        <h3 style="font-size:18px;">Assessment Settings</h3>
+        <p class="text-sm text-muted mt-4">"${escapeHtml(assessment.title)}"</p>
+
+        <div class="field mt-16">
+          <label>Passing Score (%)</label>
+          <input class="input" id="as-passing-score" type="number" min="0" max="100" value="${s.passingScore ?? 80}" />
+          <p class="text-xs text-muted mt-4">${s.passingScore === null ? 'Not set yet — currently requires every knowledge check to pass individually.' : ''}</p>
+        </div>
+
+        <div class="field">
+          <label>Attempts Allowed</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select class="input" id="as-attempts" style="flex:1;">
+              <option value="unlimited" ${attVal === 'unlimited' ? 'selected' : ''}>Unlimited</option>
+              <option value="1" ${attVal === '1' ? 'selected' : ''}>1</option>
+              <option value="2" ${attVal === '2' ? 'selected' : ''}>2</option>
+              <option value="3" ${attVal === '3' ? 'selected' : ''}>3</option>
+              <option value="5" ${attVal === '5' ? 'selected' : ''}>5</option>
+              <option value="custom" ${isCustom ? 'selected' : ''}>Custom</option>
+            </select>
+            <input type="number" class="input" id="as-attempts-custom" style="width:72px; ${isCustom ? '' : 'display:none;'}" min="1" max="99" value="${isCustom ? s.attemptsAllowed : 5}" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="flex items-center gap-8"><input type="checkbox" id="as-show-score" ${s.showScore ? 'checked' : ''} /> Show Score</label>
+        </div>
+        <div class="field">
+          <label class="flex items-center gap-8"><input type="checkbox" id="as-show-answers" ${s.showAnswers ? 'checked' : ''} /> Show Answers</label>
+        </div>
+        <div class="field">
+          <label class="flex items-center gap-8"><input type="checkbox" id="as-lock-after-pass" ${s.lockAfterPass ? 'checked' : ''} /> Lock After Pass</label>
+        </div>
+
+        <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
+          <button class="btn btn-ghost" id="as-cancel">Cancel</button>
+          <button class="btn btn-primary" id="as-save">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.body.appendChild(overlay);
+
+  const attSel = overlay.querySelector('#as-attempts');
+  const attCustom = overlay.querySelector('#as-attempts-custom');
+  attSel.addEventListener('change', () => { attCustom.style.display = attSel.value === 'custom' ? '' : 'none'; });
+
+  overlay.querySelector('#as-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#as-save').addEventListener('click', () => {
+    const attemptsAllowed = attSel.value === 'unlimited' ? 0
+      : attSel.value === 'custom' ? (parseInt(attCustom.value, 10) || 5)
+      : parseInt(attSel.value, 10);
+    assessment.settings = {
+      passingScore: Math.max(0, Math.min(100, parseInt(overlay.querySelector('#as-passing-score').value, 10) || 0)),
+      attemptsAllowed,
+      showScore: overlay.querySelector('#as-show-score').checked,
+      showAnswers: overlay.querySelector('#as-show-answers').checked,
+      lockAfterPass: overlay.querySelector('#as-lock-after-pass').checked,
+    };
+    scheduleLumioSave();
+    overlay.remove();
+    toast('Assessment settings saved', '⚙️');
+  });
 }
 
 function confirmDeleteContentItem(course, kind, id) {
@@ -304,7 +399,7 @@ function confirmDeleteContentItem(course, kind, id) {
   });
 }
 
-function bindCourseLandingEvents(course) {
+function bindCourseLandingEvents(course, viewOnly) {
   const app = document.getElementById('app');
   app.querySelector('#back-projects').addEventListener('click', () => navigate('#/projects'));
 

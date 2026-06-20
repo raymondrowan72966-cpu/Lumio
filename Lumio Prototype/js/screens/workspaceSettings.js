@@ -6,6 +6,7 @@
 
 const WORKSPACE_SETTINGS_TABS = [
   { id: 'users', label: 'Users' },
+  { id: 'reviews', label: 'Pending Reviews' },
   { id: 'system', label: 'System Information' },
 ];
 
@@ -54,8 +55,66 @@ function renderWorkspaceSettingsTab() {
   if (!host) return;
   switch (workspaceSettingsTab) {
     case 'users': host.innerHTML = workspaceUsersTab(); bindWorkspaceUsersTab(); break;
+    case 'reviews': host.innerHTML = workspaceReviewsTab(); bindWorkspaceReviewsTab(); break;
     case 'system': host.innerHTML = workspaceSystemTab(); break;
   }
+}
+
+/* ---------------- PENDING REVIEWS (Workspace Owner only) ---------------- */
+function workspaceReviewsTab() {
+  const pending = LumioState.projects.filter(p => !p.deleted && p.status === 'in_review');
+  if (!pending.length) {
+    return `<div class="card card-pad"><p class="text-sm text-muted">No projects are currently awaiting review.</p></div>`;
+  }
+  return `
+    <div class="card card-pad">
+      <div class="prop-section-title">Pending Reviews</div>
+      <div class="flex-col gap-8">
+        ${pending.map(p => pendingReviewRow(p)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function pendingReviewRow(p) {
+  const author = getWorkspaceUser(p.submittedBy) || {};
+  const authorName = author.firstName ? `${author.firstName} ${author.lastName || ''}`.trim() : 'Unknown';
+  const submittedDate = p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : '—';
+  return `
+    <div class="flex items-center gap-12" style="padding:10px 0; border-bottom:1px solid var(--border);" data-review-row="${p.id}">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:13px; color:var(--ink-900);">${escapeHtml(projectDisplayTitle(p))}</div>
+        <div class="text-muted" style="font-size:12px;">By ${escapeHtml(authorName)} · Submitted ${submittedDate}</div>
+      </div>
+      <span class="pill ${STATUS_BADGE[p.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[p.status] || p.status}</span>
+      <div class="flex gap-8">
+        <button class="btn btn-secondary btn-sm" data-review-reject="${p.id}">Reject</button>
+        <button class="btn btn-primary btn-sm" data-review-approve="${p.id}">Approve</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindWorkspaceReviewsTab() {
+  const host = document.getElementById('ws-tab-content');
+  if (!host) return;
+  host.querySelectorAll('[data-review-approve]').forEach(btn => btn.addEventListener('click', () => {
+    const p = LumioState.projects.find(x => x.id === btn.dataset.reviewApprove);
+    const result = transitionProjectStatus(p, 'approve');
+    if (!result.ok) { toast(result.reason, '⚠️'); return; }
+    toast(`"${projectDisplayTitle(p)}" approved`, '✅');
+    renderWorkspaceSettingsTab();
+  }));
+  host.querySelectorAll('[data-review-reject]').forEach(btn => btn.addEventListener('click', async () => {
+    const p = LumioState.projects.find(x => x.id === btn.dataset.reviewReject);
+    const comments = await promptModal('Reason for rejection (optional)', '');
+    if (comments === null) return; // cancelled
+    p.reviewComments = comments || null;
+    const result = transitionProjectStatus(p, 'reject');
+    if (!result.ok) { toast(result.reason, '⚠️'); return; }
+    toast(`"${projectDisplayTitle(p)}" sent back to Draft`, '↩️');
+    renderWorkspaceSettingsTab();
+  }));
 }
 
 /* ---------------- USERS ---------------- */

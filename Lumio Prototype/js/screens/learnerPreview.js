@@ -74,6 +74,7 @@ function shuffleArray(arr) {
 function exitLearnerPreview() {
   if (LearnerUI._scrollHandler) { window.removeEventListener('scroll', LearnerUI._scrollHandler); LearnerUI._scrollHandler = null; }
   if (LearnerUI._headerResizeObserver) { LearnerUI._headerResizeObserver.disconnect(); LearnerUI._headerResizeObserver = null; }
+  if (LearnerUI._viewedObserver) { LearnerUI._viewedObserver.disconnect(); LearnerUI._viewedObserver = null; }
   const returnTo = (LumioState.learnerPreview && LumioState.learnerPreview.returnTo) || '#/projects';
   LumioState.learnerPreview = null;
   navigate(returnTo);
@@ -130,8 +131,13 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
     Object.keys(progress.blockProgress || {}).map(k => k.split(':')[0])
       .filter(id => !progress.completedLessons.includes(id))
   );
+  // height (not just max-height) is required: max-height only caps overflow,
+  // it never forces the box to fill — a flex column item's height is
+  // intrinsic to its content otherwise. Without an explicit height, a course
+  // with few lessons leaves the aside shorter than the viewport, and the
+  // page background (not the sidebar's --surface-0) shows through below it.
   const stickyStyle = sticky
-    ? `align-self:flex-start; position:sticky; top:57px; max-height:calc(100vh - 57px);`
+    ? `align-self:flex-start; position:sticky; top:57px; height:calc(100vh - 57px); max-height:calc(100vh - 57px);`
     : ``;
   const drawerStyle = mobileDrawer
     ? `position:absolute; top:0; left:0; bottom:0; z-index:200; transform:translateX(-100%); transition:transform 0.25s ease; box-shadow:var(--elevation-2);`
@@ -541,6 +547,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       const syncSidebarOffset = () => {
         const h = hdr.offsetHeight;
         aside.style.top = h + 'px';
+        aside.style.height = `calc(100vh - ${h}px)`;
         aside.style.maxHeight = `calc(100vh - ${h}px)`;
       };
       syncSidebarOffset();
@@ -635,6 +642,12 @@ function renderLearnerLesson(course, lessonId) {
     ? (assessmentIdx > 0 ? course.assessments[assessmentIdx - 1].id : (course.lessons.length ? course.lessons[course.lessons.length - 1].id : null))
     : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
+  // Next is disabled until every required block in THIS lesson is complete —
+  // a lesson-wide gate, separate from (and additional to) any Continue-block
+  // gating the author has configured within the lesson itself.
+  const revealedForLesson = LearnerUI.revealedContinues[lessonId] || new Set();
+  const nextDisabled = !CompletionEngine.isLessonReadyForNext(blocks, ctx, revealedForLesson);
+
   const body = `
     <div style="max-width:1100px; margin:0 auto; padding:40px 40px 40px; width:100%; flex:1;">
       <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
@@ -644,9 +657,9 @@ function renderLearnerLesson(course, lessonId) {
       </div>
       ${renderLearnerBlocks(blocks, ctx)}
     </div>
-    <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; min-height:72px; box-sizing:border-box;">
       <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>← Previous</button>
-      <button class="btn btn-primary" id="lp-next">${nextLabel}</button>
+      <button class="btn btn-primary" id="lp-next" ${nextDisabled ? 'disabled title="Complete all required content above to continue"' : ''}>${nextLabel}</button>
     </div>
   `;
 
@@ -701,7 +714,7 @@ function renderLearnerLesson(course, lessonId) {
       progress.lessonCompletedAt[lessonId] = Date.now();
     }
     if (isAssessment) {
-      recordAssessmentAttempt(lessonId, lessonId, blocks, progress);
+      recordAssessmentAttempt(lesson, lessonId, blocks, progress);
       if (isLastAssessment) {
         progress.courseStatus = 'completed';
         progress.courseCompletedAt = Date.now();
@@ -827,6 +840,22 @@ function refreshContinueLocks(ctx) {
   });
 }
 
+/* Re-evaluates the Next button's disabled state in place (no full
+   re-render) — used by signals that arrive asynchronously and wouldn't
+   otherwise trigger a re-render: a block scrolling into view, or a video/
+   audio element firing 'ended'. Click-driven interactions (Continue,
+   accordions, KC submission, etc.) already trigger a full rerender(),
+   which recomputes the same disabled state inline in the footer template. */
+function refreshNextButtonState(ctx) {
+  const btn = document.getElementById('lp-next');
+  if (!btn) return;
+  const blocks = ctx.blocks || LumioState.lessons[ctx.lessonId] || [];
+  const revealed = LearnerUI.revealedContinues[ctx.lessonId] || new Set();
+  const disabled = !CompletionEngine.isLessonReadyForNext(blocks, ctx, revealed);
+  btn.disabled = disabled;
+  btn.title = disabled ? 'Complete all required content above to continue' : '';
+}
+
 /* ---- Continue (progression gate) ---- */
 function learnerContinueBlock(block, index, ctx) {
   const d = block.data || {};
@@ -854,7 +883,22 @@ function learnerFileBlock(block, index, ctx) {
 }
 
 function learnerVideoBlock(block, index, ctx) {
-  return renderBlockContent(block, false);
+  const d = block.data || {};
+  const html = renderBlockContent(block, false);
+  // Direct/uploaded video renders a real <video> element (class
+  // block-video-el) — its 'ended' event reliably marks the block watched
+  // (wired in bindLearnerBlockEvents). A YouTube/Vimeo embed renders an
+  // <iframe>; there is no postMessage/IFrame Player API integration today,
+  // so there is no reliable in-page signal for "watched" — rather than
+  // assume one, a manual control is offered instead.
+  const embed = !d.src && d.url ? parseVideoEmbedUrl(d.url) : null;
+  const needsManualMark = !d.src && embed && (embed.type === 'youtube' || embed.type === 'vimeo');
+  if (!needsManualMark) return html;
+  const watched = !!(ctx.progress.blockProgress && ctx.progress.blockProgress[ctx.lessonId + ':' + index] && ctx.progress.blockProgress[ctx.lessonId + ':' + index].watched);
+  return `${html}
+    <div class="mt-8" style="text-align:center;">
+      <button class="btn btn-secondary btn-sm lp-mark-watched" data-block-index="${index}" ${watched ? 'disabled' : ''}>${watched ? '✓ Marked as watched' : 'Mark video as watched'}</button>
+    </div>`;
 }
 
 function learnerAudioBlock(block, index, ctx) {
@@ -951,6 +995,7 @@ function normalizeKcSettings(s) {
   return {
     maxAttempts:         s.maxAttempts ?? 0,           // 0 = unlimited
     allowRetry:          s.allowRetry !== false,        // default true
+    lockAfterFinalAttempt: s.lockAfterFinalAttempt !== false, // default true — preserves existing behaviour
     requireCorrectAnswer: !!(s.requireCorrectAnswer),
     completionRule:      s.completionRule  || 'submitted',
     showCorrectAnswer:   s.showCorrectAnswer || 'immediately',
@@ -1261,9 +1306,13 @@ function submitKc(ctx, key, type, blocks) {
   ans.partialScore = { score: scoreResult.score, total: scoreResult.total };
   if (passed) ans.passed = true;
 
-  // Lock when passed, retry is disabled, or max attempts reached.
+  // Lock when passed, retry is disabled, or max attempts reached (the
+  // last condition only applies if Lock After Final Attempt is enabled —
+  // when disabled, an exhausted learner sees their final result but the
+  // block does not lock itself; only Allow Retry / passing still apply).
   const maxAttempts = settings.maxAttempts;
-  if (passed || !settings.allowRetry || (maxAttempts > 0 && ans.attempts >= maxAttempts)) {
+  const exhausted = maxAttempts > 0 && ans.attempts >= maxAttempts && settings.lockAfterFinalAttempt;
+  if (passed || !settings.allowRetry || exhausted) {
     ans.locked = true;
   }
 
@@ -1369,14 +1418,43 @@ function recordInteraction(ctx, blockIndex, rawType, ans, scoreResult, d) {
   scheduleLumioSave();
 }
 
+// Reads assessment-level settings (Passing Score, Attempts Allowed, Show
+// Score, Show Answers, Lock After Pass) configured via the "Assessment
+// Settings" menu in courseLanding.js. Additive/backward-compatible: an
+// assessment with no settings yet behaves exactly as before this sprint
+// (unlimited attempts, every-KC-passed determines pass/fail).
+function normalizeAssessmentSettings(a) {
+  const s = (a && a.settings) || {};
+  return {
+    passingScore:    s.passingScore ?? null,   // percentage threshold, or null = "every KC must pass" (legacy behaviour)
+    attemptsAllowed: s.attemptsAllowed ?? 0,    // 0 = unlimited
+    showScore:       s.showScore !== false,
+    showAnswers:     s.showAnswers !== false,
+    lockAfterPass:   !!s.lockAfterPass,
+  };
+}
+
+// Whether the assessment itself (not an individual KC block within it) is
+// locked from further attempts, per its own settings.
+function isAssessmentLocked(assessment, history) {
+  const s = normalizeAssessmentSettings(assessment);
+  const list = history || [];
+  if (s.attemptsAllowed > 0 && list.length >= s.attemptsAllowed) return true;
+  if (s.lockAfterPass && list.some(h => h.passed)) return true;
+  return false;
+}
+
 // Appends one entry to LumioState.assessmentAttempts[assessmentId], summarizing
 // every KC block in that assessment's blocks at the moment the learner leaves
 // it (clicks Next/Finish) — the natural "submission" event for an assessment.
-function recordAssessmentAttempt(assessmentId, lessonId, blocks, progress) {
+function recordAssessmentAttempt(assessment, lessonId, blocks, progress) {
+  const assessmentId = assessment.id;
   if (!LumioState.assessmentAttempts) LumioState.assessmentAttempts = {};
   const history = LumioState.assessmentAttempts[assessmentId] || (LumioState.assessmentAttempts[assessmentId] = []);
+  if (isAssessmentLocked(assessment, history)) return; // already exhausted/passed-and-locked — don't record a phantom extra attempt
 
-  let score = 0, maxScore = 0, allPassed = true, anyKc = false;
+  const settings = normalizeAssessmentSettings(assessment);
+  let score = 0, maxScore = 0, allKcPassed = true, anyKc = false;
   const answers = [];
   blocks.forEach((block, i) => {
     if (!block.type || !block.type.startsWith('kc_')) return;
@@ -1385,17 +1463,23 @@ function recordAssessmentAttempt(assessmentId, lessonId, blocks, progress) {
     const ans = progress.kcAnswers[key];
     const partial = ans && ans.partialScore;
     if (partial) { score += partial.score || 0; maxScore += partial.total || 0; }
-    if (!ans || !ans.passed) allPassed = false;
+    if (!ans || !ans.passed) allKcPassed = false;
     answers.push({ blockIndex: i, type: block.type, response: ans ? (ans.selected ?? ans.response ?? ans.order ?? ans.pairs ?? null) : null, passed: !!(ans && ans.passed) });
   });
   if (!anyKc) return; // nothing to record for an assessment with no KC blocks
+
+  // Passing Score (percentage) takes priority when configured; otherwise
+  // fall back to the original "every KC block individually passed" rule.
+  const passed = settings.passingScore !== null
+    ? (maxScore > 0 && (score / maxScore) * 100 >= settings.passingScore)
+    : allKcPassed;
 
   history.push({
     attemptNumber: history.length + 1,
     timestamp: Date.now(),
     score,
     maxScore,
-    passed: allPassed,
+    passed,
     answers,
   });
 
@@ -1406,6 +1490,83 @@ function recordAssessmentAttempt(assessmentId, lessonId, blocks, progress) {
 function bindLearnerBlockEvents(course, blocks, ctx) {
   const app = document.getElementById('app');
   const rerender = () => renderLearnerLesson(course, ctx.lessonId);
+
+  // "Viewed" tracking for the Next-button gate — paragraphs, images,
+  // quotes, statements, etc. (any block whose completion strategy is
+  // 'viewed', excluding video/audio which use real media events below).
+  // A block counts as viewed once any part of it has been visible in the
+  // viewport — a single intersection is sufficient and verifiable; no
+  // dwell-time or visibility-percentage threshold is assumed here, since
+  // there is no existing product definition of "read" beyond "seen".
+  if (LearnerUI._viewedObserver) { LearnerUI._viewedObserver.disconnect(); LearnerUI._viewedObserver = null; }
+  const viewedObserver = new IntersectionObserver((entries) => {
+    let changed = false;
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const index = parseInt(entry.target.dataset.lpIndex, 10);
+      const block = blocks[index];
+      if (!block) return;
+      const cap = BlockCapabilities.COMPLETION[block.type];
+      if (!cap || cap.strategy !== 'viewed' || block.type === 'video' || block.type === 'audio') return;
+      CompletionEngine.markViewed(ctx, index);
+      viewedObserver.unobserve(entry.target);
+      changed = true;
+    });
+    if (changed) refreshNextButtonState(ctx);
+  }, { threshold: 0.1 });
+  app.querySelectorAll(`[data-lp-lesson="${ctx.lessonId}"][data-lp-index]`).forEach(node => {
+    const index = parseInt(node.dataset.lpIndex, 10);
+    const block = blocks[index];
+    if (!block) return;
+    const cap = BlockCapabilities.COMPLETION[block.type];
+    if (cap && cap.strategy === 'viewed' && block.type !== 'video' && block.type !== 'audio') {
+      viewedObserver.observe(node);
+    }
+  });
+  LearnerUI._viewedObserver = viewedObserver;
+
+  // Video — direct/uploaded files render a real <video> element; its
+  // 'ended' event is a reliable, verifiable completion signal.
+  app.querySelectorAll('.block-video-el').forEach(videoEl => {
+    const wrapper = videoEl.closest('[data-lp-index]');
+    if (!wrapper) return;
+    const index = parseInt(wrapper.dataset.lpIndex, 10);
+    videoEl.addEventListener('ended', () => {
+      CompletionEngine.markWatched(ctx, index);
+      refreshNextButtonState(ctx);
+    });
+    // Real playback-position tracking for the 'watched_50/75/100' rules —
+    // only meaningful for direct/uploaded video, where duration/currentTime
+    // are genuine browser-reported values, not an estimate.
+    videoEl.addEventListener('timeupdate', () => {
+      if (!videoEl.duration) return;
+      CompletionEngine.markProgressPercent(ctx, index, 'watchedPercent', (videoEl.currentTime / videoEl.duration) * 100);
+      refreshNextButtonState(ctx);
+    });
+  });
+  // YouTube/Vimeo embeds have no reliable in-page "ended" signal — the
+  // manual fallback rendered in learnerVideoBlock() is handled here.
+  app.querySelectorAll('.lp-mark-watched').forEach(btn => btn.addEventListener('click', () => {
+    const index = parseInt(btn.dataset.blockIndex, 10);
+    CompletionEngine.markWatched(ctx, index);
+    rerender();
+  }));
+
+  // Audio — always a real <audio> element; 'ended' is reliable.
+  app.querySelectorAll('.block-audio-el').forEach(audioEl => {
+    const wrapper = audioEl.closest('[data-lp-index]');
+    if (!wrapper) return;
+    const index = parseInt(wrapper.dataset.lpIndex, 10);
+    audioEl.addEventListener('ended', () => {
+      CompletionEngine.markPlayed(ctx, index);
+      refreshNextButtonState(ctx);
+    });
+    audioEl.addEventListener('timeupdate', () => {
+      if (!audioEl.duration) return;
+      CompletionEngine.markProgressPercent(ctx, index, 'playedPercent', (audioEl.currentTime / audioEl.duration) * 100);
+      refreshNextButtonState(ctx);
+    });
+  });
 
   // Continue
   app.querySelectorAll('.lp-continue').forEach(btn => btn.addEventListener('click', () => {

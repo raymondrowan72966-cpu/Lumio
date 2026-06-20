@@ -30,6 +30,26 @@ function renderLessonBuilder(lessonId) {
   LumioState.currentLessonId = lessonId;
   if (!LumioState.lessons[lessonId]) LumioState.lessons[lessonId] = [];
   const { course, lesson } = getCourseAndLesson(lessonId);
+
+  // Entry protection: a view-only user never reaches the editable canvas at
+  // all — blocking entry entirely is safer and more complete than trying to
+  // disable every individual control (contenteditable text, block toolbars,
+  // drag handles, settings panels, publish actions) one by one.
+  const project = LumioState.projects.find(p => p.id === course.id);
+  if (isProjectViewOnly(project)) {
+    const app = document.getElementById('app');
+    app.innerHTML = `
+      <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:40px;">
+        <div style="font-size:40px;">👁️</div>
+        <h2 style="font-size:20px;">View Only Access</h2>
+        <p class="text-sm text-muted" style="max-width:420px;">You have view-only access to this project and cannot edit its content. Ask the project owner for edit access if you need to make changes.</p>
+        <button class="btn btn-primary" id="view-only-return">← Return to Course</button>
+      </div>
+    `;
+    app.querySelector('#view-only-return').addEventListener('click', () => navigate('#/course/' + course.id));
+    return;
+  }
+
   const blocks = LumioState.lessons[lessonId];
 
   const prevScroll = document.getElementById('lesson-canvas-wrap')?.scrollTop || 0;
@@ -462,6 +482,7 @@ function lumioRecordProgress(el, kind, itemIndex) {
   else if (kind === 'flipped') CompletionEngine.markFlipped(ctx, index, itemIndex);
   else if (kind === 'completed') CompletionEngine.markCompleted(ctx, index);
   refreshContinueLocks(ctx);
+  if (typeof refreshNextButtonState === 'function') refreshNextButtonState(ctx);
 }
 
 /* Full-size image lightbox — a Learner Preview-only interaction, opened by
@@ -2910,7 +2931,63 @@ function renderImageFamilyPanel(block, index) {
   }
 }
 
+/* Wraps renderRightTabContentInner so every block type's Settings tab gets
+   the same "Completion" section appended, regardless of which dedicated
+   per-type panel function produced the rest of the tab. Single insertion
+   point — avoids touching every individual panel function (text/statement/
+   list/image/chart/divider/audio/video/file each have their own, plus the
+   generic accordion/tabs/flashcard/scenario/fallback branch further down). */
 function renderRightTabContent(block, index, course) {
+  const inner = renderRightTabContentInner(block, index, course);
+  if (BuilderUI.rightTab !== 'settings' || !CompletionEngine.isRequirable(block.type)) return inner;
+  return inner + completionRequirementPanel(block);
+}
+
+// Renders the "Completion" Design Panel section: a Required toggle, plus a
+// Rule dropdown — hidden entirely when the type has only one valid rule
+// (nothing to choose), per the Phase 4 spec ("If a block type has only one
+// valid rule: Hide the dropdown").
+function completionRequirementPanel(block) {
+  const s = block.settings || {};
+  const required = s.completionRequired === true;
+  const options = CompletionEngine.ruleOptionsFor(block.type);
+  const currentRule = CompletionEngine.effectiveRule(block);
+  const RULE_LABELS = {
+    viewed: 'Viewed', watched_50: 'Watched 50%', watched_75: 'Watched 75%', watched_100: 'Watched 100%',
+    played: 'Played', played_50: 'Played 50%', played_75: 'Played 75%', played_100: 'Played 100%',
+    any_panel: 'Open Any Panel', all_panels: 'Open All Panels',
+    any_tab: 'View Any Tab', all_tabs: 'View All Tabs',
+    any_slide: 'View Any Slide', all_slides: 'View All Slides',
+    any_step: 'View Any Step', all_steps: 'View All Steps',
+    any_hotspot: 'Open Any Hotspot', all_hotspots: 'Open All Hotspots',
+    any_card: 'Flip Any Card', all_cards: 'Flip All Cards',
+    interacted: 'Interacted', click: 'Click Continue',
+    submitted: 'Submitted', correct: 'Correct',
+  };
+  // Reuses the existing generic .settings-field / .settings-select-str
+  // handlers (both already write block.settings[data-field] on the
+  // currently-selected block and re-render) — no new event wiring needed.
+  // The Rule dropdown's visibility recomputes correctly on the next render
+  // since it's driven by `required`, read fresh from block.settings each time.
+  return `
+    <div class="prop-section-title mt-16">Completion</div>
+    <div class="field">
+      <label class="flex items-center gap-8">
+        <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
+        Required for Lesson Completion
+      </label>
+    </div>
+    ${options.length > 1 ? `
+    <div class="field" style="${required ? '' : 'display:none;'}">
+      <label>Rule</label>
+      <select class="input settings-select-str" data-field="completionRuleType">
+        ${options.map(o => `<option value="${o}" ${o === currentRule ? 'selected' : ''}>${RULE_LABELS[o] || o}</option>`).join('')}
+      </select>
+    </div>` : ''}
+  `;
+}
+
+function renderRightTabContentInner(block, index, course) {
   const d = block.data || {};
   if (blockCategory(block.type) === 'Text') {
     return renderTextBlockPanel(block, index);
@@ -3376,7 +3453,8 @@ function kcOrderingContentPanel(block, d) {
 function kcSettingsPanel(block) {
   const s = block.settings || {};
   const maxAttempts = s.maxAttempts ?? 0;
-  const attVal = maxAttempts === 0 ? 'unlimited' : maxAttempts <= 3 ? String(maxAttempts) : 'custom';
+  const FIXED_ATTEMPT_OPTIONS = [1, 2, 3, 5];
+  const attVal = maxAttempts === 0 ? 'unlimited' : FIXED_ATTEMPT_OPTIONS.includes(maxAttempts) ? String(maxAttempts) : 'custom';
   const isCustom = attVal === 'custom';
   const showCA  = s.showCorrectAnswer  || 'immediately';
   const compRule = s.completionRule    || 'submitted';
@@ -3392,6 +3470,7 @@ function kcSettingsPanel(block) {
           <option value="1"  ${attVal === '1'  ? 'selected' : ''}>1</option>
           <option value="2"  ${attVal === '2'  ? 'selected' : ''}>2</option>
           <option value="3"  ${attVal === '3'  ? 'selected' : ''}>3</option>
+          <option value="5"  ${attVal === '5'  ? 'selected' : ''}>5</option>
           <option value="custom" ${attVal === 'custom' ? 'selected' : ''}>Custom</option>
         </select>
         <input type="number" class="input settings-num" id="kc-custom-attempts" data-field="maxAttempts"
@@ -3406,6 +3485,15 @@ function kcSettingsPanel(block) {
           ${s.allowRetry !== false ? 'checked' : ''} />
         Allow Retry
       </label>
+    </div>
+
+    <div class="field">
+      <label class="flex items-center gap-8">
+        <input type="checkbox" class="settings-field" data-field="lockAfterFinalAttempt"
+          ${s.lockAfterFinalAttempt !== false ? 'checked' : ''} />
+        Lock After Final Attempt
+      </label>
+      <p class="text-xs text-muted mt-4">When on, the block locks once Attempts Allowed is reached. When off, learners can keep trying past the limit (Allow Retry must also be on).</p>
     </div>
 
     <div class="field">
