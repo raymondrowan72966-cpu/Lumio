@@ -714,7 +714,7 @@ function renderLearnerLesson(course, lessonId) {
       progress.lessonCompletedAt[lessonId] = Date.now();
     }
     if (isAssessment) {
-      recordAssessmentAttempt(lesson, lessonId, blocks, progress);
+      recordAssessmentAttempt(lesson, lessonId, blocks, progress, course.id);
       if (isLastAssessment) {
         progress.courseStatus = 'completed';
         progress.courseCompletedAt = Date.now();
@@ -1053,7 +1053,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const d = block.data || {};
   const options = normalizeKcOptions(d);
   const correct = d.correct ?? 0;
-  const key = ctx.lessonId + ':' + index;
+  const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key];
   const settings = normalizeKcSettings(block.settings);
   const submitted = !!(ans && ans.submitted);
@@ -1089,7 +1089,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
 function learnerKcMultipleResponse(block, index, ctx) {
   const d = block.data || {};
   const options = normalizeKcOptions(d);
-  const key = ctx.lessonId + ':' + index;
+  const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || { selected: [] };
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
@@ -1125,7 +1125,7 @@ function learnerKcMatching(block, index, ctx) {
   const d = block.data || {};
   const left  = normalizeKcLeft(d);
   const right = normalizeKcRight(d);
-  const key = ctx.lessonId + ':' + index;
+  const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || { pairs: {}, selectedLeft: null };
   const pairs = ans.pairs || {};
   const settings = normalizeKcSettings(block.settings);
@@ -1167,7 +1167,7 @@ function learnerKcMatching(block, index, ctx) {
 function learnerKcOrdering(block, index, ctx) {
   const d = block.data || {};
   const items = normalizeKcItems(d);
-  const key = ctx.lessonId + ':' + index;
+  const key = ctx.lessonId + ':' + (block.id || index);
   let ans = ctx.progress.kcAnswers[key];
   if (!ans || !ans.order) {
     ans = { ...(ans || {}), order: shuffleArray(items.map((_, i) => i)) };
@@ -1205,7 +1205,7 @@ function learnerKcOrdering(block, index, ctx) {
 
 function learnerKcFillGap(block, index, ctx) {
   const d = block.data || {};
-  const key = ctx.lessonId + ':' + index;
+  const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || {};
   const text = d.text || 'Complete this sentence: ____.';
   const settings = normalizeKcSettings(block.settings);
@@ -1284,8 +1284,13 @@ function isKcPassed(scoreResult, settings) {
 function submitKc(ctx, key, type, blocks) {
   const ans = ctx.progress.kcAnswers[key] || {};
   if (ans.locked) return;
-  const blockIndex = parseInt(key.split(':')[1], 10);
-  const block = blocks[blockIndex] || {};
+  // key's suffix is normally a stable block id ("blk_xxx"); a purely
+  // numeric suffix only occurs for stale, not-yet-migrated keys (shouldn't
+  // happen post-boot-migration, but resolved by index as a safe fallback
+  // rather than failing outright).
+  const suffix = key.slice(key.indexOf(':') + 1);
+  const blockIndex = blocks.findIndex(b => b.id === suffix);
+  const block = (blockIndex !== -1 ? blocks[blockIndex] : blocks[parseInt(suffix, 10)]) || {};
   const d = block.data || {};
   const settings = normalizeKcSettings(block.settings);
 
@@ -1320,7 +1325,7 @@ function submitKc(ctx, key, type, blocks) {
 
   // Append (never overwrite) a new interaction history entry — this is the
   // record kcAnswers itself can no longer provide once a retake happens.
-  recordInteraction(ctx, blockIndex, type, ans, scoreResult, d);
+  recordInteraction(ctx, blockIndex, type, ans, scoreResult, d, block);
 }
 
 /* ---------------- INTERACTION HISTORY ---------------- */
@@ -1389,15 +1394,17 @@ function _snapshotCorrectResponse(rawType, d) {
 }
 
 // Appends one entry to LumioState.interactionHistory[courseId][lessonId][blockId].
-// blockId is "lessonId:index" today — blocks have no stable id yet (flagged
-// in the architecture audit); reordering a lesson's blocks would misattribute
-// history captured before the reorder, same caveat as kcAnswers/blockProgress.
-function recordInteraction(ctx, blockIndex, rawType, ans, scoreResult, d) {
+// blockId is the block's own stable id (Entity Identity Hardening Sprint) —
+// previously this was "lessonId:index", which both duplicated the lessonId
+// already present one level up AND broke under reordering. `block` is the
+// resolved block object (or null if somehow not found, falling back to the
+// raw index so this never throws).
+function recordInteraction(ctx, blockIndex, rawType, ans, scoreResult, d, block) {
   if (!LumioState.interactionHistory) LumioState.interactionHistory = {};
   const byCourse = LumioState.interactionHistory;
   if (!byCourse[ctx.courseId]) byCourse[ctx.courseId] = {};
   if (!byCourse[ctx.courseId][ctx.lessonId]) byCourse[ctx.courseId][ctx.lessonId] = {};
-  const blockId = ctx.lessonId + ':' + blockIndex;
+  const blockId = (block && block.id) || blockIndex;
   const history = byCourse[ctx.courseId][ctx.lessonId][blockId] || (byCourse[ctx.courseId][ctx.lessonId][blockId] = []);
 
   const result = scoreResult.correct === null ? 'ungraded'
@@ -1444,13 +1451,19 @@ function isAssessmentLocked(assessment, history) {
   return false;
 }
 
-// Appends one entry to LumioState.assessmentAttempts[assessmentId], summarizing
-// every KC block in that assessment's blocks at the moment the learner leaves
-// it (clicks Next/Finish) — the natural "submission" event for an assessment.
-function recordAssessmentAttempt(assessment, lessonId, blocks, progress) {
+// Appends one entry to LumioState.assessmentAttempts[courseId][assessmentId],
+// summarizing every KC block in that assessment's blocks at the moment the
+// learner leaves it (clicks Next/Finish) — the natural "submission" event
+// for an assessment. Namespaced under courseId (Entity Identity Hardening
+// Sprint) — previously a flat assessmentAttempts[assessmentId], which meant
+// two different courses both using assessment id "a1" would silently merge
+// their attempt histories into one array (confirmed risk in the audit).
+function recordAssessmentAttempt(assessment, lessonId, blocks, progress, courseId) {
   const assessmentId = assessment.id;
   if (!LumioState.assessmentAttempts) LumioState.assessmentAttempts = {};
-  const history = LumioState.assessmentAttempts[assessmentId] || (LumioState.assessmentAttempts[assessmentId] = []);
+  if (!LumioState.assessmentAttempts[courseId]) LumioState.assessmentAttempts[courseId] = {};
+  const byCourse = LumioState.assessmentAttempts[courseId];
+  const history = byCourse[assessmentId] || (byCourse[assessmentId] = []);
   if (isAssessmentLocked(assessment, history)) return; // already exhausted/passed-and-locked — don't record a phantom extra attempt
 
   const settings = normalizeAssessmentSettings(assessment);
@@ -1459,7 +1472,7 @@ function recordAssessmentAttempt(assessment, lessonId, blocks, progress) {
   blocks.forEach((block, i) => {
     if (!block.type || !block.type.startsWith('kc_')) return;
     anyKc = true;
-    const key = lessonId + ':' + i;
+    const key = lessonId + ':' + (block.id || i);
     const ans = progress.kcAnswers[key];
     const partial = ans && ans.partialScore;
     if (partial) { score += partial.score || 0; maxScore += partial.total || 0; }

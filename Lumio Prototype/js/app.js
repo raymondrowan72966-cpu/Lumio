@@ -29,6 +29,14 @@ const LumioState = {
     l1: JSON.parse(JSON.stringify(LumioData.sampleLessonBlocks)),
     l2: JSON.parse(JSON.stringify(LumioData.demoLessons.l2)),
     l3: JSON.parse(JSON.stringify(LumioData.demoLessons.l3)),
+    // p1 (New Hire Onboarding) previously aliased course c1's l1/l2/l3 content
+    // directly — a confirmed id collision (Identity & Entity Integrity Audit).
+    // p1 now owns its own independent clone of the same starting content
+    // under its own ids, so editing one course's lessons never touches the
+    // other's.
+    'p1-l1': JSON.parse(JSON.stringify(LumioData.sampleLessonBlocks)),
+    'p1-l2': JSON.parse(JSON.stringify(LumioData.demoLessons.l2)),
+    'p1-l3': JSON.parse(JSON.stringify(LumioData.demoLessons.l3)),
     ws1: JSON.parse(JSON.stringify(LumioData.demoLessons.ws1)),
     ws2: JSON.parse(JSON.stringify(LumioData.demoLessons.ws2)),
     ws3: JSON.parse(JSON.stringify(LumioData.demoLessons.ws3)),
@@ -105,6 +113,15 @@ const LumioState = {
 
   // pending workspace invitations
   invitations: [],
+
+  // ---- SaaS foundation entities (additive — see ROLES & PERMISSIONS
+  // section below for the full design note). Populated by the v16
+  // migration from the legacy fields above; not yet read by any existing
+  // screen. ----
+  users: [],
+  workspaces: [],
+  workspaceMemberships: [],
+  session: { currentUserId: null, currentWorkspaceId: null },
 };
 
 /* ---------------- ROLES & PERMISSIONS ---------------- */
@@ -117,6 +134,285 @@ function isWorkspaceOwner() {
 function canAccessWorkspaceSettings() { return isWorkspaceOwner(); }
 function canManageUsers() { return isWorkspaceOwner(); }
 function canInviteAdministrators() { return isWorkspaceOwner(); }
+
+/* ============================================================
+   SAAS WORKSPACE/AUTH FOUNDATION (Workspace & Authentication
+   Foundation Sprint)
+
+   New canonical entities — User / Workspace / WorkspaceMembership /
+   session — are introduced ADDITIVELY here, alongside (not replacing)
+   the legacy currentUser/adminUsers/workspace/invitations fields that
+   every existing screen (courseLanding.js, projects.js, lessonBuilder.js,
+   profile.js, workspaceSettings.js) already reads directly. This is a
+   deliberate scope boundary for this sprint: build the real foundation,
+   keep zero regression risk to existing UI, and leave "cut the UI over
+   to the new model" for a dedicated follow-up sprint once an auth
+   provider is actually wired in.
+
+   Canonical role values used by the NEW entities only:
+     'workspace_owner' | 'administrator'
+   Legacy fields (currentUser.role, adminUsers[].role) keep their
+   existing values ('owner' | 'admin') unchanged — toCanonicalRole()/
+   toLegacyRole() bridge the two where a function needs to cross from
+   one model into the other.
+   ============================================================ */
+const ROLE_WORKSPACE_OWNER = 'workspace_owner';
+const ROLE_ADMINISTRATOR = 'administrator';
+const CANONICAL_ROLE_LABELS = { [ROLE_WORKSPACE_OWNER]: 'Workspace Owner', [ROLE_ADMINISTRATOR]: 'Administrator' };
+
+// Supported authProvider values for the new User entity. 'local_demo'
+// marks the prototype's simulated accounts — distinct from a future real
+// 'email' (password) provider, so migrated demo data is never confused
+// with a real email/password signup once that exists.
+const AUTH_PROVIDERS = ['google', 'microsoft', 'apple', 'email', 'local_demo'];
+
+function toCanonicalRole(legacyRole) {
+  return legacyRole === 'owner' ? ROLE_WORKSPACE_OWNER : ROLE_ADMINISTRATOR;
+}
+function toLegacyRole(canonicalRole) {
+  return canonicalRole === ROLE_WORKSPACE_OWNER ? 'owner' : 'admin';
+}
+function toCanonicalAuthProvider(legacyProvider) {
+  if (legacyProvider === 'microsoft') return 'microsoft';
+  if (legacyProvider === 'google') return 'google';
+  return 'local_demo'; // 'local' and any unrecognized legacy value
+}
+
+// Single source of truth for "who is acting right now" going forward —
+// today this only ever points at the one migrated demo identity, but the
+// shape is real: a future login flow sets these two ids, nothing else.
+function getCurrentUser() {
+  return (LumioState.users || []).find(u => u.id === LumioState.session?.currentUserId) || null;
+}
+function getCurrentWorkspace() {
+  return (LumioState.workspaces || []).find(w => w.id === LumioState.session?.currentWorkspaceId) || null;
+}
+function getWorkspaceMembership(userId, workspaceId) {
+  return (LumioState.workspaceMemberships || []).find(m => m.userId === userId && m.workspaceId === workspaceId) || null;
+}
+// Canonical-role equivalents of isWorkspaceOwner()/etc., reading the NEW
+// entities via the current session — kept side-by-side with the legacy
+// functions above (which remain the ones every existing screen actually
+// calls today). Future auth-cutover work re-points the legacy functions
+// at these instead of at currentUser.role directly.
+function isWorkspaceOwnerCanonical() {
+  const ws = getCurrentWorkspace();
+  const user = getCurrentUser();
+  if (!ws || !user) return false;
+  const membership = getWorkspaceMembership(user.id, ws.id);
+  return !!membership && membership.role === ROLE_WORKSPACE_OWNER;
+}
+
+/* ============================================================
+   LUMIO AUTH — provider abstraction (Google/Microsoft/Apple/Email
+   Authentication Architecture Sprint)
+
+   login(provider, opts) / logout() / restoreSession() are the only
+   entry points every future real OAuth integration needs to call into —
+   today they're backed by mock providers (Phase 8); a future sprint
+   swaps _mockProviderPayload() for a real SDK callback and nothing else
+   in this module, or any of its callers, needs to change.
+
+   Design note: LumioState.currentUser/adminUsers (the legacy fields every
+   existing screen reads directly) are kept in sync with the canonical
+   users[]/session by _syncLegacyCurrentUser() on every login/restore —
+   same additive-foundation approach as the prior two sprints. No existing
+   screen needed to change to benefit from real authentication once it
+   lands.
+   ============================================================ */
+const LumioAuth = (function () {
+  const SESSION_TAB_MARKER = 'lumio.session.activeTab';
+
+  // Deterministic, NOT cryptographically secure — a real backend would
+  // hash passwords server-side (bcrypt/argon2). This exists only so a
+  // raw password is never the literal string compared/stored client-side.
+  function _hashPassword(pw) {
+    let h = 0;
+    const s = String(pw || '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return 'h_' + Math.abs(h).toString(36);
+  }
+
+  // Realistic shapes for what each provider's identity payload actually
+  // looks like, so a future real integration's field-mapping code can be
+  // written and tested against something structurally honest today.
+  function _mockProviderPayload(provider) {
+    const uid = generateUniqueId('mock');
+    if (provider === 'google') {
+      return { sub: 'google-' + uid, email: 'demo.user@gmail.com', given_name: 'Alex', family_name: 'Morgan', picture: null, email_verified: true };
+    }
+    if (provider === 'microsoft') {
+      return { oid: 'ms-' + uid, mail: 'demo.user@outlook.com', givenName: 'Alex', surname: 'Morgan', userPrincipalName: 'demo.user@outlook.com' };
+    }
+    if (provider === 'apple') {
+      return { sub: 'apple-' + uid, email: 'demo.user@icloud.com', name: { firstName: 'Alex', lastName: 'Morgan' }, is_private_email: false };
+    }
+    return null;
+  }
+
+  function _fieldsFromPayload(provider, payload) {
+    if (provider === 'google') return { email: payload.email, firstName: payload.given_name, lastName: payload.family_name };
+    if (provider === 'microsoft') return { email: payload.mail, firstName: payload.givenName, lastName: payload.surname };
+    if (provider === 'apple') return { email: payload.email, firstName: payload.name.firstName, lastName: payload.name.lastName };
+    return null;
+  }
+
+  // Creates the membership for a newly-created user — if no workspace
+  // exists yet, this user becomes its Workspace Owner (Phase 5 rule:
+  // "Workspace Owner creates workspace"); otherwise they join the existing
+  // single workspace as an Administrator ("Administrators join workspace").
+  // Ownership Correction Sprint: every self-registering user (Google,
+  // Microsoft, Apple, Email) is a SaaS account holder, not a teammate —
+  // they always get their OWN new workspace and become its
+  // workspace_owner. The only way to ever become an 'administrator' is
+  // accepting someone else's invitation into THEIR workspace (see
+  // acceptInvitation in workspaceSettings.js, which builds its own
+  // membership directly and never calls this function). Name follows the
+  // existing Workspace Settings default-naming pattern (ensureSaasFoundation
+  // uses the same literal 'My Workspace' for the seeded demo workspace) —
+  // not invented for this sprint.
+  function _bindNewUserToWorkspace(user) {
+    const workspace = { id: generateUniqueId('ws'), name: 'My Workspace', ownerId: user.id, createdAt: Date.now() };
+    LumioState.workspaces.push(workspace);
+    user.role = ROLE_WORKSPACE_OWNER;
+    LumioState.workspaceMemberships.push({ workspaceId: workspace.id, userId: user.id, role: user.role, joinedAt: Date.now() });
+    return workspace;
+  }
+
+  function _createUser(fields, authProvider, extra) {
+    const user = Object.assign({
+      id: generateUniqueId('u'),
+      email: fields.email,
+      firstName: fields.firstName,
+      lastName: fields.lastName,
+      displayName: `${fields.firstName} ${fields.lastName}`.trim(),
+      avatar: null,
+      role: ROLE_WORKSPACE_OWNER, // _bindNewUserToWorkspace always sets this for self-registration — see note there
+      createdAt: Date.now(),
+      lastLoginAt: Date.now(),
+      authProvider,
+    }, extra || {});
+    LumioState.users.push(user);
+    _bindNewUserToWorkspace(user);
+    return user;
+  }
+
+  // Keeps the legacy currentUser/adminUsers fields (read directly by every
+  // existing screen) in sync with whichever canonical user is now signed
+  // in — the same bridge pattern used for invitation acceptance.
+  function _syncLegacyCurrentUser(user) {
+    LumioState.currentUser = {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      avatar: user.avatar,
+      role: toLegacyRole(user.role),
+      dateJoined: user.createdAt,
+      lastLogin: user.lastLoginAt,
+      password: user.passwordHash ? undefined : 'lumio123',
+      status: 'active',
+      authenticationProvider: (user.authProvider === 'google' || user.authProvider === 'microsoft') ? user.authProvider : 'local',
+    };
+    if (!LumioState.adminUsers.find(u => u.id === user.id) && user.id !== LumioState.users[0]?.id) {
+      // mirror non-primary signed-in users into adminUsers too, so the
+      // Workspace Settings user list (which reads adminUsers) stays complete
+      LumioState.adminUsers.push(Object.assign({}, LumioState.currentUser));
+    }
+  }
+
+  function _establishSession(user, rememberMe) {
+    // A user now belongs to exactly the workspace(s) they own or were
+    // invited into — no longer assume "workspace 0" is theirs.
+    const membership = (LumioState.workspaceMemberships || []).find(m => m.userId === user.id);
+    LumioState.session = {
+      currentUserId: user.id,
+      currentWorkspaceId: membership ? membership.workspaceId : null,
+      rememberMe: rememberMe !== false,
+    };
+    _syncLegacyCurrentUser(user);
+    // Marks this browser TAB as having an active session — present for the
+    // life of the tab, cleared when the tab/browser closes. Used by
+    // restoreSession() to distinguish "still the same tab, just refreshed"
+    // from "a brand new browser session", which is exactly what "Remember
+    // me" needs to decide whether to honor a persisted-but-not-remembered session.
+    try { sessionStorage.setItem(SESSION_TAB_MARKER, '1'); } catch (e) {}
+    scheduleLumioSave();
+  }
+
+  // Mock SSO login — simulates a successful provider round-trip and
+  // returns/creates the canonical User exactly as a real OAuth callback
+  // would, just without ever leaving the browser.
+  function loginWithProvider(provider, rememberMe) {
+    const payload = _mockProviderPayload(provider);
+    if (!payload) return { ok: false, reason: `Unsupported provider "${provider}".` };
+    const fields = _fieldsFromPayload(provider, payload);
+    let user = LumioState.users.find(u => u.email.toLowerCase() === fields.email.toLowerCase());
+    if (user) {
+      user.lastLoginAt = Date.now();
+    } else {
+      user = _createUser(fields, provider);
+    }
+    _establishSession(user, rememberMe);
+    return { ok: true, user, payload };
+  }
+
+  function registerEmail(email, password, firstName, lastName, rememberMe) {
+    if (!email || !password || !firstName) return { ok: false, reason: 'Please fill in all required fields.' };
+    if (LumioState.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+      return { ok: false, reason: 'An account with this email already exists.' };
+    }
+    if (password.length < 6) return { ok: false, reason: 'Password must be at least 6 characters.' };
+    const user = _createUser({ email, firstName, lastName: lastName || '' }, 'email', { passwordHash: _hashPassword(password) });
+    _establishSession(user, rememberMe);
+    return { ok: true, user };
+  }
+
+  function loginWithEmail(email, password, rememberMe) {
+    const user = LumioState.users.find(u => u.email.toLowerCase() === (email || '').toLowerCase() && u.authProvider === 'email');
+    if (!user) return { ok: false, reason: 'No account found with that email and password provider.' };
+    if (user.passwordHash !== _hashPassword(password)) return { ok: false, reason: 'Incorrect password.' };
+    user.lastLoginAt = Date.now();
+    _establishSession(user, rememberMe);
+    return { ok: true, user };
+  }
+
+  function logout() {
+    LumioState.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
+    try { sessionStorage.removeItem(SESSION_TAB_MARKER); } catch (e) {}
+    scheduleLumioSave();
+  }
+
+  // Called once at boot, after loadLumioState()/ensureSaasFoundation(). If
+  // a session was persisted with rememberMe === false and this is a brand
+  // new browser tab/session (no sessionStorage marker — meaning the
+  // browser was actually closed and reopened, not just refreshed), the
+  // session is cleared and the learner/author is sent back to login.
+  function restoreSession() {
+    const s = LumioState.session;
+    if (!s || !s.currentUserId) return false;
+    let activeTab = false;
+    try { activeTab = sessionStorage.getItem(SESSION_TAB_MARKER) === '1'; } catch (e) {}
+    if (s.rememberMe === false && !activeTab) {
+      logout();
+      return false;
+    }
+    const user = LumioState.users.find(u => u.id === s.currentUserId);
+    if (!user) { logout(); return false; }
+    _syncLegacyCurrentUser(user);
+    try { sessionStorage.setItem(SESSION_TAB_MARKER, '1'); } catch (e) {}
+    return true;
+  }
+
+  return {
+    loginWithProvider,
+    registerEmail,
+    loginWithEmail,
+    logout,
+    restoreSession,
+    _hashPassword, // exposed for profile.js's existing password-change flow to adopt later
+  };
+})();
 
 /* ============================================================
    PROJECT STATUS LIFECYCLE
@@ -146,6 +442,23 @@ const PROJECT_STATUS_TRANSITIONS = {
 
 function isProjectOwner(project) {
   return !!(project && project.ownerId === LumioState.currentUser.id);
+}
+
+// Ownership & Visibility Correction Sprint: a user sees a project ONLY if
+// they own it or it was explicitly shared with them — deliberately NOT the
+// same rule as hasFullProjectAccess() below (which intentionally lets a
+// Workspace Owner edit/manage projects once visible, e.g. via the review
+// queue). This is the listing/Continue-Working/counts visibility rule —
+// no workspace-wide bypass, no seeded-project bypass, by design: a
+// brand-new Workspace Owner with no projects of their own sees zero.
+function isProjectVisible(project) {
+  if (!project || project.deleted) return false;
+  if (isProjectOwner(project)) return true;
+  const uid = LumioState.currentUser.id;
+  return project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
+}
+function visibleProjects() {
+  return LumioState.projects.filter(isProjectVisible);
 }
 
 // Owner of the project, or the Workspace Owner (who bypasses sharing
@@ -223,27 +536,35 @@ function transitionProjectStatus(project, action) {
   return { ok: true };
 }
 
-/* ---------------- AUTHENTICATION SERVICE STUBS ---------------- */
-// These are the only two integration points that need real implementations
-// when Microsoft/Google OAuth is connected. Replace each stub body with the
-// appropriate OAuth SDK call (e.g. MSAL for Microsoft, Google Identity
-// Services for Google). On successful authentication, create or look up the
-// matching workspace user and call navigate('#/projects') or navigate('#/welcome').
-
+/* ---------------- AUTHENTICATION SERVICE INTEGRATION POINTS ---------------- */
+// These three are the only functions that need to change when a real OAuth
+// provider is connected: swap LumioAuth.loginWithProvider(provider)'s mock
+// payload for a real SDK callback (MSAL for Microsoft, Google Identity
+// Services for Google, Sign in with Apple JS for Apple) and call this same
+// function with the real payload. Every other call site (login.js,
+// LumioAuth itself, session restore) needs zero changes.
 function authenticateMicrosoft() {
-  // Future integration: initialise MSAL, call loginPopup/loginRedirect,
-  // exchange the id_token for a Lumio session, then navigate('#/welcome').
-  console.info('[Lumio Auth] Microsoft SSO — integration point (not yet wired)');
-  toast('Microsoft SSO is not configured for this workspace.', '⚠️');
+  const result = LumioAuth.loginWithProvider('microsoft', LumioUI.rememberMe);
+  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Microsoft)`, '✅'); navigate('#/projects'); }
+  else toast(result.reason, '⚠️');
 }
 
 function authenticateGoogle() {
-  // Future integration: load the Google Identity Services SDK,
-  // call google.accounts.id.initialize + prompt/renderButton,
-  // exchange the credential JWT for a Lumio session, then navigate('#/welcome').
-  console.info('[Lumio Auth] Google SSO — integration point (not yet wired)');
-  toast('Google SSO is not configured for this workspace.', '⚠️');
+  const result = LumioAuth.loginWithProvider('google', LumioUI.rememberMe);
+  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Google)`, '✅'); navigate('#/projects'); }
+  else toast(result.reason, '⚠️');
 }
+
+function authenticateApple() {
+  const result = LumioAuth.loginWithProvider('apple', LumioUI.rememberMe);
+  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Apple)`, '✅'); navigate('#/projects'); }
+  else toast(result.reason, '⚠️');
+}
+
+// Transient, not-persisted UI state shared by the login screen — currently
+// just the "Remember me" checkbox's value at the moment a sign-in button is
+// clicked. Not part of LumioState since it's pre-authentication UI state.
+const LumioUI = { rememberMe: true };
 
 // Returns every workspace member (the signed-in user plus all other users),
 // used for rendering the Users tab and for the multi-owner safeguard checks.
@@ -355,9 +676,167 @@ function generateUniqueId(prefix) {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + __lumioIdCounter.toString(36);
 }
 
+// Stable block identity — assigned once at creation, never derived from
+// array index/position. Every block-creation call site (insert, AI draft,
+// chat-assist insert) must stamp this; duplication must call it again to
+// get a NEW id rather than cloning the original's id.
+function generateBlockId() {
+  return generateUniqueId('blk_');
+}
+
+// Remaps any keys of the form "lessonId:<numeric index>" found in `obj` to
+// "lessonId:<blockId>", using the index->id mapping captured at the moment
+// every block in that lesson is known to have a stable id. Only touches
+// keys whose suffix is purely numeric (the old scheme) — a key already in
+// "lessonId:blk_xxx" form never matches and is left alone, which makes this
+// naturally idempotent (safe to re-run on every boot).
+function remapIndexKeysToBlockIds(obj, lessonId, indexToId) {
+  if (!obj) return 0;
+  let count = 0;
+  Object.keys(obj).forEach(key => {
+    const sep = key.indexOf(':');
+    if (sep === -1) return;
+    const lid = key.slice(0, sep);
+    const rest = key.slice(sep + 1);
+    if (lid !== lessonId || !/^\d+$/.test(rest)) return;
+    const newId = indexToId[rest];
+    if (!newId) return;
+    const newKey = lid + ':' + newId;
+    if (newKey === key || obj[newKey] !== undefined) return; // never overwrite an existing entry
+    obj[newKey] = obj[key];
+    delete obj[key];
+    count++;
+  });
+  return count;
+}
+
+// One-time-per-boot, idempotent hardening pass:
+//  1. Assigns a stable id to every block in every lesson that doesn't
+//     already have one (covers both a fresh install, where
+//     LumioState.lessons is built directly from data.js seed content and
+//     never passes through migrateLumioState at all, and an upgraded save).
+//  2. Remaps every "lessonId:index" key still found in blockProgress,
+//     kcAnswers, and interactionHistory (across every course) to
+//     "lessonId:blockId", using the index each block currently occupies —
+//     which is unambiguous at this exact moment, before any further
+//     reordering happens. Never reorders or modifies block/answer content,
+//     only the key each entry is stored under.
+function ensureStableBlockIdentity() {
+  let backfilled = 0, remapped = 0;
+  Object.keys(LumioState.lessons || {}).forEach(lessonId => {
+    const blocks = LumioState.lessons[lessonId];
+    if (!Array.isArray(blocks)) return;
+    const indexToId = {};
+    blocks.forEach((block, i) => {
+      if (!block.id) { block.id = generateBlockId(); backfilled++; }
+      indexToId[i] = block.id;
+    });
+
+    Object.values(LumioState.learnerProgress || {}).forEach(progress => {
+      if (!progress) return;
+      remapped += remapIndexKeysToBlockIds(progress.kcAnswers, lessonId, indexToId);
+      remapped += remapIndexKeysToBlockIds(progress.blockProgress, lessonId, indexToId);
+    });
+    Object.values(LumioState.interactionHistory || {}).forEach(byLesson => {
+      if (byLesson && byLesson[lessonId]) {
+        // Pre-hardening, the third level was keyed "lessonId:index" (the
+        // lessonId redundantly repeated, since it's already the parent key
+        // one level up). Post-hardening it's the bare block id. Recognize
+        // and remap only the old "lessonId:<digits>" shape.
+        const remappedKeys = {};
+        let touched = false;
+        Object.keys(byLesson[lessonId]).forEach(key => {
+          const sep = key.indexOf(':');
+          const prefix = sep === -1 ? null : key.slice(0, sep);
+          const suffix = sep === -1 ? key : key.slice(sep + 1);
+          if (prefix === lessonId && /^\d+$/.test(suffix) && indexToId[suffix]) {
+            remappedKeys[indexToId[suffix]] = byLesson[lessonId][key];
+            touched = true;
+            remapped++;
+          } else {
+            remappedKeys[key] = byLesson[lessonId][key];
+          }
+        });
+        if (touched) byLesson[lessonId] = remappedKeys;
+      }
+    });
+  });
+  if (backfilled > 0) console.log(`[Lumio] Backfilled stable ids for ${backfilled} block(s) that had none.`);
+  if (remapped > 0) console.log(`[Lumio] Remapped ${remapped} progress/history key(s) from index-based to block-id-based.`);
+  return { backfilled, remapped };
+}
+
+// Idempotent, boot-time builder for the SaaS foundation entities (User /
+// Workspace / WorkspaceMembership / session). Runs unconditionally at boot
+// — covers BOTH a fresh install (LumioState.users/workspaces/etc. start
+// as empty arrays in the object literal above, never touched by
+// migrateLumioState at all on a truly first load) AND an upgraded save
+// (where migrateLumioState's v16 step has already run). Safe to call on
+// every load: does nothing once users[]/workspaces[] are already populated.
+function ensureSaasFoundation() {
+  if ((LumioState.users || []).length > 0) return; // already built — no-op
+
+  const legacyOwner = LumioState.currentUser;
+  const legacyAdmins = LumioState.adminUsers || [];
+
+  const ownerUser = {
+    id: legacyOwner.id,
+    email: legacyOwner.email,
+    firstName: legacyOwner.firstName,
+    lastName: legacyOwner.lastName,
+    displayName: `${legacyOwner.firstName} ${legacyOwner.lastName}`.trim(),
+    avatar: legacyOwner.avatar || null,
+    role: ROLE_WORKSPACE_OWNER,
+    createdAt: legacyOwner.dateJoined || Date.now(),
+    lastLoginAt: legacyOwner.lastLogin || Date.now(),
+    authProvider: toCanonicalAuthProvider(legacyOwner.authenticationProvider),
+  };
+  const adminUserEntities = legacyAdmins.map(u => ({
+    id: u.id,
+    email: u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    displayName: `${u.firstName} ${u.lastName}`.trim(),
+    avatar: u.avatar || null,
+    role: toCanonicalRole(u.role),
+    createdAt: Date.now(), // legacy admin records never tracked a join date
+    lastLoginAt: null,
+    authProvider: toCanonicalAuthProvider(u.authenticationProvider),
+  }));
+
+  LumioState.users = [ownerUser, ...adminUserEntities];
+
+  const workspaceId = 'ws-' + ownerUser.id;
+  LumioState.workspaces = [{
+    id: workspaceId,
+    name: 'My Workspace', // legacy workspace.systemInfo never had a name field
+    ownerId: ownerUser.id,
+    createdAt: LumioState.workspace?.systemInfo?.installationDate || Date.now(),
+  }];
+
+  LumioState.workspaceMemberships = LumioState.users.map(u => ({
+    workspaceId,
+    userId: u.id,
+    role: u.role,
+    joinedAt: u.createdAt,
+  }));
+
+  LumioState.session = { currentUserId: ownerUser.id, currentWorkspaceId: workspaceId };
+
+  // Backfill any invitation created before this sprint (workspaceId was
+  // null at migration time, since the workspace didn't exist yet) — now
+  // that the one real workspace exists, every existing invitation belongs
+  // to it (there has only ever been one workspace in this prototype).
+  (LumioState.invitations || []).forEach(inv => {
+    if (!inv.workspaceId) inv.workspaceId = workspaceId;
+  });
+
+  console.log(`[Lumio] Built SaaS foundation: ${LumioState.users.length} user(s), 1 workspace, ${LumioState.workspaceMemberships.length} membership(s).`);
+}
+
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 13;
+const LUMIO_STATE_VERSION = 16;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts. */
@@ -371,6 +850,7 @@ const LUMIO_PERSISTED_KEYS = [
   'learnerProgress', 'learnerPreview', 'learnerProfile', 'resume',
   'interactionHistory', 'assessmentAttempts',
   'currentUser', 'workspace', 'adminUsers', 'invitations',
+  'users', 'workspaces', 'workspaceMemberships', 'session',
 ];
 
 // Generates a stable local learner identifier in the form "local-xxxxxxxx".
@@ -661,6 +1141,118 @@ function migrateLumioState(record) {
       if (p.submittedAt === undefined) p.submittedAt = null;
     });
     version = 13;
+  }
+
+  if (version < 14) {
+    // v14 fixes the confirmed lesson/assessment id collision between
+    // course c1 (courseTemplate) and project p1 (demoCourses.p1) — both
+    // hand-authored seed objects independently used the literal ids
+    // l1/l2/l3/a1 (see Identity & Entity Integrity Audit). Any save still
+    // carrying the old ids on course p1 gets remapped to p1-l1/p1-l2/
+    // p1-l3/p1-a1, with its CURRENT content (including any edits the user
+    // already made) cloned over to the new key — never discarded. Every
+    // cross-reference (progress, interaction history, assessment
+    // attempts, resume) is remapped in lockstep so no tracked state is
+    // silently orphaned under the old id.
+    const p1Course = (state.courses || {}).p1;
+    const OLD_TO_NEW = { l1: 'p1-l1', l2: 'p1-l2', l3: 'p1-l3', a1: 'p1-a1' };
+    if (p1Course && p1Course.lessons && p1Course.lessons.some(l => OLD_TO_NEW[l.id])) {
+      p1Course.lessons.forEach(l => { if (OLD_TO_NEW[l.id]) l.id = OLD_TO_NEW[l.id]; });
+      (p1Course.assessments || []).forEach(a => { if (OLD_TO_NEW[a.id]) a.id = OLD_TO_NEW[a.id]; });
+
+      // Clone lesson/assessment CONTENT (the actual block arrays) to the
+      // new keys. The old keys are left in place afterward (still owned by
+      // c1) rather than deleted, since deleting would destroy c1's content.
+      Object.entries(OLD_TO_NEW).forEach(([oldId, newId]) => {
+        if (state.lessons && Object.prototype.hasOwnProperty.call(state.lessons, oldId)) {
+          state.lessons[newId] = JSON.parse(JSON.stringify(state.lessons[oldId]));
+        }
+      });
+
+      // Remap progress/history/resume references from old id -> new id,
+      // scoped to project p1 only (c1's own learnerProgress/history, if
+      // any, is untouched — it correctly keeps using the original ids).
+      const progress = state.learnerProgress && state.learnerProgress.p1;
+      if (progress) {
+        if (Array.isArray(progress.completedLessons)) {
+          progress.completedLessons = progress.completedLessons.map(id => OLD_TO_NEW[id] || id);
+        }
+        if (progress.lastLessonId && OLD_TO_NEW[progress.lastLessonId]) progress.lastLessonId = OLD_TO_NEW[progress.lastLessonId];
+        ['kcAnswers', 'blockProgress', 'lessonCompletedAt'].forEach(field => {
+          if (!progress[field]) return;
+          const remapped = {};
+          Object.entries(progress[field]).forEach(([key, val]) => {
+            const sep = key.indexOf(':');
+            const lid = sep === -1 ? key : key.slice(0, sep);
+            const rest = sep === -1 ? '' : key.slice(sep);
+            remapped[(OLD_TO_NEW[lid] || lid) + rest] = val;
+          });
+          progress[field] = remapped;
+        });
+      }
+      const history = state.interactionHistory && state.interactionHistory.p1;
+      if (history) {
+        Object.keys(OLD_TO_NEW).forEach(oldId => {
+          if (history[oldId]) { history[OLD_TO_NEW[oldId]] = history[oldId]; delete history[oldId]; }
+        });
+      }
+      if (state.assessmentAttempts && state.assessmentAttempts.a1) {
+        state.assessmentAttempts['p1-a1'] = state.assessmentAttempts.a1;
+        delete state.assessmentAttempts.a1;
+      }
+      if (state.resume && state.resume.courseId === 'p1' && OLD_TO_NEW[state.resume.lessonId]) {
+        state.resume.lessonId = OLD_TO_NEW[state.resume.lessonId];
+      }
+    }
+    version = 14;
+  }
+
+  if (version < 15) {
+    // v15 namespaces assessmentAttempts under courseId (Entity Identity
+    // Hardening Sprint) — previously a flat assessmentAttempts[assessmentId],
+    // which meant two different courses both using the same assessment id
+    // would silently merge their attempt histories into one array (a
+    // confirmed risk in the Identity & Entity Integrity Audit, distinct
+    // from the v14 lesson-id fix above). For each flat entry, find which
+    // course currently owns that assessment id and nest it underneath. If
+    // more than one course references the same id (only possible for an
+    // already-known collision), the first course found keeps the history;
+    // this is a best-effort resolution of a pre-existing ambiguity, not a
+    // new loss — no attempts are discarded, only the rare ambiguous case
+    // can't be split perfectly after the fact.
+    const flatAttempts = state.assessmentAttempts;
+    if (flatAttempts && !Object.values(flatAttempts).every(v => v && typeof v === 'object' && !Array.isArray(v))) {
+      const nested = {};
+      Object.entries(flatAttempts).forEach(([assessmentId, history]) => {
+        if (!Array.isArray(history)) return; // already nested (shouldn't happen here, defensive)
+        const owningCourse = Object.values(state.courses || {}).find(c =>
+          (c.assessments || []).some(a => a.id === assessmentId)
+        );
+        const courseId = owningCourse ? owningCourse.id : 'unknown';
+        if (!nested[courseId]) nested[courseId] = {};
+        nested[courseId][assessmentId] = history;
+      });
+      state.assessmentAttempts = nested;
+    }
+    version = 15;
+  }
+
+  if (version < 16) {
+    // v16 introduces the SaaS foundation entities (Workspace & Authentication
+    // Foundation Sprint). users[]/workspaces[]/workspaceMemberships[]/session
+    // are built by ensureSaasFoundation() at boot (idempotent, runs on every
+    // load — handles both a fresh install and an upgraded save uniformly,
+    // same pattern as ensureStableBlockIdentity()), so nothing to do for
+    // those here. This step only extends existing invitations with the new
+    // additive fields (workspaceId/invitedBy/expiresAt/acceptedAt) — no data
+    // loss, existing fields (status/token/link/etc.) are untouched.
+    (state.invitations || []).forEach(inv => {
+      if (inv.workspaceId === undefined) inv.workspaceId = null; // backfilled properly once a real workspace exists for this save
+      if (inv.invitedBy === undefined) inv.invitedBy = null; // historical invites never recorded who sent them
+      if (inv.expiresAt === undefined) inv.expiresAt = (inv.createdAt || Date.now()) + 7 * 24 * 3600 * 1000; // 7-day default
+      if (inv.acceptedAt === undefined) inv.acceptedAt = inv.status === 'accepted' ? (inv.createdAt || Date.now()) : null; // best-effort — exact accept time was never recorded historically
+    });
+    version = 16;
   }
 
   return state;
@@ -973,8 +1565,12 @@ function navigate(hash) {
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', () => {
   const restoredHash = loadLumioState();
-  if (restoredHash) location.hash = restoredHash;
-  if (!location.hash) location.hash = '#/login';
+  ensureStableBlockIdentity();
+  ensureSaasFoundation();
+  const sessionValid = LumioAuth.restoreSession();
+  if (sessionValid && restoredHash) location.hash = restoredHash;
+  else if (sessionValid && !location.hash) location.hash = '#/projects';
+  else location.hash = '#/login'; // no valid session (never signed in, or "Remember me" was off and the browser was actually closed/reopened)
   render();
   BlockMigration.validateAllLessons();
 
@@ -1134,6 +1730,7 @@ function renderShell(activeId, contentHtml, opts = {}) {
     elx.addEventListener('click', () => {
       // Close any open modal (e.g. Course Settings) before navigating away.
       document.querySelectorAll('.overlay').forEach(o => o.remove());
+      if (elx.dataset.nav === '#/login') LumioAuth.logout(); // "Sign out" — clear the real session, not just navigate away from it
       navigate(elx.dataset.nav);
     });
   });

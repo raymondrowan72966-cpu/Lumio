@@ -1,7 +1,9 @@
 /* ============================================================
    LOGIN SCREEN
-   Invitation-only enterprise access. No self-registration.
-   Supports: Local Account, Microsoft SSO, Google SSO.
+   Backed by LumioAuth (see app.js) — Google/Microsoft/Apple are mock
+   providers (Phase 8 of the Auth Architecture Sprint); Email is a real
+   local register/sign-in flow against LumioState.users[]. No data leaves
+   the browser; no real OAuth SDK is connected yet.
    ============================================================ */
 
 // Official brand marks for the SSO sign-in buttons. Inline SVG so sizing,
@@ -19,10 +21,21 @@ const SOCIAL_ICONS = {
     <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
     <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
   </svg>`,
+  apple: `<svg class="social-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path fill="#000" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C53.3 141 0 184.5 0 271.5c0 32.4 5.9 65.9 17.7 100.5 15.8 45.9 72.8 158.2 132.2 156.4 31.1-.8 53-22 93.5-22 39.2 0 59.5 22 93.5 22 59.9-.9 111.6-103.5 126.6-149.5-80.2-37.8-64.8-110.9-64.8-110.2zM254.7 90.3c33-39 30-74.5 29-87.3-29.5 1.7-63.6 19.8-82.8 42.1-21.2 24.1-33.7 53.9-31 87 32.1 2.5 61.4-14 84.8-41.8z"/>
+  </svg>`,
 };
 
+let LumioLoginMode = 'signin'; // 'signin' | 'register'
+
 function renderLogin() {
+  LumioLoginMode = 'signin';
+  paintLogin();
+}
+
+function paintLogin() {
   const app = document.getElementById('app');
+  const isRegister = LumioLoginMode === 'register';
   app.innerHTML = `
     <div class="login-shell" style="display:flex; min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden;">
 
@@ -45,30 +58,51 @@ function renderLogin() {
       <!-- Right: Auth Card -->
       <div class="login-auth" style="flex:0 1 35%; max-width:560px; min-width:420px; background:var(--surface-0); display:flex; flex-direction:column; justify-content:center; padding:88px 48px 32px; box-shadow:-8px 0 32px rgba(31,27,58,0.04); position:relative; z-index:1;">
 
-        <h2 style="font-size:24px; margin-bottom:8px;">Welcome back 👋</h2>
-        <p class="text-muted mb-24" style="font-size:14px;">Sign in to your Lumio workspace.</p>
+        <h2 style="font-size:24px; margin-bottom:8px;">${isRegister ? 'Create your account ✨' : 'Welcome back 👋'}</h2>
+        <p class="text-muted mb-24" style="font-size:14px;">${isRegister ? 'Set up a new Lumio account with email.' : 'Sign in to your Lumio workspace.'}</p>
+
+        <div id="login-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+
+        ${isRegister ? `
+        <div class="flex gap-16" style="flex-wrap:wrap;">
+          <div class="field" style="flex:1; min-width:160px;">
+            <label>First Name</label>
+            <input class="input" id="login-first-name" type="text" placeholder="Jordan" />
+          </div>
+          <div class="field" style="flex:1; min-width:160px;">
+            <label>Last Name</label>
+            <input class="input" id="login-last-name" type="text" placeholder="Reyes" />
+          </div>
+        </div>` : ''}
 
         <div class="field">
           <label>Email Address</label>
           <div class="input-icon-wrap">
             <span class="icon">✉️</span>
-            <input class="input" type="email" placeholder="you@company.com" value="jordan@lumio.app" />
+            <input class="input" id="login-email" type="email" placeholder="you@company.com" value="${isRegister ? '' : 'jordan@lumio.app'}" />
           </div>
         </div>
         <div class="field">
           <label>Password</label>
           <div class="input-icon-wrap">
             <span class="icon">🔒</span>
-            <input class="input" type="password" placeholder="Enter your password" value="••••••••" />
+            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" value="${isRegister ? '' : 'lumio123'}" />
           </div>
         </div>
+        ${!isRegister ? `
         <div class="flex justify-between items-center mb-16" style="font-size:13px;">
           <label class="flex items-center gap-8" style="cursor:pointer;">
-            <input type="checkbox" checked /> Remember me
+            <input type="checkbox" id="login-remember-me" checked /> Remember me
           </label>
           <a href="#" onclick="return false;">Forgot password?</a>
-        </div>
-        <button class="btn btn-primary w-full btn-lg" id="signin-btn">Sign In →</button>
+        </div>` : '<div class="mb-16"></div>'}
+        <button class="btn btn-primary w-full btn-lg" id="signin-btn">${isRegister ? 'Create Account →' : 'Sign In →'}</button>
+
+        <p class="text-sm text-muted mt-16" style="text-align:center;">
+          ${isRegister
+            ? `Already have an account? <a href="#" id="login-toggle-mode">Sign in</a>`
+            : `New to Lumio? <a href="#" id="login-toggle-mode">Create an account</a>`}
+        </p>
 
         <div class="flex items-center gap-12 mt-24 mb-16" style="color:var(--ink-400); font-size:12px;">
           <div style="flex:1; height:1px; background:var(--border);"></div>
@@ -77,8 +111,9 @@ function renderLogin() {
         </div>
 
         <div class="flex-col gap-8">
-          <button class="btn btn-secondary w-full social-login-btn" id="microsoft-signin-btn">${SOCIAL_ICONS.microsoft} Sign in with Microsoft</button>
-          <button class="btn btn-secondary w-full social-login-btn" id="google-signin-btn">${SOCIAL_ICONS.google} Sign in with Google</button>
+          <button class="btn btn-secondary w-full social-login-btn" id="google-signin-btn">${SOCIAL_ICONS.google} Continue with Google</button>
+          <button class="btn btn-secondary w-full social-login-btn" id="microsoft-signin-btn">${SOCIAL_ICONS.microsoft} Continue with Microsoft</button>
+          <button class="btn btn-secondary w-full social-login-btn" id="apple-signin-btn">${SOCIAL_ICONS.apple} Continue with Apple</button>
         </div>
 
       </div>
@@ -89,7 +124,49 @@ function renderLogin() {
     </div>
   `;
 
-  document.getElementById('signin-btn').addEventListener('click', () => navigate('#/welcome'));
-  document.getElementById('microsoft-signin-btn').addEventListener('click', () => authenticateMicrosoft());
-  document.getElementById('google-signin-btn').addEventListener('click', () => authenticateGoogle());
+  bindLoginEvents();
+}
+
+function bindLoginEvents() {
+  const app = document.getElementById('app');
+  const isRegister = LumioLoginMode === 'register';
+
+  const showError = (msg) => {
+    const el = app.querySelector('#login-feedback');
+    el.textContent = msg;
+    el.style.display = 'block';
+  };
+
+  app.querySelector('#login-toggle-mode').addEventListener('click', (e) => {
+    e.preventDefault();
+    LumioLoginMode = isRegister ? 'signin' : 'register';
+    paintLogin();
+  });
+
+  app.querySelector('#signin-btn').addEventListener('click', () => {
+    const email = app.querySelector('#login-email').value.trim();
+    const password = app.querySelector('#login-password').value;
+
+    if (isRegister) {
+      const firstName = app.querySelector('#login-first-name').value.trim();
+      const lastName = app.querySelector('#login-last-name').value.trim();
+      const result = LumioAuth.registerEmail(email, password, firstName, lastName, true);
+      if (!result.ok) { showError(result.reason); return; }
+      toast(`Welcome to Lumio, ${result.user.displayName}!`, '🎉');
+      navigate('#/welcome');
+      return;
+    }
+
+    const rememberMe = app.querySelector('#login-remember-me').checked;
+    const result = LumioAuth.loginWithEmail(email, password, rememberMe);
+    if (!result.ok) { showError(result.reason); return; }
+    navigate('#/welcome');
+  });
+
+  const rememberCheckbox = app.querySelector('#login-remember-me');
+  const syncRememberMe = () => { LumioUI.rememberMe = rememberCheckbox ? rememberCheckbox.checked : true; };
+
+  app.querySelector('#microsoft-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateMicrosoft(); });
+  app.querySelector('#google-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateGoogle(); });
+  app.querySelector('#apple-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateApple(); });
 }

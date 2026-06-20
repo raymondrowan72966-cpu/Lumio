@@ -226,14 +226,15 @@ async function publishHtmlPackage(course, triggerBtn) {
       if(rec.resume)LumioState.resume=rec.resume;
       if(rec.learnerProgress){if(!LumioState.learnerProgress)LumioState.learnerProgress={};LumioState.learnerProgress[cid]=rec.learnerProgress;}
       if(rec.interactionHistory){if(!LumioState.interactionHistory)LumioState.interactionHistory={};LumioState.interactionHistory[cid]=rec.interactionHistory;}
-      if(rec.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};Object.assign(LumioState.assessmentAttempts,rec.assessmentAttempts);}
+      if(rec.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};LumioState.assessmentAttempts[cid]=rec.assessmentAttempts;}
     }catch(e){}
   }
   function __saveLearnerState(){
     try{
       var assessmentAttempts={};
+      var byCourse=(LumioState.assessmentAttempts||{})[cid]||{};
       __assessmentIds.forEach(function(id){
-        if((LumioState.assessmentAttempts||{})[id])assessmentAttempts[id]=LumioState.assessmentAttempts[id];
+        if(byCourse[id])assessmentAttempts[id]=byCourse[id];
       });
       var rec={
         learnerProfile:LumioState.learnerProfile,

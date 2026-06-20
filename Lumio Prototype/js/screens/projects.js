@@ -30,14 +30,14 @@ function folderColorVar(color) {
 }
 
 function renderProjects() {
-  const isOwner = isWorkspaceOwner();
   const isTeamFolder = LumioState.currentFolder === '__team__';
   const folder = isTeamFolder ? null : LumioState.folders.find(f => f.id === LumioState.currentFolder);
 
-  let projects = LumioState.projects.filter(p => {
-    if (p.deleted) return false;
-    // Item 3: admins see only their own projects (owners see all).
-    if (!isOwner && p.ownerId && p.ownerId !== LumioState.currentUser.id) return false;
+  // Visibility is always "owned by me OR explicitly shared with me" —
+  // no Workspace Owner bypass, no workspace-wide default (Ownership &
+  // Visibility Correction Sprint). visibleProjects() is the single source
+  // of truth every list/count on this screen filters through.
+  let projects = visibleProjects().filter(p => {
     // Item 4: Team Projects virtual folder.
     if (isTeamFolder) {
       const uid = LumioState.currentUser.id;
@@ -49,8 +49,7 @@ function renderProjects() {
     return true;
   }).sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
 
-  const recent = LumioState.projects
-    .filter(p => !p.deleted)
+  const recent = visibleProjects()
     .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))
     .slice(0, 4);
 
@@ -145,7 +144,7 @@ function teamProjectsChip() {
 
 function folderChip(f) {
   const colorVar = folderColorVar(f.color);
-  const count = LumioState.projects.filter(p => p.folder === f.id && !p.deleted).length;
+  const count = visibleProjects().filter(p => p.folder === f.id).length;
   const active = LumioState.currentFolder === f.id;
   return `
     <div class="pill" style="background:${active ? colorVar : 'var(--surface-0)'}; border:1px solid ${active ? colorVar : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="${f.id}">
@@ -255,7 +254,7 @@ function emptyRecentState() {
 /* ---------------- TRASH ---------------- */
 function renderTrash() {
   const trashed = LumioState.projects
-    .filter(p => p.deleted)
+    .filter(p => p.deleted && isProjectOwner(p)) // a user's Trash only ever holds projects they own, consistent with visibleProjects()
     .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 
   const content = `
@@ -632,7 +631,7 @@ function openFolderMenu(btn, folderId) {
 
 function confirmDeleteFolder(folderId) {
   const f = LumioState.folders.find(x => x.id === folderId);
-  const count = LumioState.projects.filter(p => p.folder === folderId).length;
+  const count = visibleProjects().filter(p => p.folder === folderId).length;
   const overlay = el(`
     <div class="overlay">
       <div class="modal" style="width:440px; padding:28px;">

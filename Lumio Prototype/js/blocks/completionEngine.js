@@ -25,14 +25,28 @@ const CompletionEngine = (function () {
     return !!cap && BLOCKING_STRATEGIES.includes(cap.strategy);
   }
 
-  function progressKey(lessonId, index) {
-    return lessonId + ':' + index;
+  function progressKey(lessonId, blockIdOrIndex) {
+    return lessonId + ':' + blockIdOrIndex;
+  }
+
+  // Resolves the STABLE storage key for the block currently at `index` in
+  // ctx.blocks. Callers always pass a live array index (correct and cheap
+  // to obtain at call time, since that's how they found the block to
+  // interact with) — this function is the single place that translates
+  // "block currently at this position" into "this block's permanent id",
+  // so completion/progress survives reordering even though every caller
+  // still thinks and speaks in terms of index. Falls back to the raw index
+  // if ctx.blocks isn't populated or the block has no id yet (should not
+  // happen post-migration, but never throws either way).
+  function resolveBlockKey(ctx, index) {
+    const block = ctx.blocks && ctx.blocks[index];
+    return (block && block.id) || index;
   }
 
   function getBlockProgress(ctx, index) {
     const progress = ctx.progress;
     if (!progress.blockProgress) progress.blockProgress = {};
-    const key = progressKey(ctx.lessonId, index);
+    const key = progressKey(ctx.lessonId, resolveBlockKey(ctx, index));
     if (!progress.blockProgress[key]) progress.blockProgress[key] = {};
     return progress.blockProgress[key];
   }
@@ -63,7 +77,7 @@ const CompletionEngine = (function () {
     const d = block.data || {};
 
     if (cap.strategy === 'assessed') {
-      const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, index)];
+      const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, block.id || index)];
       if (!ans || (ans.attempts || 0) === 0) return false;
       const s = block.settings || {};
       // 'passed' completionRule or requireCorrectAnswer → must have passed at least once
@@ -253,7 +267,7 @@ const CompletionEngine = (function () {
       return itemRuleCount(rule, bp.flipped || [], itemCount(block, d));
     }
     if (cap.strategy === 'assessed') {
-      const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, index)];
+      const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, block.id || index)];
       if (!ans || (ans.attempts || 0) === 0) return false;
       return rule === 'correct' ? !!ans.passed : true; // 'submitted'
     }

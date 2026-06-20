@@ -464,12 +464,12 @@ const LumioData = {
       heroImage: { src: null, fileName: null, mimeType: null, displayMode: 'cover', posX: 'center', posY: 'center', scale: 100 },
       heroSettings: { height: 'medium', overlay: { mode: 'theme', opacity: 0.35 }, roundedCorners: true, titlePosition: 'bottom', textAlign: 'center', textColor: 'auto' },
       lessons: [
-        { id: 'l1', title: 'Welcome to the Team', objectiveIndex: 0, duration: '8 min' },
-        { id: 'l2', title: 'Your Toolkit: Apps & Access', objectiveIndex: 1, duration: '10 min' },
-        { id: 'l3', title: 'Your First Week Checklist', objectiveIndex: 2, duration: '7 min' },
+        { id: 'p1-l1', title: 'Welcome to the Team', objectiveIndex: 0, duration: '8 min' },
+        { id: 'p1-l2', title: 'Your Toolkit: Apps & Access', objectiveIndex: 1, duration: '10 min' },
+        { id: 'p1-l3', title: 'Your First Week Checklist', objectiveIndex: 2, duration: '7 min' },
       ],
       assessments: [
-        { id: 'a1', title: 'Onboarding Knowledge Check', type: 'Quiz', objectives: [0,1,2] },
+        { id: 'p1-a1', title: 'Onboarding Knowledge Check', type: 'Quiz', objectives: [0,1,2] },
       ],
     },
 

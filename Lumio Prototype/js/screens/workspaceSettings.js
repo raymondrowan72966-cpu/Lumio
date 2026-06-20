@@ -236,25 +236,73 @@ function sendInvitationEmail(invitation) {
 // with the role and authentication provider chosen at invite time.
 // For local accounts, pass the user-chosen password; for SSO, password is unused.
 // Returns the new user, or null if the token is invalid/already used.
+// Full invitation lifecycle (Ownership & Visibility Correction Sprint):
+// if an account with this email already exists, it joins the inviting
+// workspace as-is (no duplicate user created); otherwise a new account is
+// registered. Either way the resulting membership.role is ALWAYS
+// 'administrator' — invitation acceptance never grants workspace_owner,
+// regardless of what role that user might hold in a workspace of their
+// own elsewhere.
 function acceptInvitation(token, password) {
   const inv = LumioState.invitations.find(i => i.token === token && i.status === 'pending');
   if (!inv) return null;
+  // Expiry check (additive — older saves backfilled a 7-day default at
+  // migration time, see app.js v16). An expired invitation cannot be
+  // accepted; the workspace owner would need to send a new one.
+  if (inv.expiresAt && Date.now() > inv.expiresAt) return null;
 
-  const user = {
-    id: generateUniqueId('u'),
-    firstName: inv.firstName || inv.email.split('@')[0],
-    lastName: inv.lastName || '',
-    email: inv.email,
-    avatar: null,
-    role: inv.role,
-    status: 'active',
-    authenticationProvider: inv.authenticationProvider || 'local',
-  };
-  if (user.authenticationProvider === 'local') {
-    user.password = password || 'lumio123';
+  const workspaceId = inv.workspaceId || LumioState.session?.currentWorkspaceId;
+  let canonicalUser = LumioState.users.find(u => u.email.toLowerCase() === inv.email.toLowerCase());
+  let legacyUser;
+
+  if (canonicalUser) {
+    // Existing account (any provider) — sign in and join, no new identity.
+    legacyUser = canonicalUser.id === LumioState.currentUser.id
+      ? LumioState.currentUser
+      : (LumioState.adminUsers.find(u => u.id === canonicalUser.id) || {
+          id: canonicalUser.id, firstName: canonicalUser.firstName, lastName: canonicalUser.lastName,
+          email: canonicalUser.email, avatar: canonicalUser.avatar, status: 'active',
+          authenticationProvider: canonicalUser.authProvider === 'google' || canonicalUser.authProvider === 'microsoft' ? canonicalUser.authProvider : 'local',
+        });
+  } else {
+    legacyUser = {
+      id: generateUniqueId('u'),
+      firstName: inv.firstName || inv.email.split('@')[0],
+      lastName: inv.lastName || '',
+      email: inv.email,
+      avatar: null,
+      role: 'admin', // legacy role string — invitation acceptance is always Administrator
+      status: 'active',
+      authenticationProvider: inv.authenticationProvider || 'local',
+    };
+    if (legacyUser.authenticationProvider === 'local') legacyUser.password = password || 'lumio123';
+    LumioState.adminUsers.push(legacyUser);
+
+    canonicalUser = {
+      id: legacyUser.id,
+      email: legacyUser.email,
+      firstName: legacyUser.firstName,
+      lastName: legacyUser.lastName,
+      displayName: `${legacyUser.firstName} ${legacyUser.lastName}`.trim(),
+      avatar: null,
+      role: ROLE_ADMINISTRATOR,
+      createdAt: Date.now(),
+      lastLoginAt: Date.now(),
+      authProvider: toCanonicalAuthProvider(legacyUser.authenticationProvider),
+    };
+    if (legacyUser.password) canonicalUser.passwordHash = LumioAuth._hashPassword(legacyUser.password);
+    LumioState.users.push(canonicalUser);
   }
-  LumioState.adminUsers.push(user);
+
+  // Membership in the INVITING workspace is always 'administrator' — even
+  // if this user already owns a workspace of their own elsewhere.
+  if (workspaceId && !getWorkspaceMembership(canonicalUser.id, workspaceId)) {
+    LumioState.workspaceMemberships.push({ workspaceId, userId: canonicalUser.id, role: ROLE_ADMINISTRATOR, joinedAt: Date.now() });
+  }
+
   inv.status = 'accepted';
+  inv.acceptedAt = Date.now();
+
   scheduleLumioSave();
   return user;
 }
@@ -382,6 +430,7 @@ function bindWorkspaceUsersTab() {
 
     const token = generateUniqueId('inv');
     const link = `${location.origin}${location.pathname}#/accept-invite/${token}`;
+    const now = Date.now();
     const invitation = {
       id: generateUniqueId('i'),
       firstName,
@@ -392,7 +441,12 @@ function bindWorkspaceUsersTab() {
       token,
       link,
       status: 'pending',
-      createdAt: Date.now(),
+      createdAt: now,
+      // SaaS foundation fields (Workspace & Authentication Foundation Sprint).
+      workspaceId: LumioState.session?.currentWorkspaceId || null,
+      invitedBy: LumioState.session?.currentUserId || LumioState.currentUser.id,
+      expiresAt: now + 7 * 24 * 3600 * 1000, // 7 days
+      acceptedAt: null,
     };
     LumioState.invitations.push(invitation);
     sendInvitationEmail(invitation);

@@ -16,12 +16,39 @@ const BuilderUI = {
   insertZoneIndex: null, // drop-index of the active "insertion zone", or null
 };
 
-function getCourseAndLesson(lessonId) {
+// Resolves the course + lesson/assessment object for a given lessonId.
+// `preferredCourseId` (when supplied) is checked FIRST and, if it actually
+// contains the lesson, resolved unambiguously without ever scanning other
+// courses — this is how a real lesson-id collision (e.g. the historical
+// c1/p1 case) gets resolved correctly even if it ever recurred, since the
+// caller's own known context wins over a blind first-match scan.
+// Callers that already know which course they're working in (e.g.
+// courseLanding.js, which sets LumioState.currentCourseId on every course
+// page load before any lesson link can be clicked) should rely on that —
+// this function falls back to LumioState.currentCourseId automatically,
+// and only falls all the way back to scanning every course (logging a
+// warning, since at that point the result is genuinely ambiguous) if
+// neither the explicit param nor the current course actually contains it.
+function getCourseAndLesson(lessonId, preferredCourseId) {
+  function findIn(course) {
+    if (!course) return null;
+    return course.lessons.find(x => x.id === lessonId)
+      || (course.assessments || []).find(x => x.id === lessonId);
+  }
+
+  const hintedId = preferredCourseId || LumioState.currentCourseId;
+  if (hintedId && LumioState.courses[hintedId]) {
+    const hinted = findIn(LumioState.courses[hintedId]);
+    if (hinted) return { course: LumioState.courses[hintedId], lesson: hinted };
+  }
+
   let course = null, lesson = null;
   for (const c of Object.values(LumioState.courses)) {
-    const l = c.lessons.find(x => x.id === lessonId)
-      || (c.assessments || []).find(x => x.id === lessonId);
+    const l = findIn(c);
     if (l) { course = c; lesson = l; break; }
+  }
+  if (course && hintedId && course.id !== hintedId) {
+    console.warn(`[Lumio] getCourseAndLesson("${lessonId}") resolved to course "${course.id}" via full scan — the hinted course "${hintedId}" did not contain this lesson. If two courses share this lesson id, this result may be ambiguous.`);
   }
   return { course, lesson };
 }
@@ -5240,7 +5267,9 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelectorAll('.dup-block-btn').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const i = parseInt(btn.dataset.index);
-    blocks.splice(i+1, 0, JSON.parse(JSON.stringify(blocks[i])));
+    const copy = JSON.parse(JSON.stringify(blocks[i]));
+    copy.id = generateBlockId(); // duplicates must NEVER share the original's id
+    blocks.splice(i+1, 0, copy);
     BuilderUI.selected = null;
     BuilderUI.expandedBlocks = new Set();
     renderLessonBuilder(lesson.id);
@@ -6738,7 +6767,7 @@ function bindBuilderEvents(course, lesson, blocks) {
   });
   app.querySelector('#ai-add-kc')?.addEventListener('click', (e) => {
     e.preventDefault();
-    blocks.push({ type: 'kc_multiple_choice', data: {} });
+    blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: {} });
     renderLessonBuilder(lesson.id);
     toast('✨ Added a knowledge check based on this lesson', '✨');
   });
@@ -6828,7 +6857,7 @@ function handleLibraryOrCanvasDrop(e, targetIndex, blocks, lesson) {
    expands its toolbar/settings panel, and places the cursor inside its
    first editable field so authoring can begin immediately. */
 function insertBlockAndFocus(blockId, blocks, lesson, targetIndex) {
-  blocks.splice(targetIndex, 0, { type: blockId, data: {} });
+  blocks.splice(targetIndex, 0, { id: generateBlockId(), type: blockId, data: {} });
   BuilderUI.selected = targetIndex;
   BuilderUI.expandedBlocks = new Set([targetIndex]);
   BuilderUI.rightTab = 'content';
@@ -6870,10 +6899,10 @@ function aiDraftLesson(lesson, blocks) {
     </div>`;
   setTimeout(() => {
     blocks.push(
-      { type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore and why it matters.' } },
-      { type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation of the core idea, paired with a supporting visual.', imageLabel: 'Supporting image' } },
-      { type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
-      { type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
+      { id: generateBlockId(), type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore and why it matters.' } },
+      { id: generateBlockId(), type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation of the core idea, paired with a supporting visual.', imageLabel: 'Supporting image' } },
+      { id: generateBlockId(), type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
+      { id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
     );
     renderLessonBuilder(lesson.id);
     toast('✨ Drafted a starting structure — feel free to edit any block', '✨');
@@ -6888,14 +6917,14 @@ function sendChatMessage(text, lesson, blocks) {
 
   if (key === 'draft this lesson' && blocks.length === 0) {
     blocks.push(
-      { type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore.' } },
-      { type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation paired with a supporting visual.', imageLabel: 'Supporting image' } },
-      { type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
-      { type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
+      { id: generateBlockId(), type: 'heading_paragraph', data: { heading: 'Lesson Introduction', body: 'A short overview that sets up what learners are about to explore.' } },
+      { id: generateBlockId(), type: 'image_text', data: { heading: 'Key Concept', body: 'An explanation paired with a supporting visual.', imageLabel: 'Supporting image' } },
+      { id: generateBlockId(), type: 'stmt_tip', data: { text: '“A short, memorable statement that reinforces the key takeaway.”' } },
+      { id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
     );
   }
   if (key === 'suggest a knowledge check') {
-    blocks.push({ type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
+    blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
   }
 
   renderLessonBuilder(lesson.id);
