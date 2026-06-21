@@ -9,6 +9,7 @@ const TYPE_BADGE = {
 const STATUS_BADGE = {
   draft: 'pill-grey',
   in_review: 'pill-cyan',
+  rejected: 'pill-magenta',
   approved: 'pill-indigo',
   published: 'pill-teal',
   archived: 'pill-grey',
@@ -45,6 +46,7 @@ function renderProjects() {
     }
     if (LumioState.currentFolder && p.folder !== LumioState.currentFolder) return false;
     if (LumioState.typeFilter !== 'All' && p.type !== LumioState.typeFilter) return false;
+    if (LumioState.statusFilter && LumioState.statusFilter !== 'All' && p.status !== LumioState.statusFilter) return false;
     if (LumioState.searchQuery && !projectDisplayTitle(p).toLowerCase().includes(LumioState.searchQuery.toLowerCase())) return false;
     return true;
   }).sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
@@ -64,6 +66,9 @@ function renderProjects() {
           <span class="icon">🔍</span>
           <input class="input" id="search-input" placeholder="Search projects..." value="${LumioState.searchQuery}" />
         </div>
+        <select class="input" id="status-filter" style="width:140px;">
+          ${['All', ...Object.keys(PROJECT_STATUS_LABELS)].map(s => `<option value="${s}" ${(LumioState.statusFilter||'All')===s?'selected':''}>${s==='All'?'All Statuses':PROJECT_STATUS_LABELS[s]}</option>`).join('')}
+        </select>
         <select class="input" id="type-filter" style="width:160px;">
           <option ${LumioState.typeFilter==='All'?'selected':''}>All</option>
           <option ${LumioState.typeFilter==='Course'?'selected':''}>Course</option>
@@ -392,6 +397,10 @@ function bindProjectsEvents() {
     LumioState.typeFilter = e.target.value;
     renderProjects();
   });
+  app.querySelector('#status-filter')?.addEventListener('change', (e) => {
+    LumioState.statusFilter = e.target.value;
+    renderProjects();
+  });
   app.querySelector('#create-new-btn')?.addEventListener('click', openCreateNewModal);
   app.querySelector('#empty-create-btn')?.addEventListener('click', openCreateNewModal);
   app.querySelector('#new-folder-btn')?.addEventListener('click', () => openNewFolderModal());
@@ -506,8 +515,10 @@ function openProjectMenu(btn, id) {
 
   const viewOnly = isProjectViewOnly(p);
   const workflowItems = [];
-  if (!viewOnly && p.status === 'draft' && canSubmitForReview(p)) {
-    workflowItems.push(`<div data-action="submit_for_review">${menuItem('Submit For Review', '📤')}</div>`);
+  // 'rejected' is now a first-class status (Phase 1) — resubmitting from
+  // it follows the exact same action/permission as a fresh draft.
+  if (!viewOnly && (p.status === 'draft' || p.status === 'rejected') && canSubmitForReview(p)) {
+    workflowItems.push(`<div data-action="submit_for_review">${menuItem(p.status === 'rejected' ? 'Resubmit For Review' : 'Submit For Review', '📤')}</div>`);
   }
   if (p.status === 'in_review' && canApproveReject()) {
     workflowItems.push(`<div data-action="approve">${menuItem('Approve', '✅')}</div>`);
@@ -536,9 +547,24 @@ function openProjectMenu(btn, id) {
   `);
 
   ['submit_for_review', 'approve', 'reject', 'archive', 'restore'].forEach(action => {
-    menu.querySelector(`[data-action="${action}"]`)?.addEventListener('click', () => {
+    menu.querySelector(`[data-action="${action}"]`)?.addEventListener('click', async () => {
       closePopovers();
-      const result = transitionProjectStatus(p, action);
+      // Phase 2: approval comments are optional, rejection comments are
+      // mandatory — transitionProjectStatus() itself refuses a reject with
+      // no comment, but prompting up front avoids a confusing silent no-op.
+      let comment;
+      if (action === 'approve') {
+        comment = await promptModal('Add an optional comment for the project creator', '');
+        if (comment === null) return; // cancelled
+      } else if (action === 'reject') {
+        comment = null;
+        while (comment === null || !comment.trim()) {
+          comment = await promptModal('A comment is required when rejecting a submission', '');
+          if (comment === null) return; // cancelled
+          if (!comment.trim()) toast('A comment is required to reject a submission.', '⚠️');
+        }
+      }
+      const result = transitionProjectStatus(p, action, comment);
       if (!result.ok) { toast(result.reason, '⚠️'); return; }
       renderProjects();
       toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, '✅');

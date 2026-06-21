@@ -6,7 +6,7 @@
 
 const WORKSPACE_SETTINGS_TABS = [
   { id: 'users', label: 'Users' },
-  { id: 'reviews', label: 'Pending Reviews' },
+  { id: 'governance', label: 'Governance' },
   { id: 'system', label: 'System Information' },
 ];
 
@@ -55,24 +55,39 @@ function renderWorkspaceSettingsTab() {
   if (!host) return;
   switch (workspaceSettingsTab) {
     case 'users': host.innerHTML = workspaceUsersTab(); bindWorkspaceUsersTab(); break;
-    case 'reviews': host.innerHTML = workspaceReviewsTab(); bindWorkspaceReviewsTab(); break;
+    case 'governance': host.innerHTML = workspaceGovernanceTab(); bindWorkspaceReviewsTab(); break;
     case 'system': host.innerHTML = workspaceSystemTab(); break;
   }
 }
 
-/* ---------------- PENDING REVIEWS (Workspace Owner only) ---------------- */
-function workspaceReviewsTab() {
-  const pending = LumioState.projects.filter(p => !p.deleted && p.status === 'in_review');
-  if (!pending.length) {
-    return `<div class="card card-pad"><p class="text-sm text-muted">No projects are currently awaiting review.</p></div>`;
-  }
+/* ---------------- GOVERNANCE DASHBOARD (Workspace Owner only) ----------------
+   Phase 6 of the Governance & Review Workflow Hardening Sprint: a single
+   place to see review activity across every status, not just the pending
+   queue — closes the "Administrator has no visibility" / "no way to see
+   approved/rejected/archived projects" gaps from the prior audit. Still
+   Workspace-Owner-only (canAccessWorkspaceSettings gates the whole screen);
+   an Administrator's equivalent visibility is the Review Status section on
+   their own projects' Course Landing page (Phase 5). */
+function workspaceGovernanceTab() {
+  const all = LumioState.projects.filter(p => !p.deleted);
+  const pending = all.filter(p => p.status === 'in_review');
+  const recentlyApproved = all.filter(p => p.status === 'approved').sort((a,b) => (b.reviewedAt||0)-(a.reviewedAt||0)).slice(0, 5);
+  const recentlyRejected = all.filter(p => p.status === 'rejected').sort((a,b) => (b.reviewedAt||0)-(a.reviewedAt||0)).slice(0, 5);
+  const published = all.filter(p => p.status === 'published').sort((a,b) => (b.lastAccessed||0)-(a.lastAccessed||0)).slice(0, 5);
+  const archived = all.filter(p => p.status === 'archived');
+
+  const section = (title, items, emptyText, rowFn) => `
+    <div class="card card-pad mb-16">
+      <div class="prop-section-title">${title}</div>
+      ${items.length ? `<div class="flex-col gap-8">${items.map(rowFn).join('')}</div>` : `<p class="text-sm text-muted">${emptyText}</p>`}
+    </div>`;
+
   return `
-    <div class="card card-pad">
-      <div class="prop-section-title">Pending Reviews</div>
-      <div class="flex-col gap-8">
-        ${pending.map(p => pendingReviewRow(p)).join('')}
-      </div>
-    </div>
+    ${section('Pending Reviews', pending, 'No projects are currently awaiting review.', p => pendingReviewRow(p))}
+    ${section('Recently Approved', recentlyApproved, 'No projects have been approved yet.', p => governanceRow(p, 'reviewedAt'))}
+    ${section('Recently Rejected', recentlyRejected, 'No projects have been rejected.', p => governanceRow(p, 'reviewedAt', true))}
+    ${section('Published', published, 'No projects are currently published.', p => governanceRow(p, 'lastAccessed'))}
+    ${section('Archived', archived, 'No projects are archived.', p => governanceRow(p, 'lastAccessed'))}
   `;
 }
 
@@ -95,24 +110,47 @@ function pendingReviewRow(p) {
   `;
 }
 
+// Generic read-only row for the Recently Approved/Rejected/Published/Archived
+// sections — shows type, the comment (when present) and the relevant date.
+function governanceRow(p, dateField, showComment) {
+  const reviewer = p.reviewedBy ? getWorkspaceUser(p.reviewedBy) : null;
+  const reviewerName = reviewer ? `${reviewer.firstName} ${reviewer.lastName || ''}`.trim() : null;
+  return `
+    <div style="padding:10px 0; border-bottom:1px solid var(--border);">
+      <div class="flex items-center gap-12">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:13px; color:var(--ink-900);">${escapeHtml(projectDisplayTitle(p))} <span class="text-muted" style="font-weight:400;">· ${p.type}</span></div>
+          <div class="text-muted" style="font-size:12px;">${reviewerName ? `By ${escapeHtml(reviewerName)} · ` : ''}${p[dateField] ? new Date(p[dateField]).toLocaleDateString() : '—'}</div>
+        </div>
+        <span class="pill ${STATUS_BADGE[p.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[p.status] || p.status}</span>
+      </div>
+      ${showComment && p.reviewComments ? `<div class="text-sm mt-8" style="padding:8px 10px; background:#FEECEC; border-radius:var(--r-sm);">"${escapeHtml(p.reviewComments)}"</div>` : ''}
+    </div>`;
+}
+
 function bindWorkspaceReviewsTab() {
   const host = document.getElementById('ws-tab-content');
   if (!host) return;
-  host.querySelectorAll('[data-review-approve]').forEach(btn => btn.addEventListener('click', () => {
+  host.querySelectorAll('[data-review-approve]').forEach(btn => btn.addEventListener('click', async () => {
     const p = LumioState.projects.find(x => x.id === btn.dataset.reviewApprove);
-    const result = transitionProjectStatus(p, 'approve');
+    const comment = await promptModal('Add an optional comment for the project creator', '');
+    if (comment === null) return; // cancelled
+    const result = transitionProjectStatus(p, 'approve', comment);
     if (!result.ok) { toast(result.reason, '⚠️'); return; }
     toast(`"${projectDisplayTitle(p)}" approved`, '✅');
     renderWorkspaceSettingsTab();
   }));
   host.querySelectorAll('[data-review-reject]').forEach(btn => btn.addEventListener('click', async () => {
     const p = LumioState.projects.find(x => x.id === btn.dataset.reviewReject);
-    const comments = await promptModal('Reason for rejection (optional)', '');
-    if (comments === null) return; // cancelled
-    p.reviewComments = comments || null;
-    const result = transitionProjectStatus(p, 'reject');
+    let comment = null;
+    while (comment === null || !comment.trim()) {
+      comment = await promptModal('A comment is required when rejecting a submission', '');
+      if (comment === null) return; // cancelled
+      if (!comment.trim()) toast('A comment is required to reject a submission.', '⚠️');
+    }
+    const result = transitionProjectStatus(p, 'reject', comment);
     if (!result.ok) { toast(result.reason, '⚠️'); return; }
-    toast(`"${projectDisplayTitle(p)}" sent back to Draft`, '↩️');
+    toast(`"${projectDisplayTitle(p)}" rejected`, '↩️');
     renderWorkspaceSettingsTab();
   }));
 }

@@ -329,6 +329,295 @@ ${jsBlocks}
   }
 }
 
+/* ============================================================
+   SCORM 1.2 PUBLISH ENGINE
+   SCORM 1.2 Export Implementation Sprint.
+   Reuses every piece of the HTML publish pipeline above (asset
+   optimization, JS/CSS bundling, buildZip) — the only differences are:
+   the bundled JS list also includes js/scorm.js, the bootstrap script
+   wires the SCORM RTE API alongside the existing localStorage fallback,
+   and the package additionally contains imsmanifest.xml.
+   ============================================================ */
+const PUBLISH_SCORM_JS_FILES = PUBLISH_JS_FILES.concat(['js/scorm.js']);
+
+// Phase 7: imsmanifest.xml — the file every SCORM 1.2 LMS reads first to
+// import a package. identifier/organization/resource/launch file are all
+// required by the SCORM 1.2 CAM (Content Aggregation Model); `adlcp:scormtype`
+// must be exactly "sco" for a launchable, trackable content object.
+function buildImsManifest(course, project) {
+  const id = (s) => escapeHtml(String(s).replace(/[^A-Za-z0-9_.-]/g, '_'));
+  const courseId = id(course.id);
+  const title = escapeHtml(course.title || 'Course');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="LUMIO_${courseId}" version="1.2"
+    xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+    xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+                         http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="LUMIO_ORG_${courseId}">
+    <organization identifier="LUMIO_ORG_${courseId}">
+      <title>${title}</title>
+      <item identifier="LUMIO_ITEM_${courseId}" identifierref="LUMIO_RES_${courseId}">
+        <title>${title}</title>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="LUMIO_RES_${courseId}" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+    </resource>
+  </resources>
+</manifest>`;
+}
+
+async function publishScormPackage(course, triggerBtn) {
+  const project = LumioState.projects.find(p => p.id === course.id);
+  if (!canPublishProjectStatus(project)) {
+    const statusLabel = project ? (PROJECT_STATUS_LABELS[project.status] || project.status) : 'unknown';
+    toast(`Cannot publish — project status is "${statusLabel}". It must be Approved first.`, '⚠️');
+    return;
+  }
+  if (project && !canEditProject(project)) {
+    toast('You do not have permission to publish this project.', '⚠️');
+    return;
+  }
+
+  const issues = getCourseReadinessIssues(course);
+  if (issues.length > 0) {
+    toast('Course not ready: ' + issues[0], '⚠️');
+    return;
+  }
+
+  const originalLabel = triggerBtn ? triggerBtn.textContent : '';
+  if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
+
+  try {
+    const lessonData = {};
+    (course.lessons || []).forEach(l => {
+      if (LumioState.lessons[l.id]) lessonData[l.id] = LumioState.lessons[l.id];
+    });
+    (course.assessments || []).forEach(a => {
+      if (LumioState.lessons[a.id]) lessonData[a.id] = LumioState.lessons[a.id];
+    });
+
+    const assetRefs = _collectProjectAssetRefs(course, lessonData);
+    const assetEntries = await AssetStore.exportAll(assetRefs);
+
+    const assetMap = {};
+    const zipAssetFiles = [];
+    for (const a of assetEntries) {
+      let finalBlob = a.blob, finalMime = a.mimeType, finalExt = _mimeToExt(a.mimeType);
+      if (a.mimeType && a.mimeType.startsWith('image/')) {
+        const opt = await optimizeImageForPublish(a.blob, a.mimeType);
+        finalBlob = opt.blob; finalMime = opt.mimeType; finalExt = opt.ext;
+      }
+      const hexId = a.id.replace('asset://', '');
+      const filePath = `assets/${hexId}.${finalExt}`;
+      assetMap[a.id] = filePath;
+      const buf = await finalBlob.arrayBuffer();
+      zipAssetFiles.push({ name: filePath, content: new Uint8Array(buf) });
+    }
+
+    const [css, ...jsSources] = await Promise.all([
+      fetch('css/styles.css').then(r => { if (!r.ok) throw new Error('CSS fetch failed'); return r.text(); }),
+      ...PUBLISH_SCORM_JS_FILES.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(f + ' fetch failed'); return r.text(); })),
+    ]);
+
+    const courseDataJson = JSON.stringify({ course, lessons: lessonData });
+    const assetMapJson = JSON.stringify(assetMap);
+
+    // SCORM bootstrap: same render/navigate wiring as the HTML export, but
+    // __loadLearnerState/__saveLearnerState now prefer the SCORM RTE
+    // (suspend_data / lesson_status / score / session_time) when an LMS API
+    // is present, and transparently fall back to the exact same
+    // localStorage scheme the plain HTML package uses when it isn't —
+    // e.g. when a SCORM zip is just unzipped and opened directly.
+    const bootstrapScript = `(function(){
+  var __cd=window.__LUMIO_COURSE_DATA__;
+  var cid=__cd.course.id;
+  var __lk='lumio-learner-'+cid;
+  var __assessmentIds=(__cd.course.assessments||[]).map(function(a){return a.id;});
+  var __scormOk=false;
+  try{__scormOk=ScormRuntime.init();}catch(e){__scormOk=false;}
+
+  // Phase 9/10: derive SCORM lesson_status + score from the SAME
+  // completion-engine-driven progress state every other surface reads —
+  // no parallel/forked completion logic, just a read-only projection.
+  function __computeScormStatus(){
+    var progress=(LumioState.learnerProgress||{})[cid]||{};
+    var lessons=__cd.course.lessons||[];
+    var assessments=__cd.course.assessments||[];
+    var allLessonsDone=lessons.length===0||lessons.every(function(l){return (progress.completedLessons||[]).includes(l.id);});
+    var status='not attempted';
+    if(progress.courseStatus==='in_progress')status='incomplete';
+    if(progress.courseStatus==='completed')status='completed';
+    // If any assessment has been attempted, lesson_status reflects
+    // pass/fail (Phase 10) rather than plain completion.
+    var bestScore=null,sawAssessment=false,allPassed=true;
+    assessments.forEach(function(a){
+      var att=((LumioState.assessmentAttempts||{})[cid]||{})[a.id];
+      if(att&&typeof att.score==='number'){
+        sawAssessment=true;
+        if(bestScore===null||att.score>bestScore)bestScore=att.score;
+        if(!att.passed)allPassed=false;
+      }
+    });
+    if(sawAssessment&&allLessonsDone){status=allPassed?'passed':'failed';}
+    return {status:status,score:bestScore};
+  }
+
+  function __loadLearnerState(){
+    if(__scormOk){
+      var suspended=ScormRuntime.getSuspendData();
+      if(suspended){
+        if(suspended.learnerProfile)LumioState.learnerProfile=suspended.learnerProfile;
+        if(suspended.resume)LumioState.resume=suspended.resume;
+        if(suspended.learnerProgress){if(!LumioState.learnerProgress)LumioState.learnerProgress={};LumioState.learnerProgress[cid]=suspended.learnerProgress;}
+        if(suspended.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};LumioState.assessmentAttempts[cid]=suspended.assessmentAttempts;}
+        ScormRuntime.setEntry(true);
+      } else {
+        ScormRuntime.setEntry(false);
+      }
+      // Phase 4: LMS-provided student identity, read-only, used only as a
+      // fallback display name when Lumio's own learnerProfile has none yet.
+      var student=ScormRuntime.getStudentInfo();
+      if(student&&student.name){
+        if(!LumioState.learnerProfile)LumioState.learnerProfile={};
+        if(!LumioState.learnerProfile.learnerName)LumioState.learnerProfile.learnerName=student.name;
+        if(student.id&&!LumioState.learnerProfile.scormStudentId)LumioState.learnerProfile.scormStudentId=student.id;
+      }
+      return;
+    }
+    // No LMS — exact same fallback the plain HTML export uses.
+    try{
+      var raw=localStorage.getItem(__lk);
+      if(!raw)return;
+      var rec=JSON.parse(raw);
+      if(rec.learnerProfile)LumioState.learnerProfile=rec.learnerProfile;
+      if(rec.resume)LumioState.resume=rec.resume;
+      if(rec.learnerProgress){if(!LumioState.learnerProgress)LumioState.learnerProgress={};LumioState.learnerProgress[cid]=rec.learnerProgress;}
+      if(rec.interactionHistory){if(!LumioState.interactionHistory)LumioState.interactionHistory={};LumioState.interactionHistory[cid]=rec.interactionHistory;}
+      if(rec.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};LumioState.assessmentAttempts[cid]=rec.assessmentAttempts;}
+    }catch(e){}
+  }
+  function __saveLearnerState(){
+    var assessmentAttempts={};
+    var byCourse=(LumioState.assessmentAttempts||{})[cid]||{};
+    __assessmentIds.forEach(function(id){if(byCourse[id])assessmentAttempts[id]=byCourse[id];});
+    var learnerProgress=(LumioState.learnerProgress||{})[cid];
+    if(__scormOk){
+      // Phase 6: suspend_data carries current lesson, lesson completion,
+      // assessment progress/score, and (via learnerProgress.blockProgress)
+      // Continue-block / required-interaction completion — everything
+      // needed to resume exactly where the learner left off.
+      ScormRuntime.setSuspendData({
+        learnerProfile:LumioState.learnerProfile,
+        resume:LumioState.resume,
+        learnerProgress:learnerProgress,
+        assessmentAttempts:assessmentAttempts,
+      });
+      var derived=__computeScormStatus();
+      ScormRuntime.setLessonStatus(derived.status);
+      if(derived.score!==null)ScormRuntime.setScore(derived.score,0,100);
+      ScormRuntime.commit();
+      return;
+    }
+    try{
+      var rec={
+        learnerProfile:LumioState.learnerProfile,
+        resume:LumioState.resume,
+        learnerProgress:learnerProgress,
+        interactionHistory:(LumioState.interactionHistory||{})[cid],
+        assessmentAttempts:assessmentAttempts,
+      };
+      localStorage.setItem(__lk,JSON.stringify(rec));
+    }catch(e){}
+  }
+  var __saveTimer=null;
+  window.loadLumioState=function(){__loadLearnerState();return null;};
+  window.saveLumioState=__saveLearnerState;
+  window.scheduleLumioSave=function(){if(__saveTimer)clearTimeout(__saveTimer);__saveTimer=setTimeout(__saveLearnerState,400);};
+  window.addEventListener('beforeunload',function(){__saveLearnerState();if(__scormOk)ScormRuntime.finish();});
+  LumioState.courses[cid]=__cd.course;
+  Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  LumioState.learnerPreview={returnTo:''};
+  LearnerUI.publishedMode=true;
+  var __am=window.__LUMIO_ASSET_MAP__;
+  AssetStore.resolveMediaSrc=function(src){if(!src)return'';return(__am&&__am[src])||src;};
+  AssetStore.preloadBlocks=async function(){return 0;};
+  AssetStore.resolveUrl=async function(src){return((__am&&__am[src])||src)||null;};
+  window.navigate=function(hash){
+    if(location.hash===hash){window.render();}
+    else{location.hash=hash;}
+    window.scrollTo(0,0);
+  };
+  window.render=function(){
+    LumioState.courses[cid]=__cd.course;
+    Object.assign(LumioState.lessons,__cd.lessons);
+    var m=(location.hash||'').match(/^#\\/learner\\/[^\\/]+\\/(.+)$/);
+    renderLearnerPreview(cid,m?m[1]:null);
+  };
+  window.addEventListener('hashchange',window.render);
+})();`;
+
+    const jsBlocks = jsSources.map((src, i) =>
+      `<script>\n/* ${PUBLISH_SCORM_JS_FILES[i]} */\n${src}\n<\/script>`
+    ).join('\n');
+
+    const title = escapeHtml(course.title || 'Course');
+    const html = `<!DOCTYPE html>
+<html lang="${escapeHtml(course.language || 'en')}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>${css}</style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>window.__LUMIO_COURSE_DATA__=${courseDataJson};<\/script>
+  <script>window.__LUMIO_ASSET_MAP__=${assetMapJson};<\/script>
+${jsBlocks}
+  <script>${bootstrapScript}<\/script>
+</body>
+</html>`;
+
+    const manifest = buildImsManifest(course, project);
+    const safeName = (course.title || 'course').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
+    const zipBytes = buildZip([
+      { name: 'imsmanifest.xml', content: manifest },
+      { name: 'index.html', content: html },
+      ...zipAssetFiles,
+    ]);
+
+    const blob = new Blob([zipBytes], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}-scorm12.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    if (!course.publishHistory) course.publishHistory = [];
+    course.publishHistory.unshift({ date: Date.now(), format: 'SCORM 1.2', version: course.publishVersion || '1.0', status: 'success' });
+    scheduleLumioSave();
+    toast(`SCORM 1.2 package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, '📦');
+  } catch (err) {
+    console.error('[Lumio Publish] SCORM publish failed:', err);
+    toast('SCORM publish failed — see console', '❌');
+    if (!course.publishHistory) course.publishHistory = [];
+    course.publishHistory.unshift({ date: Date.now(), format: 'SCORM 1.2', version: course.publishVersion || '1.0', status: 'failed' });
+    scheduleLumioSave();
+  } finally {
+    if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
+  }
+}
+
 function buildZip(files) {
   const enc = s => new TextEncoder().encode(s);
   const concat = (...bufs) => {

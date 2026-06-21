@@ -74,16 +74,16 @@ const LumioState = {
   // signed-in user profile + account security
   currentUser: {
     id: 'u-owner',
-    firstName: 'Jordan',
-    lastName: 'Reyes',
-    email: 'jordan@lumio.app',
+    firstName: 'Raymond',
+    lastName: 'Rowan',
+    email: 'raymondrowan72966@gmail.com',
     avatar: null, // data URL, or null for initials avatar
     role: 'owner', // 'owner' | 'admin'
     dateJoined: Date.now() - 120 * 24 * 3600 * 1000,
     lastLogin: Date.now(),
-    password: 'lumio123', // prototype-only stand-in for a hashed password
+    password: 'md@7296666', // prototype-only stand-in for a hashed password
     status: 'active', // 'active' | 'disabled'
-    authenticationProvider: 'local', // 'local' | 'microsoft' | 'google'
+    authenticationProvider: 'email', // 'email' | 'local_demo' | 'microsoft' | 'google' | 'apple'
   },
 
   // workspace system info (Workspace Owner only)
@@ -113,6 +113,11 @@ const LumioState = {
 
   // pending workspace invitations
   invitations: [],
+
+  // in-platform notification ledger (Governance & Review Workflow
+  // Hardening Sprint, Phase 7) — { id, userId, message, projectId,
+  // createdAt, read }, newest first.
+  notifications: [],
 
   // ---- SaaS foundation entities (additive — see ROLES & PERMISSIONS
   // section below for the full design note). Populated by the v16
@@ -175,6 +180,8 @@ function toLegacyRole(canonicalRole) {
 function toCanonicalAuthProvider(legacyProvider) {
   if (legacyProvider === 'microsoft') return 'microsoft';
   if (legacyProvider === 'google') return 'google';
+  if (legacyProvider === 'apple') return 'apple';
+  if (legacyProvider === 'email') return 'email'; // a real, permanent email/password account — not a demo identity
   return 'local_demo'; // 'local' and any unrecognized legacy value
 }
 
@@ -426,15 +433,21 @@ const LumioAuth = (function () {
 const PROJECT_STATUS_LABELS = {
   draft: 'Draft',
   in_review: 'In Review',
+  rejected: 'Rejected',
   approved: 'Approved',
   published: 'Published',
   archived: 'Archived',
 };
 
 // Allowed transitions: { fromStatus: { action: toStatus } }
+// Governance & Review Workflow Hardening Sprint: 'rejected' is now a
+// first-class status (was previously collapsed back into 'draft', which
+// made a rejected project visually indistinguishable from one that was
+// never submitted — a documented Governance Gap from the prior audit).
 const PROJECT_STATUS_TRANSITIONS = {
   draft:      { submit_for_review: 'in_review' },
-  in_review:  { approve: 'approved', reject: 'draft' },
+  in_review:  { approve: 'approved', reject: 'rejected' },
+  rejected:   { submit_for_review: 'in_review' },
   approved:   { publish: 'published' },
   published:  { republish: 'published', archive: 'archived' },
   archived:   { restore: 'draft' },
@@ -501,10 +514,48 @@ function canPublishProjectStatus(project) {
   return !!project && (project.status === 'approved' || project.status === 'published');
 }
 
+// Append-only review history — Phase 3 of the Governance & Review Workflow
+// Hardening Sprint. Never mutates or overwrites a prior entry; every
+// governance action (submitted/approved/rejected/published/archived/
+// restored) gets its own permanent row with who/when/comment.
+const REVIEW_HISTORY_ACTION_LABELS = {
+  submit_for_review: 'Submitted', approve: 'Approved', reject: 'Rejected',
+  publish: 'Published', republish: 'Republished', archive: 'Archived', restore: 'Restored',
+};
+function pushReviewHistory(project, action, comment) {
+  if (!Array.isArray(project.reviewHistory)) project.reviewHistory = [];
+  project.reviewHistory.push({
+    action: REVIEW_HISTORY_ACTION_LABELS[action] || action,
+    userId: LumioState.currentUser.id,
+    userName: currentUserDisplayName(),
+    date: Date.now(),
+    comment: comment || null,
+  });
+}
+
+// In-platform notifications (Phase 7) — no email integration, just a
+// persisted, per-user ledger surfaced via the notification bell.
+function addNotification(userId, message, projectId) {
+  if (!userId) return;
+  if (!Array.isArray(LumioState.notifications)) LumioState.notifications = [];
+  LumioState.notifications.unshift({
+    id: generateUniqueId('n'), userId, message, projectId,
+    createdAt: Date.now(), read: false,
+  });
+}
+function myNotifications() {
+  const uid = LumioState.currentUser.id;
+  return (LumioState.notifications || []).filter(n => n.userId === uid);
+}
+function myUnreadNotificationCount() {
+  return myNotifications().filter(n => !n.read).length;
+}
+
 // Attempts a status transition. Returns { ok: true } or { ok: false, reason }.
 // Never trusts the caller's UI to only offer valid actions — re-validates
 // the transition table and the actor's permission every time.
-function transitionProjectStatus(project, action) {
+// `comment` is optional for approve, MANDATORY for reject (Phase 2).
+function transitionProjectStatus(project, action, comment) {
   if (!project) return { ok: false, reason: 'Project not found.' };
   const allowed = PROJECT_STATUS_TRANSITIONS[project.status];
   const toStatus = allowed && allowed[action];
@@ -512,6 +563,7 @@ function transitionProjectStatus(project, action) {
 
   if (action === 'submit_for_review' && !canSubmitForReview(project)) return { ok: false, reason: 'You do not have permission to submit this project for review.' };
   if ((action === 'approve' || action === 'reject') && !canApproveReject()) return { ok: false, reason: 'Only the Workspace Owner can approve or reject submissions.' };
+  if (action === 'reject' && !(comment && comment.trim())) return { ok: false, reason: 'A comment is required when rejecting a submission.' };
   if (action === 'archive' && !canArchiveProject()) return { ok: false, reason: 'Only the Workspace Owner can archive projects.' };
   if (action === 'restore' && !canRestoreProject()) return { ok: false, reason: 'Only the Workspace Owner can restore archived projects.' };
   if ((action === 'publish' || action === 'republish') && !canEditProject(project)) return { ok: false, reason: 'You do not have permission to publish this project.' };
@@ -522,15 +574,21 @@ function transitionProjectStatus(project, action) {
     project.submittedBy = LumioState.currentUser.id;
     project.submittedAt = now;
     project.reviewComments = null;
+    addNotification('u-owner', `"${projectDisplayTitle(project)}" was submitted for review by ${currentUserDisplayName()}.`, project.id);
   } else if (action === 'approve') {
     project.reviewStatus = 'approved';
     project.reviewedBy = LumioState.currentUser.id;
     project.reviewedAt = now;
+    project.reviewComments = comment || null;
+    addNotification(project.ownerId, `"${projectDisplayTitle(project)}" was approved.`, project.id);
   } else if (action === 'reject') {
     project.reviewStatus = 'rejected';
     project.reviewedBy = LumioState.currentUser.id;
     project.reviewedAt = now;
+    project.reviewComments = comment;
+    addNotification(project.ownerId, `"${projectDisplayTitle(project)}" was rejected.`, project.id);
   }
+  pushReviewHistory(project, action, comment);
   project.status = toStatus;
   scheduleLumioSave();
   return { ok: true };
@@ -790,6 +848,12 @@ function ensureSaasFoundation() {
     createdAt: legacyOwner.dateJoined || Date.now(),
     lastLoginAt: legacyOwner.lastLogin || Date.now(),
     authProvider: toCanonicalAuthProvider(legacyOwner.authenticationProvider),
+    // A real email/password account needs a passwordHash so LumioAuth.loginWithEmail
+    // can authenticate it after sign-out — without this, the seeded Workspace
+    // Owner could never sign back in via the Email path once logged out.
+    ...(legacyOwner.authenticationProvider === 'email' && legacyOwner.password
+      ? { passwordHash: LumioAuth._hashPassword(legacyOwner.password) }
+      : {}),
   };
   const adminUserEntities = legacyAdmins.map(u => ({
     id: u.id,
@@ -836,7 +900,7 @@ function ensureSaasFoundation() {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 16;
+const LUMIO_STATE_VERSION = 18;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts. */
@@ -851,6 +915,7 @@ const LUMIO_PERSISTED_KEYS = [
   'interactionHistory', 'assessmentAttempts',
   'currentUser', 'workspace', 'adminUsers', 'invitations',
   'users', 'workspaces', 'workspaceMemberships', 'session',
+  'notifications', 'statusFilter',
 ];
 
 // Generates a stable local learner identifier in the form "local-xxxxxxxx".
@@ -1253,6 +1318,48 @@ function migrateLumioState(record) {
       if (inv.acceptedAt === undefined) inv.acceptedAt = inv.status === 'accepted' ? (inv.createdAt || Date.now()) : null; // best-effort — exact accept time was never recorded historically
     });
     version = 16;
+  }
+
+  if (version < 17) {
+    // v17: Authentication Persistence & Workspace Owner Recovery Sprint —
+    // converts the seeded demo Workspace Owner (u-owner / jordan@lumio.app)
+    // into a permanent real email/password account. Identity-guarded: only
+    // touches the record if it still matches the ORIGINAL seed email, so a
+    // real user who has since renamed the account or changed its email is
+    // never overwritten.
+    const owner = state.currentUser;
+    const isOriginalSeedOwner = owner && owner.id === 'u-owner' && owner.email === 'jordan@lumio.app';
+    if (isOriginalSeedOwner) {
+      owner.firstName = 'Raymond';
+      owner.lastName = 'Rowan';
+      owner.email = 'raymondrowan72966@gmail.com';
+      owner.password = 'md@7296666';
+      owner.authenticationProvider = 'email';
+    }
+    const canonicalOwner = (state.users || []).find(u => u.id === 'u-owner');
+    if (canonicalOwner && canonicalOwner.email === 'jordan@lumio.app') {
+      canonicalOwner.firstName = 'Raymond';
+      canonicalOwner.lastName = 'Rowan';
+      canonicalOwner.displayName = 'Raymond Rowan';
+      canonicalOwner.email = 'raymondrowan72966@gmail.com';
+      canonicalOwner.authProvider = 'email';
+      canonicalOwner.passwordHash = LumioAuth._hashPassword('md@7296666');
+    }
+    version = 17;
+  }
+
+  if (version < 18) {
+    // v18: Governance & Review Workflow Hardening Sprint — additive only.
+    // reviewHistory is backfilled empty (no historical data to recover);
+    // a rejected project under the OLD scheme already reverted to 'draft'
+    // before this sprint, so there's nothing to retroactively reclassify —
+    // only NEW rejections from this point forward get the first-class
+    // 'rejected' status.
+    (state.projects || []).forEach(p => {
+      if (!Array.isArray(p.reviewHistory)) p.reviewHistory = [];
+    });
+    if (!Array.isArray(state.notifications)) state.notifications = [];
+    version = 18;
   }
 
   return state;
@@ -1710,6 +1817,10 @@ function renderShell(activeId, contentHtml, opts = {}) {
         </div>
         ` : ''}
         <div style="flex:1"></div>
+        <div class="nav-item" id="notif-bell-trigger" style="position:relative;">
+          <span class="ic">🔔</span><span>Notifications</span>
+          ${myUnreadNotificationCount() > 0 ? `<span class="pill pill-magenta" style="margin-left:auto; min-width:20px; text-align:center; padding:2px 6px;">${myUnreadNotificationCount()}</span>` : ''}
+        </div>
         <div class="nav-item" data-nav="#/login">
           <span class="ic">↩️</span><span>Sign out</span>
         </div>
@@ -1734,6 +1845,31 @@ function renderShell(activeId, contentHtml, opts = {}) {
       navigate(elx.dataset.nav);
     });
   });
+
+  app.querySelector('#notif-bell-trigger')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openNotificationsPanel(e.currentTarget);
+  });
+}
+
+// Phase 7 notification bell dropdown — lists this user's notifications
+// (newest first), marks them all read on open (the bell itself re-renders
+// on next navigation/shell paint, clearing the unread badge).
+function openNotificationsPanel(anchorEl) {
+  document.querySelectorAll('.popover-menu').forEach(m => m.remove());
+  const items = myNotifications().slice(0, 15);
+  const html = items.length
+    ? items.map(n => `
+        <div style="padding:10px 12px; border-bottom:1px solid var(--border); ${n.read ? '' : 'background:var(--pastel-lavender);'}">
+          <div class="text-sm" style="color:var(--ink-900);">${escapeHtml(n.message)}</div>
+          <div class="text-muted" style="font-size:11px; margin-top:2px;">${formatDateLong(n.createdAt)}</div>
+        </div>`).join('')
+    : `<div style="padding:16px; text-align:center;" class="text-sm text-muted">No notifications yet.</div>`;
+  const menu = popoverAt(anchorEl, html, { width: 280 });
+  menu.style.maxHeight = '360px';
+  menu.style.overflowY = 'auto';
+  myNotifications().forEach(n => { n.read = true; });
+  scheduleLumioSave();
 }
 
 /* ---------------- MAIN RENDER DISPATCH ---------------- */

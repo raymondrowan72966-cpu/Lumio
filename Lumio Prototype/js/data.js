@@ -68,6 +68,19 @@ const LumioData = {
       ownerId: 'u-owner', sharedWith: [], sharedScope: null, sharedPermission: 'view',
       reviewStatus: null, reviewedBy: null, reviewedAt: null, reviewComments: null, submittedBy: null, submittedAt: null,
     },
+    // Governance Workflow & Review Management Audit Sprint: every other
+    // Microlearning seed project is already in_review or published — there
+    // was no Draft Microlearning in the demo data at all, which made the
+    // "Submit For Review" action (correctly status-gated, not type-gated)
+    // impossible to find when testing against Microlearning specifically.
+    // This entry restores full Draft-state parity between the two types.
+    {
+      id: 'p8', title: 'Onboarding Microlesson: Security Basics', type: 'Microlearning', folder: 'f2',
+      modified: 'Edited 4 hours ago', status: 'draft', thumb: 3, health: 70,
+      lastAccessed: Date.now() - 4 * 3600 * 1000, deleted: false, deletedAt: null,
+      ownerId: 'u-owner', sharedWith: [], sharedScope: null, sharedPermission: 'view',
+      reviewStatus: null, reviewedBy: null, reviewedAt: null, reviewComments: null, submittedBy: null, submittedAt: null,
+    },
   ],
 
   // ============================================================

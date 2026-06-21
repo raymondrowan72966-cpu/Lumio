@@ -79,14 +79,14 @@ function paintLogin() {
           <label>Email Address</label>
           <div class="input-icon-wrap">
             <span class="icon">✉️</span>
-            <input class="input" id="login-email" type="email" placeholder="you@company.com" value="${isRegister ? '' : 'jordan@lumio.app'}" />
+            <input class="input" id="login-email" type="email" placeholder="you@company.com" value="${isRegister ? '' : 'raymondrowan72966@gmail.com'}" />
           </div>
         </div>
         <div class="field">
           <label>Password</label>
           <div class="input-icon-wrap">
             <span class="icon">🔒</span>
-            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" value="${isRegister ? '' : 'lumio123'}" />
+            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" value="${isRegister ? '' : 'md@7296666'}" />
           </div>
         </div>
         ${!isRegister ? `

@@ -65,6 +65,9 @@ function renderCourseLanding(courseId) {
       ])}
       <div style="position:relative; z-index:1; max-width:760px; margin:0 auto; ${themeVarStyle(course.themeDesign)}">
 
+        <!-- Review Status (Phase 5: creator visibility) -->
+        ${project ? renderReviewStatusSection(project) : ''}
+
         <!-- Hero -->
         ${renderHeroSection(course)}
 
@@ -84,6 +87,46 @@ function renderCourseLanding(courseId) {
   `;
   renderShell('projects', content, { largeLogo: true });
   bindCourseLandingEvents(course, viewOnly);
+}
+
+// Governance & Review Workflow Hardening Sprint, Phase 5: project owners
+// must see status/reviewer/review date/comments without digging into
+// Workspace Settings (which they may not even have access to as an
+// Administrator). Shown for every status except plain 'draft' (nothing to
+// report yet) — most prominent for 'rejected', where the comment is the
+// whole point.
+function renderReviewStatusSection(project) {
+  if (project.status === 'draft' && !project.reviewedBy) return '';
+  const reviewer = project.reviewedBy ? getWorkspaceUser(project.reviewedBy) : null;
+  const reviewerName = reviewer ? `${reviewer.firstName} ${reviewer.lastName || ''}`.trim() : null;
+  const isRejected = project.status === 'rejected';
+  const history = Array.isArray(project.reviewHistory) ? project.reviewHistory.slice().reverse() : [];
+
+  return `
+    <div class="card card-pad mb-24" style="${isRejected ? 'border:1px solid #E5484D; background:#FEECEC;' : ''}">
+      <div class="flex items-center justify-between mb-8">
+        <div class="prop-section-title" style="margin:0;">Review Status</div>
+        <span class="pill ${STATUS_BADGE[project.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[project.status] || project.status}</span>
+      </div>
+      ${reviewerName ? `
+        <p class="text-sm" style="margin:0 0 4px;"><strong>${isRejected ? 'Rejected by' : 'Reviewed by'}:</strong> ${escapeHtml(reviewerName)}</p>
+        <p class="text-sm text-muted" style="margin:0 0 8px;"><strong>${isRejected ? 'Rejected on' : 'Reviewed on'}:</strong> ${formatDateLong(project.reviewedAt)}</p>
+      ` : ''}
+      ${project.reviewComments ? `<div class="text-sm" style="padding:10px 12px; background:${isRejected ? 'rgba(255,255,255,0.6)' : 'var(--surface-50)'}; border-radius:var(--r-sm); margin-bottom:8px;">"${escapeHtml(project.reviewComments)}"</div>` : ''}
+      ${history.length ? `
+        <details>
+          <summary class="text-sm text-muted" style="cursor:pointer;">Review history (${history.length})</summary>
+          <div class="flex-col gap-8 mt-8">
+            ${history.map(h => `
+              <div class="text-sm" style="padding:8px 0; border-bottom:1px solid var(--border);">
+                <strong>${escapeHtml(h.action)}</strong> by ${escapeHtml(h.userName || 'Unknown')} — ${formatDateLong(h.date)}
+                ${h.comment ? `<div class="text-muted mt-4">"${escapeHtml(h.comment)}"</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </details>
+      ` : ''}
+    </div>`;
 }
 
 function renderHeroSection(course, opts = {}) {
@@ -688,15 +731,19 @@ function openPublishModal(course) {
         </div>
       </div>`;
 
+    // SCORM 1.2 Export Implementation Sprint: 'scorm12' is now a real,
+    // implemented format alongside 'html' — every other format id in
+    // PUBLISH_FORMATS (SCORM 2004 editions, xAPI, PDF) remains "Coming Soon".
+    const IMPLEMENTED_FORMATS = ['html', 'scorm12'];
     const formatsHtml = PUBLISH_FORMATS.map(f => `
-      <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady && !(f.id === 'html') ? 'opacity:0.5;' : !isReady ? 'opacity:0.5;' : ''}">
+      <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
         <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
         <div style="flex:1; min-width:0;">
           <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
           <div class="text-sm text-muted">${f.desc}</div>
         </div>
-        ${f.id === 'html' && isReady
-          ? `<button class="btn btn-primary btn-sm" data-publish-html style="font-size:12px; white-space:nowrap;">Publish</button>`
+        ${IMPLEMENTED_FORMATS.includes(f.id) && isReady
+          ? `<button class="btn btn-primary btn-sm" data-publish-format="${f.id}" style="font-size:12px; white-space:nowrap;">Publish</button>`
           : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
       </div>`).join('');
 
@@ -860,8 +907,10 @@ function openPublishModal(course) {
   });
 
   overlay.addEventListener('click', e => {
-    const btn = e.target.closest('[data-publish-html]');
-    if (btn) publishHtmlPackage(course, btn);
+    const btn = e.target.closest('[data-publish-format]');
+    if (!btn) return;
+    if (btn.dataset.publishFormat === 'html') publishHtmlPackage(course, btn);
+    else if (btn.dataset.publishFormat === 'scorm12') publishScormPackage(course, btn);
   });
 }
 
