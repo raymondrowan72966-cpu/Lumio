@@ -132,14 +132,57 @@ const ScormRuntime = (function () {
   // required interactions) — same shape as the existing localStorage
   // learner-state record, just size-capped for LMS storage.
   const SUSPEND_DATA_MAX = 4096;
+  // LMS & Validation Sprint, Phase 8 fix: a real stress test (20 lessons,
+  // 8 assessments, 60 tracked blocks) proved the original "if still too
+  // big, hard-slice the JSON string" fallback produces a syntactically
+  // INVALID JSON string mid-object — JSON.parse() on the next launch
+  // throws, getSuspendData() returns null, and the ENTIRE resume state is
+  // silently lost (not gracefully degraded). Fixed by degrading through a
+  // strictly ordered list of ALWAYS-VALID-JSON candidates, each built by
+  // dropping a less-critical field rather than truncating bytes — resume
+  // position and assessment results (the fields that matter most) are
+  // preserved as long as possible; only granular per-block interaction
+  // detail (blockProgress) is sacrificed first.
   function setSuspendData(obj) {
-    let json;
-    try { json = JSON.stringify(obj); } catch (e) { return false; }
-    if (json.length > SUSPEND_DATA_MAX) {
-      console.warn(`[SCORM] suspend_data (${json.length} chars) exceeds the 4096-char SCORM 1.2 limit — dropping interactionHistory to fit.`);
-      const trimmed = Object.assign({}, obj, { interactionHistory: undefined });
-      json = JSON.stringify(trimmed);
-      if (json.length > SUSPEND_DATA_MAX) json = json.slice(0, SUSPEND_DATA_MAX); // last resort, should not happen in practice
+    const candidates = [
+      obj,
+      Object.assign({}, obj, { interactionHistory: undefined }),
+      Object.assign({}, obj, { interactionHistory: undefined, learnerProgress: obj.learnerProgress ? Object.assign({}, obj.learnerProgress, { blockProgress: undefined }) : obj.learnerProgress }),
+      // Last resort: only the fields needed to resume position + know
+      // what's complete — always small enough to fit, and always valid JSON.
+      {
+        resume: obj.resume,
+        learnerProgress: obj.learnerProgress ? {
+          completedLessons: obj.learnerProgress.completedLessons,
+          courseStatus: obj.learnerProgress.courseStatus,
+          lastLessonId: obj.learnerProgress.lastLessonId,
+          lastBlockIndex: obj.learnerProgress.lastBlockIndex,
+        } : undefined,
+        assessmentAttempts: obj.assessmentAttempts,
+      },
+    ];
+    let json = null;
+    for (let i = 0; i < candidates.length; i++) {
+      let candidateJson;
+      try { candidateJson = JSON.stringify(candidates[i]); } catch (e) { continue; }
+      if (candidateJson.length <= SUSPEND_DATA_MAX) {
+        json = candidateJson;
+        if (i > 0) console.warn(`[SCORM] suspend_data exceeded the 4096-char SCORM 1.2 limit — degraded to fallback level ${i} (still valid JSON, full lesson position + completion + scores preserved).`);
+        break;
+      }
+    }
+    if (json === null) {
+      // Even the minimal skeleton didn't fit (pathological case — would
+      // need hundreds of lessons). Truncate the lesson list rather than
+      // the JSON string itself, so what remains still parses.
+      const minimal = candidates[candidates.length - 1];
+      while (minimal.learnerProgress && minimal.learnerProgress.completedLessons && minimal.learnerProgress.completedLessons.length > 0) {
+        minimal.learnerProgress.completedLessons = minimal.learnerProgress.completedLessons.slice(0, -10);
+        const attempt = JSON.stringify(minimal);
+        if (attempt.length <= SUSPEND_DATA_MAX) { json = attempt; break; }
+      }
+      if (json === null) json = '{}'; // truly nothing fits — never invalid JSON
+      console.warn('[SCORM] suspend_data could not fit even the minimal resume skeleton — completedLessons list was truncated to fit.');
     }
     return set('cmi.suspend_data', json);
   }

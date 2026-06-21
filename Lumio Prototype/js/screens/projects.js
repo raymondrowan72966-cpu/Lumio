@@ -112,6 +112,30 @@ function renderProjects() {
   `;
   renderShell('projects', content, { largeLogo: true });
   bindProjectsEvents();
+
+  // Hero Image Persistence Defect (round 2): the prior fix only warmed the
+  // asset cache on Course Landing. Project cards and Continue Working
+  // cards (this screen, via cardThumbMedia() -> AssetStore.resolveMediaSrc())
+  // never warmed it at all — on a cold page load they hit the cache before
+  // the learner/builder ever opens a specific course, so resolveMediaSrc()
+  // returned '' and the cards rendered a literal "black placeholder"
+  // (cardThumbMedia's #0b0b12 background with an empty/broken <img src="">
+  // on top of it) — exactly the reported symptom. Scans every VISIBLE
+  // project's hero/thumbnail refs (not just one course) since this screen
+  // shows many cards at once.
+  const _cardAssetRefs = [];
+  [...projects, ...recent].forEach(p => {
+    const course = LumioState.courses && LumioState.courses[p.id];
+    if (!course) return;
+    if (course.thumbnailImage && course.thumbnailImage.src) _cardAssetRefs.push(course.thumbnailImage.src);
+    if (course.heroImage && course.heroImage._thumbSrc) _cardAssetRefs.push(course.heroImage._thumbSrc);
+    if (course.heroImage && course.heroImage.src) _cardAssetRefs.push(course.heroImage.src);
+  });
+  if (_cardAssetRefs.length) {
+    AssetStore.preloadBlocks([], _cardAssetRefs).then(count => {
+      if (count > 0) renderProjects();
+    });
+  }
 }
 
 function continueCard(p) {

@@ -261,6 +261,14 @@ function invitationRow(inv) {
 
 // Sends (or logs) the invitation email. Wire up a real transactional email
 // service here — this is the only integration point needed for email delivery.
+// Issue 8 audit finding, documented in code as well as in the sprint
+// report: this function has NEVER sent a real email — it only logs what
+// WOULD be sent. INVITATION FRAMEWORK IMPLEMENTED (token generation, link
+// construction, acceptance flow all work end-to-end) — EMAIL DELIVERY NOT
+// IMPLEMENTED (no SMTP/Resend/SendGrid/Graph integration exists). Wiring
+// a real provider here is the only change needed once one is configured;
+// every caller of sendInvitationEmail() already passes the full
+// invitation object needed to compose a real message.
 function sendInvitationEmail(invitation) {
   const authLabel = AUTH_PROVIDER_LABELS[invitation.authenticationProvider] || 'Lumio Account';
   console.info(`[Lumio] Invitation email would be sent to ${invitation.email}:
@@ -340,6 +348,11 @@ function acceptInvitation(token, password) {
 
   inv.status = 'accepted';
   inv.acceptedAt = Date.now();
+
+  const workspace = (LumioState.workspaces || []).find(w => w.id === workspaceId);
+  if (workspace) {
+    addNotification(workspace.ownerId, `${canonicalUser.displayName || canonicalUser.email} accepted your invitation and joined as Administrator.`, null);
+  }
 
   scheduleLumioSave();
   return legacyUser;
@@ -488,6 +501,7 @@ function bindWorkspaceUsersTab() {
     };
     LumioState.invitations.push(invitation);
     sendInvitationEmail(invitation);
+    addNotification(invitation.invitedBy, `Invitation sent to ${email} as ${ROLE_LABELS[role]}.`, null);
 
     app.querySelector('#ws-invite-first-name').value = '';
     app.querySelector('#ws-invite-last-name').value = '';

@@ -87,6 +87,23 @@ function renderCourseLanding(courseId) {
   `;
   renderShell('projects', content, { largeLogo: true });
   bindCourseLandingEvents(course, viewOnly);
+
+  // Issue 1 fix (Account Persistence & Invitation System Correction
+  // Sprint): the hero/thumbnail image asset cache was never warmed on this
+  // screen — AssetStore.resolveMediaSrc() returns '' for any asset:// ref
+  // not yet in its in-memory URL cache, and nothing populated that cache
+  // for hero/thumbnail refs specifically (learnerPreview.js's course
+  // overview already did this; this builder screen never did), so a hero
+  // image correctly saved to course.heroImage.src rendered blank on every
+  // fresh page load until something else incidentally warmed the cache.
+  const _heroRef = (course.heroImage || {}).src;
+  const _thumbRef = (course.thumbnailImage || {}).src;
+  const _heroRefs = [_heroRef, _thumbRef].filter(Boolean);
+  if (_heroRefs.length) {
+    AssetStore.preloadBlocks([], _heroRefs).then(count => {
+      if (count > 0) renderCourseLanding(courseId);
+    });
+  }
 }
 
 // Governance & Review Workflow Hardening Sprint, Phase 5: project owners

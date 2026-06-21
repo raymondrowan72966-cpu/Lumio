@@ -71,45 +71,30 @@ const LumioState = {
   // [{ attemptNumber, timestamp, score, maxScore, passed, answers }]
   assessmentAttempts: {},
 
-  // signed-in user profile + account security
-  currentUser: {
-    id: 'u-owner',
-    firstName: 'Raymond',
-    lastName: 'Rowan',
-    email: 'raymondrowan72966@gmail.com',
-    avatar: null, // data URL, or null for initials avatar
-    role: 'owner', // 'owner' | 'admin'
-    dateJoined: Date.now() - 120 * 24 * 3600 * 1000,
-    lastLogin: Date.now(),
-    password: 'md@7296666', // prototype-only stand-in for a hashed password
-    status: 'active', // 'active' | 'disabled'
-    authenticationProvider: 'email', // 'email' | 'local_demo' | 'microsoft' | 'google' | 'apple'
-  },
+  // Account Persistence, User Management & Invitation System Correction
+  // Sprint: Lumio now boots to a true first-run state — NO seeded identity.
+  // currentUser is null until a real login/registration populates it via
+  // LumioAuth; the central route guard in render() (below) refuses to
+  // render any protected screen while it's null, sending the visitor to
+  // #/login instead. Nothing here is ever read by a screen the guard
+  // hasn't already gated.
+  currentUser: null,
 
-  // workspace system info (Workspace Owner only)
+  // workspace system info (Workspace Owner only) — populated per-workspace
+  // once a real workspace exists; never pre-seeded.
   workspace: {
     systemInfo: {
       platformVersion: '1.0.0',
       buildNumber: '2026.06.15',
       databaseVersion: 'Prototype (local storage)',
-      installationDate: Date.now() - 180 * 24 * 3600 * 1000,
+      installationDate: Date.now(),
       licenseInfo: 'Unlicensed (prototype)', // future-ready: license key/plan details
     },
   },
 
   // other workspace members managed alongside the signed-in user (any role)
-  adminUsers: [
-    {
-      id: 'u-admin1',
-      firstName: 'Taylor',
-      lastName: 'Brooks',
-      email: 'taylor@lumio.app',
-      avatar: null,
-      role: 'admin',
-      status: 'active', // 'active' | 'disabled'
-      authenticationProvider: 'local', // 'local' | 'microsoft' | 'google'
-    },
-  ],
+  // — no seeded admin user; populated by invitation acceptance only.
+  adminUsers: [],
 
   // pending workspace invitations
   invitations: [],
@@ -386,6 +371,14 @@ const LumioAuth = (function () {
 
   function logout() {
     LumioState.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
+    // Issue 4 root cause: currentUser previously stayed populated with the
+    // just-signed-out identity after logout — purely cosmetic until the
+    // NEXT login overwrote it via _syncLegacyCurrentUser, but in the
+    // window between logout and the next real login, any code that read
+    // LumioState.currentUser directly (instead of going through the
+    // session) saw stale data. Clearing it here makes "signed out" mean
+    // exactly that.
+    LumioState.currentUser = null;
     try { sessionStorage.removeItem(SESSION_TAB_MARKER); } catch (e) {}
     scheduleLumioSave();
   }
@@ -569,29 +562,51 @@ function transitionProjectStatus(project, action, comment) {
   if ((action === 'publish' || action === 'republish') && !canEditProject(project)) return { ok: false, reason: 'You do not have permission to publish this project.' };
 
   const now = Date.now();
+  const title = projectDisplayTitle(project);
   if (action === 'submit_for_review') {
     project.reviewStatus = 'pending';
     project.submittedBy = LumioState.currentUser.id;
     project.submittedAt = now;
     project.reviewComments = null;
-    addNotification('u-owner', `"${projectDisplayTitle(project)}" was submitted for review by ${currentUserDisplayName()}.`, project.id);
+    // Issue 3 root cause: this used to notify the literal id 'u-owner',
+    // which only worked by coincidence when that happened to be the real
+    // seeded owner's id. Now that fresh installs/real registrations give
+    // the Workspace Owner a real generated id, that hardcoded target
+    // silently pointed at a user who may not exist — the notification was
+    // created but nobody could ever see it. Resolved dynamically instead.
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was submitted for review by ${currentUserDisplayName()}.`, project.id);
   } else if (action === 'approve') {
     project.reviewStatus = 'approved';
     project.reviewedBy = LumioState.currentUser.id;
     project.reviewedAt = now;
     project.reviewComments = comment || null;
-    addNotification(project.ownerId, `"${projectDisplayTitle(project)}" was approved.`, project.id);
+    addNotification(project.ownerId, `"${title}" was approved.`, project.id);
   } else if (action === 'reject') {
     project.reviewStatus = 'rejected';
     project.reviewedBy = LumioState.currentUser.id;
     project.reviewedAt = now;
     project.reviewComments = comment;
-    addNotification(project.ownerId, `"${projectDisplayTitle(project)}" was rejected.`, project.id);
+    addNotification(project.ownerId, `"${title}" was rejected.`, project.id);
+  } else if (action === 'publish' || action === 'republish') {
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was ${action === 'republish' ? 're-published' : 'published'} by ${currentUserDisplayName()}.`, project.id);
+  } else if (action === 'archive') {
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was archived by ${currentUserDisplayName()}.`, project.id);
+  } else if (action === 'restore') {
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was restored from archive by ${currentUserDisplayName()}.`, project.id);
   }
   pushReviewHistory(project, action, comment);
   project.status = toStatus;
   scheduleLumioSave();
   return { ok: true };
+}
+
+// Resolves "the Workspace Owner" for a given project — the owner of the
+// workspace that project's owner is a member of. Used by notification
+// targeting instead of ever hardcoding a user id (Issue 3 fix).
+function getWorkspaceOwnerIdForProject(project) {
+  const membership = (LumioState.workspaceMemberships || []).find(m => m.userId === project.ownerId);
+  const workspace = membership ? (LumioState.workspaces || []).find(w => w.id === membership.workspaceId) : null;
+  return workspace ? workspace.ownerId : project.ownerId;
 }
 
 /* ---------------- AUTHENTICATION SERVICE INTEGRATION POINTS ---------------- */
@@ -833,6 +848,11 @@ function ensureStableBlockIdentity() {
 // every load: does nothing once users[]/workspaces[] are already populated.
 function ensureSaasFoundation() {
   if ((LumioState.users || []).length > 0) return; // already built — no-op
+  // True first-run state (Account Persistence & Invitation System
+  // Correction Sprint): a fresh install has no seeded identity to convert
+  // — currentUser is null until LumioAuth registers/logs someone in for
+  // real. Do NOT fabricate a user/workspace from nothing.
+  if (!LumioState.currentUser) return;
 
   const legacyOwner = LumioState.currentUser;
   const legacyAdmins = LumioState.adminUsers || [];
@@ -900,7 +920,7 @@ function ensureSaasFoundation() {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 18;
+const LUMIO_STATE_VERSION = 19;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts. */
@@ -1360,6 +1380,43 @@ function migrateLumioState(record) {
     });
     if (!Array.isArray(state.notifications)) state.notifications = [];
     version = 18;
+  }
+
+  if (version < 19) {
+    // v19: Account Persistence, User Management & Invitation System
+    // Correction Sprint, Issues 6/10 — purge legacy DEMO identities
+    // (Jordan Reyes, Alex Morgan and its Microsoft/Apple mock-login
+    // siblings, Taylor Brooks, any plain demo.user@*) from any state
+    // saved by an earlier version of the app. A genuinely converted real
+    // account is explicitly NOT touched — only the exact, known seed/mock
+    // emails are ever removed, by an allowlist, never a heuristic, so a
+    // real user's own account can never be mistaken for a demo one.
+    const LEGACY_DEMO_EMAILS = [
+      'jordan@lumio.app', 'taylor@lumio.app',
+      'demo.user@gmail.com', 'demo.user@outlook.com', 'demo.user@icloud.com',
+    ];
+    const isLegacyDemo = (u) => u && LEGACY_DEMO_EMAILS.includes((u.email || '').toLowerCase());
+
+    const demoUserIds = new Set((state.users || []).filter(isLegacyDemo).map(u => u.id));
+    if (state.currentUser && isLegacyDemo(state.currentUser)) demoUserIds.add(state.currentUser.id);
+    (state.adminUsers || []).forEach(u => { if (isLegacyDemo(u)) demoUserIds.add(u.id); });
+
+    if (demoUserIds.size > 0) {
+      state.users = (state.users || []).filter(u => !demoUserIds.has(u.id));
+      state.adminUsers = (state.adminUsers || []).filter(u => !demoUserIds.has(u.id));
+      const demoWorkspaceIds = new Set((state.workspaces || []).filter(w => demoUserIds.has(w.ownerId)).map(w => w.id));
+      state.workspaces = (state.workspaces || []).filter(w => !demoWorkspaceIds.has(w.id));
+      state.workspaceMemberships = (state.workspaceMemberships || []).filter(m => !demoUserIds.has(m.userId) && !demoWorkspaceIds.has(m.workspaceId));
+      state.invitations = (state.invitations || []).filter(inv => !demoWorkspaceIds.has(inv.workspaceId));
+      // If the signed-in session WAS a demo identity, sign out cleanly —
+      // never recreate it, never leave a dangling session pointing at a
+      // user that no longer exists.
+      if (state.session && demoUserIds.has(state.session.currentUserId)) {
+        state.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
+      }
+      if (state.currentUser && demoUserIds.has(state.currentUser.id)) state.currentUser = null;
+    }
+    version = 19;
   }
 
   return state;
@@ -1873,10 +1930,24 @@ function openNotificationsPanel(anchorEl) {
 }
 
 /* ---------------- MAIN RENDER DISPATCH ---------------- */
+// Routes reachable with no signed-in session — every other route is
+// "protected" and redirects to #/login if currentUser is null. This is
+// the central guard the app never had: previously every screen assumed
+// LumioState.currentUser was always populated (true only because a demo
+// identity was hardcoded into the seed state), so a true first-run /
+// post-logout null currentUser would have crashed any directly-hit
+// protected route (hashchange, back/forward, a stale bookmark) instead of
+// gracefully redirecting.
+const PUBLIC_ROUTES = ['login', 'accept-invite'];
 function render() {
   const hash = location.hash || '#/login';
   const parts = hash.replace('#/', '').split('/');
-  const [path, param] = parts;
+  let [path, param] = parts;
+
+  if (!LumioState.currentUser && !PUBLIC_ROUTES.includes(path)) {
+    if (location.hash !== '#/login') { location.hash = '#/login'; return; }
+    path = 'login';
+  }
 
   // Clear any course-theme CSS variables left over from a previous screen;
   // themed screens (course/lesson/learner) re-apply their own via applyThemeVars().
