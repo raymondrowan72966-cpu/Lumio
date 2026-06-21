@@ -739,7 +739,7 @@ function applyBlockStylesToDom(block, index) {
   const content = wrapper.querySelector('.block-content-area');
   if (content) {
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    content.style.cssText = `padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}`;
+    content.style.cssText = `padding:3px 22px; ${alignStyle} ${textBlockExtraStyle(block)}`;
   }
   wrapper.querySelectorAll('.editable-text').forEach(elx => {
     const role = elx.dataset.role || 'body';
@@ -755,7 +755,7 @@ function applyStatementStylesToDom(block, index) {
   const content = wrapper.querySelector('.block-content-area');
   if (content) {
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    content.style.cssText = `padding:22px; ${alignStyle} ${statementBlockExtraStyle(block)}`;
+    content.style.cssText = `padding:3px 22px; ${alignStyle} ${statementBlockExtraStyle(block)}`;
   }
   const data = block.data || {};
   wrapper.querySelectorAll('.editable-text').forEach(elx => {
@@ -780,7 +780,7 @@ function applyQuoteStylesToDom(block, index) {
   const content = wrapper.querySelector('.block-content-area');
   if (content) {
     const alignStyle = ds.align ? `text-align:${ds.align};` : '';
-    content.style.cssText = `padding:22px; ${alignStyle} ${quoteBlockExtraStyle(block)}`;
+    content.style.cssText = `padding:3px 22px; ${alignStyle} ${quoteBlockExtraStyle(block)}`;
   }
   if (block.type === 'quote_image') {
     const overlay = wrapper.querySelector('.quote-image-overlay');
@@ -800,7 +800,7 @@ function applyListStylesToDom(block, index) {
   if (!wrapper) return;
   const ds = block.design || {};
   const content = wrapper.querySelector('.block-content-area');
-  if (content) content.style.cssText = `padding:22px; ${listBlockExtraStyle(block)}`;
+  if (content) content.style.cssText = `padding:3px 22px; ${listBlockExtraStyle(block)}`;
   const itemsWrap = wrapper.querySelector('.list-items-wrap');
   if (itemsWrap) itemsWrap.style.paddingLeft = `${ds.indent ?? 20}px`;
   const addBtn = wrapper.querySelector('.list-item-add');
@@ -966,7 +966,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
         <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">⧉</button>
         <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">✕</button>${moveButtons}
       </div>
-      <div class="block-content-area" style="padding:22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}">
+      <div class="block-content-area" style="padding:3px 22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
       </div>
     </div>
@@ -1387,11 +1387,15 @@ function renderBlockContent(block, editable) {
     case 'table': {
       const rows = d.rows || DEFAULT_TABLE_ROWS;
       const cellAlign = d.cellAlign || [];
+      const headerBg = ds.tableHeaderBg || 'var(--pastel-lavender)';
+      const headerTextColor = ds.tableHeaderTextColor || '';
+      const borderColor = ds.tableBorderColor || 'var(--border)';
+      const bodyFill = ds.tableBodyFill || '';
       return `<table style="width:100%; border-collapse:collapse; font-size:13px;">
-        ${rows.map((row, ri) => `<tr ${ri === 0 ? 'style="background:var(--pastel-lavender);"' : ''}>${row.map((cell, ci) => {
+        ${rows.map((row, ri) => `<tr style="background:${ri === 0 ? headerBg : (bodyFill || 'transparent')};">${row.map((cell, ci) => {
           const tag = ri === 0 ? 'th' : 'td';
           const align = (cellAlign[ri] || [])[ci];
-          return `<${tag} style="padding:8px; text-align:left; border:1px solid var(--border);"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" data-richtext="true" ${ce} style="${textTypographyStyle(ds, 13)}${align ? `text-align:${align};` : ''}">${richTextOut(cell)}</div></${tag}>`;
+          return `<${tag} style="padding:8px; text-align:left; border:1px solid ${borderColor};${ri === 0 && headerTextColor ? ` color:${headerTextColor};` : ''}"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" data-richtext="true" ${ce} style="${textTypographyStyle(ds, 13)}${align ? `text-align:${align};` : ''}">${richTextOut(cell)}</div></${tag}>`;
         }).join('')}</tr>`).join('')}
       </table>`;
     }
@@ -2692,6 +2696,35 @@ function renderTextBlockPanel(block, index) {
         ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
       ` : ''}
     </div>
+    ${block.type === 'table' ? `
+    <div class="prop-section">
+      <div class="prop-section-title">Table Style</div>
+      <p class="text-sm text-muted mb-8">Header Background</p>
+      <div class="flex items-center gap-8 mb-12">
+        <input type="color" class="design-color-input" data-prop="tableHeaderBg" value="${ds.tableHeaderBg || '#E4E1F9'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <button class="btn btn-secondary btn-sm table-style-reset" data-prop="tableHeaderBg">Reset</button>
+      </div>
+      <p class="text-sm text-muted mb-8">Header Text Colour</p>
+      <div class="flex items-center gap-8 mb-12">
+        <input type="color" class="design-color-input" data-prop="tableHeaderTextColor" value="${ds.tableHeaderTextColor || '#1A1A2E'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <button class="btn btn-secondary btn-sm table-style-reset" data-prop="tableHeaderTextColor">Reset</button>
+      </div>
+      <p class="text-sm text-muted mb-8">Border Colour</p>
+      <div class="flex items-center gap-8 mb-12">
+        <input type="color" class="design-color-input" data-prop="tableBorderColor" value="${ds.tableBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <button class="btn btn-secondary btn-sm table-style-reset" data-prop="tableBorderColor">Reset</button>
+      </div>
+      <p class="text-sm text-muted mb-8">Body Fill Colour</p>
+      <label class="flex items-center gap-8 text-sm mb-8" style="cursor:pointer;">
+        <input type="checkbox" class="table-bodyfill-toggle" ${ds.tableBodyFill ? 'checked' : ''}/> Use custom body fill
+      </label>
+      ${ds.tableBodyFill ? `
+      <div class="flex items-center gap-8">
+        <input type="color" class="design-color-input" data-prop="tableBodyFill" value="${ds.tableBodyFill}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <button class="btn btn-secondary btn-sm table-style-reset" data-prop="tableBodyFill">Reset</button>
+      </div>` : ''}
+    </div>
+    ` : ''}
     <div class="prop-section" style="border-bottom:none;">
       <div class="prop-section-title">Advanced</div>
       <p class="text-sm text-muted">Block ID: block-${index + 1}</p>
@@ -5661,6 +5694,24 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     block.design = block.design || {};
     block.design[inp.dataset.prop] = inp.value;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+
+  // Table block — header/border/body-fill colour resets and the body-fill toggle.
+  app.querySelectorAll('.table-style-reset').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block || !block.design) return;
+    delete block.design[btn.dataset.prop];
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.table-bodyfill-toggle').forEach(cb => cb.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    if (cb.checked) block.design.tableBodyFill = block.design.tableBodyFill || '#FFFFFF';
+    else delete block.design.tableBodyFill;
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));

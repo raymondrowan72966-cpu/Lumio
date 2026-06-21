@@ -616,22 +616,29 @@ function getWorkspaceOwnerIdForProject(project) {
 // Services for Google, Sign in with Apple JS for Apple) and call this same
 // function with the real payload. Every other call site (login.js,
 // LumioAuth itself, session restore) needs zero changes.
+// Account Management Remediation Sprint, Priority 2 fix: these three used
+// to call LumioAuth.loginWithProvider(), which silently created/signed into
+// a fully persisted account using a HARDCODED mock identity (firstName
+// 'Alex', lastName 'Morgan', a fixed demo.user@{gmail,outlook,icloud}.com
+// per provider — see LumioAuth's _mockProviderPayload). Every click created
+// or reused that same fake identity, which is exactly how the "duplicate
+// Alex Morgan" accounts kept appearing. There is no real OAuth SDK wired up
+// yet, so creating ANY account from these buttons is inherently fake/
+// misleading — the honest behaviour is to say so instead of fabricating an
+// identity. LumioAuth.loginWithProvider/_mockProviderPayload are left
+// completely intact (unused, not deleted) so a future sprint can wire a
+// real SDK callback into these same three functions with zero changes
+// elsewhere, exactly as the original integration-point design intended.
 function authenticateMicrosoft() {
-  const result = LumioAuth.loginWithProvider('microsoft', LumioUI.rememberMe);
-  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Microsoft)`, '✅'); navigate('#/projects'); }
-  else toast(result.reason, '⚠️');
+  toast('Microsoft sign-in isn’t connected yet — please register or sign in with email.', '⚠️');
 }
 
 function authenticateGoogle() {
-  const result = LumioAuth.loginWithProvider('google', LumioUI.rememberMe);
-  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Google)`, '✅'); navigate('#/projects'); }
-  else toast(result.reason, '⚠️');
+  toast('Google sign-in isn’t connected yet — please register or sign in with email.', '⚠️');
 }
 
 function authenticateApple() {
-  const result = LumioAuth.loginWithProvider('apple', LumioUI.rememberMe);
-  if (result.ok) { toast(`Signed in as ${result.user.displayName} (Apple)`, '✅'); navigate('#/projects'); }
-  else toast(result.reason, '⚠️');
+  toast('Apple sign-in isn’t connected yet — please register or sign in with email.', '⚠️');
 }
 
 // Transient, not-persisted UI state shared by the login screen — currently
@@ -639,10 +646,29 @@ function authenticateApple() {
 // clicked. Not part of LumioState since it's pre-authentication UI state.
 const LumioUI = { rememberMe: true };
 
-// Returns every workspace member (the signed-in user plus all other users),
-// used for rendering the Users tab and for the multi-owner safeguard checks.
+// Returns only the members of the ACTIVE workspace, used for rendering the
+// Users tab and for the multi-owner safeguard checks.
+// Account Management Remediation Sprint, Priority 1 fix: this previously
+// returned [currentUser, ...adminUsers] unconditionally — i.e. every
+// identity that had EVER signed in on this browser, regardless of which
+// workspace they actually belong to. adminUsers is a flat, cross-workspace
+// mirror (every non-primary signed-in user gets pushed into it by
+// _syncLegacyCurrentUser/acceptInvitation), so two completely unrelated
+// SaaS account holders who each own their own separate workspace would both
+// show up in EITHER workspace's Users tab. Scoping by workspaceMemberships
+// for LumioState.session.currentWorkspaceId is the actual fix — every real
+// membership (owner at workspace creation, administrator at invitation
+// acceptance) already gets a workspaceMemberships row, so this filter
+// correctly includes the Owner, every Administrator, and every invited user
+// who has accepted, while excluding unrelated accounts.
 function allWorkspaceUsers() {
-  return [LumioState.currentUser, ...LumioState.adminUsers];
+  const workspaceId = LumioState.session?.currentWorkspaceId;
+  const memberIds = new Set(
+    (LumioState.workspaceMemberships || [])
+      .filter(m => m.workspaceId === workspaceId)
+      .map(m => m.userId)
+  );
+  return [LumioState.currentUser, ...LumioState.adminUsers].filter(u => u && memberIds.has(u.id));
 }
 
 // Counts how many workspace members currently hold the Owner role. Used to
@@ -923,9 +949,13 @@ const LUMIO_STORAGE_KEY = 'lumio.state';
 const LUMIO_STATE_VERSION = 19;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
-   learner preview so spacing can never silently diverge between contexts. */
-const FLOW_SPACING = '32px';
-const FLOW_SPACING_TIGHT = '8px';
+   learner preview so spacing can never silently diverge between contexts.
+   This is a wrapper-level margin-bottom applied automatically to every
+   block, entirely separate from each block's own Top/Bottom Padding design
+   controls — it's what was producing a large visible gap even when a block's
+   own padding was set to 0 (Export/Layout Investigation Sprint, Issue 5). */
+const FLOW_SPACING = '6px';
+const FLOW_SPACING_TIGHT = '2px';
 
 // Keys of LumioState that should be persisted/restored across sessions.
 const LUMIO_PERSISTED_KEYS = [
@@ -1732,9 +1762,15 @@ window.addEventListener('DOMContentLoaded', () => {
   ensureStableBlockIdentity();
   ensureSaasFoundation();
   const sessionValid = LumioAuth.restoreSession();
-  if (sessionValid && restoredHash) location.hash = restoredHash;
-  else if (sessionValid && !location.hash) location.hash = '#/projects';
-  else location.hash = '#/login'; // no valid session (never signed in, or "Remember me" was off and the browser was actually closed/reopened)
+  // Published/exported packages (see the LearnerUI.publishedMode check in
+  // render() above) are a single self-contained learner runtime with no
+  // login concept at all — forcing #/login here would stomp whatever hash
+  // the bootstrap/learner navigation already set before this handler runs.
+  if (!LearnerUI.publishedMode) {
+    if (sessionValid && restoredHash) location.hash = restoredHash;
+    else if (sessionValid && !location.hash) location.hash = '#/projects';
+    else location.hash = '#/login'; // no valid session (never signed in, or "Remember me" was off and the browser was actually closed/reopened)
+  }
   render();
   BlockMigration.validateAllLessons();
 
@@ -1944,7 +1980,15 @@ function render() {
   const parts = hash.replace('#/', '').split('/');
   let [path, param] = parts;
 
-  if (!LumioState.currentUser && !PUBLIC_ROUTES.includes(path)) {
+  // Exported/published packages (publish.js's bootstrap sets this flag) have
+  // no concept of login — they're a single self-contained learner runtime
+  // with no LumioState.currentUser, ever. Without this check, app.js's own
+  // hashchange listener (registered once at load via window.addEventListener
+  // ('hashchange', render), independent of the bootstrap's window.render
+  // override) fires on every learner navigation and redirects to #/login,
+  // silently overwriting the hash the bootstrap just set — the root cause of
+  // "Start Course" (and all in-package navigation) doing nothing.
+  if (!LearnerUI.publishedMode && !LumioState.currentUser && !PUBLIC_ROUTES.includes(path)) {
     if (location.hash !== '#/login') { location.hash = '#/login'; return; }
     path = 'login';
   }

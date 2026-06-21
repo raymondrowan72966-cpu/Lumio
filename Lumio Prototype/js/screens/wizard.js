@@ -67,6 +67,20 @@ function renderWizard() {
 
   bindWizardEvents(stepKey);
 
+  // Hero Image Persistence defect class, wizard instance: resolveMediaSrc()
+  // is a synchronous cache-only lookup, and this step's preview never
+  // warmed the cache for a hero set on a PRIOR visit (Back/Continue/reload/
+  // logout-login restoring LumioState.wizard) — only a same-session fresh
+  // upload happened to work, because readHeroImageFile() already calls
+  // AssetStore.resolveUrl() before invoking its callback. Same fix pattern
+  // as courseLanding.js/projects.js: warm the cache, re-render once if it
+  // changed anything.
+  if (stepKey === 'image' && w.heroImage && w.heroImage.src) {
+    AssetStore.preloadBlocks([], [w.heroImage.src]).then(count => {
+      if (count > 0) renderWizard();
+    });
+  }
+
   document.getElementById('wizard-logo').addEventListener('click', () => {
     if (LumioState.wizard) {
       confirmLeaveModal('You have a course draft in progress. Your progress will be saved, but the wizard will close.', () => {
@@ -191,7 +205,7 @@ function wizardStepContent(stepKey, w) {
           <input type="file" id="wiz-hero-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="card" style="overflow:hidden; ${w.heroImage && w.heroImage.src ? '' : 'display:flex; align-items:center; justify-content:center; height:160px; background:var(--surface-50);'}">
             ${w.heroImage && w.heroImage.src
-              ? `<img src="${w.heroImage.src}" alt="" style="width:100%; height:200px; object-fit:cover; display:block;" />`
+              ? `<img src="${AssetStore.resolveMediaSrc(w.heroImage.src)}" alt="" style="width:100%; height:200px; object-fit:cover; display:block;" />`
               : `<div style="text-align:center; padding:20px;"><div style="font-size:32px;">🖼️</div><p class="text-sm text-muted mt-8">No image selected — a themed gradient will be used by default.</p></div>`}
           </div>
           <div class="flex gap-12 mt-16" style="justify-content:center;">

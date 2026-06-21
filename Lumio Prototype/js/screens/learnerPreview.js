@@ -877,12 +877,12 @@ function renderLearnerBlocks(blocks, ctx) {
     let wrapperStyle;
     if (treatment === 'cardless') {
       // Cardless: flat page content, no card chrome. Same spacing logic as builder.
-      wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${flowMargin}; padding:22px; ${extraStyle}`;
+      wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${flowMargin}; padding:3px 22px; ${extraStyle}`;
     } else {
       // Card-treatment: white background, 1px border, NO shadow (Preview = Published rule).
       const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
       const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
-      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:none; border:1px solid var(--border); margin-bottom:${FLOW_SPACING}; padding:22px; ${extraStyle}`;
+      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:none; border:1px solid var(--border); margin-bottom:${FLOW_SPACING}; padding:3px 22px; ${extraStyle}`;
     }
     html += `<div data-lp-lesson="${ctx.lessonId}" data-lp-index="${i}" style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
     if (block.type === 'continue' && !revealed.has(i)) break;
