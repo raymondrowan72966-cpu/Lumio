@@ -156,9 +156,12 @@ function bindWorkspaceReviewsTab() {
 }
 
 /* ---------------- USERS ---------------- */
+// Account Management Finalization Sprint, Phase 2: resolves directly from
+// users[] — the only authoritative store. The returned object is a live
+// reference, so callers that mutate it (role change, disable/enable)
+// persist immediately with no separate legacy-mirror sync step.
 function getWorkspaceUser(id) {
-  if (LumioState.currentUser.id === id) return LumioState.currentUser;
-  return LumioState.adminUsers.find(u => u.id === id);
+  return (LumioState.users || []).find(u => u.id === id) || null;
 }
 
 function workspaceUsersTab() {
@@ -220,17 +223,17 @@ function workspaceUsersTab() {
 }
 
 function userRow(user) {
-  const isSelf = user.id === LumioState.currentUser.id;
+  const isSelf = user.id === getCurrentUser()?.id;
   return `
     <div class="flex items-center gap-12" style="padding:10px 0; border-bottom:1px solid var(--border);" data-user-row="${user.id}">
       ${avatarHtml(user, 36)}
       <div style="flex:1; min-width:0;">
-        <div style="font-weight:600; font-size:13px; color:var(--ink-900);">${escapeHtml(`${user.firstName} ${user.lastName}`.trim())}${isSelf ? ' <span class="text-muted" style="font-weight:400;">(You)</span>' : ''}</div>
+        <div style="font-weight:600; font-size:13px; color:var(--ink-900);">${escapeHtml(`${user.firstName || ''} ${user.lastName || ''}`.trim())}${isSelf ? ' <span class="text-muted" style="font-weight:400;">(You)</span>' : ''}</div>
         <div class="text-muted" style="font-size:12px;">${escapeHtml(user.email)}</div>
       </div>
       <select class="input" style="width:160px; padding:6px 8px; font-size:12px;" data-user-role="${user.id}">
-        <option value="owner" ${user.role === 'owner' ? 'selected' : ''}>Workspace Owner</option>
-        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator</option>
+        <option value="${ROLE_WORKSPACE_OWNER}" ${user.role === ROLE_WORKSPACE_OWNER ? 'selected' : ''}>Workspace Owner</option>
+        <option value="${ROLE_ADMINISTRATOR}" ${user.role === ROLE_ADMINISTRATOR ? 'selected' : ''}>Administrator</option>
       </select>
       <span class="pill ${user.status === 'active' ? 'pill-teal' : 'pill-grey'}">${user.status === 'active' ? 'Active' : 'Disabled'}</span>
       <div class="flex gap-8">
@@ -299,44 +302,27 @@ function acceptInvitation(token, password) {
 
   const workspaceId = inv.workspaceId || LumioState.session?.currentWorkspaceId;
   let canonicalUser = LumioState.users.find(u => u.email.toLowerCase() === inv.email.toLowerCase());
-  let legacyUser;
 
-  if (canonicalUser) {
-    // Existing account (any provider) — sign in and join, no new identity.
-    legacyUser = canonicalUser.id === LumioState.currentUser.id
-      ? LumioState.currentUser
-      : (LumioState.adminUsers.find(u => u.id === canonicalUser.id) || {
-          id: canonicalUser.id, firstName: canonicalUser.firstName, lastName: canonicalUser.lastName,
-          email: canonicalUser.email, avatar: canonicalUser.avatar, status: 'active',
-          authenticationProvider: canonicalUser.authProvider === 'google' || canonicalUser.authProvider === 'microsoft' ? canonicalUser.authProvider : 'local',
-        });
-  } else {
-    legacyUser = {
+  if (!canonicalUser) {
+    // Account Management Finalization Sprint, Phase 2: writes directly into
+    // users[] — there is no longer a separate legacy/adminUsers record to
+    // create alongside it.
+    canonicalUser = {
       id: generateUniqueId('u'),
+      email: inv.email,
       firstName: inv.firstName || inv.email.split('@')[0],
       lastName: inv.lastName || '',
-      email: inv.email,
-      avatar: null,
-      role: 'admin', // legacy role string — invitation acceptance is always Administrator
-      status: 'active',
-      authenticationProvider: inv.authenticationProvider || 'local',
-    };
-    if (legacyUser.authenticationProvider === 'local') legacyUser.password = password || 'lumio123';
-    LumioState.adminUsers.push(legacyUser);
-
-    canonicalUser = {
-      id: legacyUser.id,
-      email: legacyUser.email,
-      firstName: legacyUser.firstName,
-      lastName: legacyUser.lastName,
-      displayName: `${legacyUser.firstName} ${legacyUser.lastName}`.trim(),
+      displayName: `${inv.firstName || ''} ${inv.lastName || ''}`.trim() || inv.email,
       avatar: null,
       role: ROLE_ADMINISTRATOR,
+      status: 'active',
       createdAt: Date.now(),
       lastLoginAt: Date.now(),
-      authProvider: toCanonicalAuthProvider(legacyUser.authenticationProvider),
+      authProvider: toCanonicalAuthProvider(inv.authenticationProvider),
     };
-    if (legacyUser.password) canonicalUser.passwordHash = LumioAuth._hashPassword(legacyUser.password);
+    if (canonicalUser.authProvider === 'email' || canonicalUser.authProvider === 'local_demo') {
+      canonicalUser.passwordHash = LumioAuth._hashPassword(password || 'lumio123');
+    }
     LumioState.users.push(canonicalUser);
   }
 
@@ -355,7 +341,7 @@ function acceptInvitation(token, password) {
   }
 
   scheduleLumioSave();
-  return legacyUser;
+  return canonicalUser;
 }
 
 function bindWorkspaceUsersTab() {
@@ -369,14 +355,22 @@ function bindWorkspaceUsersTab() {
       const newRole = sel.value;
       if (newRole === user.role) return;
 
-      if (user.role === 'owner' && newRole === 'admin' && workspaceOwnerCount() <= 1) {
+      if (user.role === ROLE_WORKSPACE_OWNER && newRole === ROLE_ADMINISTRATOR && workspaceOwnerCount() <= 1) {
         sel.value = user.role;
         toast('At least one Workspace Owner is required. Promote another user before changing this role.', '⚠️');
         return;
       }
 
       user.role = newRole;
-      toast(`${user.firstName} ${user.lastName} is now ${ROLE_LABELS[newRole]}`, '🔄');
+      // Also keep this workspace's membership row (the actual source of
+      // truth for "what role does this user hold in THIS workspace") in
+      // sync — the canonical users[].role field above is a convenience
+      // default, but workspaceMemberships is what allWorkspaceUsers()/
+      // getWorkspaceMembership() actually consult.
+      const ws = getCurrentWorkspace();
+      const membership = ws && getWorkspaceMembership(user.id, ws.id);
+      if (membership) membership.role = newRole;
+      toast(`${user.firstName} ${user.lastName} is now ${CANONICAL_ROLE_LABELS[newRole]}`, '🔄');
       renderWorkspaceSettings();
       scheduleLumioSave();
     });
@@ -387,14 +381,14 @@ function bindWorkspaceUsersTab() {
       const id = btn.dataset.userToggle;
       const user = getWorkspaceUser(id);
       if (!user) return;
-      const isSelf = id === LumioState.currentUser.id;
+      const isSelf = id === getCurrentUser()?.id;
 
       if (user.status === 'active') {
         if (isSelf) {
           toast('You cannot disable your own account.', '⚠️');
           return;
         }
-        if (user.role === 'owner' && workspaceOwnerCount() <= 1) {
+        if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
           toast('At least one Workspace Owner is required. You cannot disable the only remaining Workspace Owner.', '⚠️');
           return;
         }
@@ -411,22 +405,28 @@ function bindWorkspaceUsersTab() {
       const id = btn.dataset.userRemove;
       const user = getWorkspaceUser(id);
       if (!user) return;
-      const isSelf = id === LumioState.currentUser.id;
+      const isSelf = id === getCurrentUser()?.id;
 
       if (isSelf) {
-        if (user.role === 'owner' && workspaceOwnerCount() <= 1) {
+        if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
           toast('You are the only Workspace Owner — at least one Workspace Owner is required.', '⚠️');
         } else {
           toast('You cannot remove your own account.', '⚠️');
         }
         return;
       }
-      if (user.role === 'owner' && workspaceOwnerCount() <= 1) {
+      if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
         toast('At least one Workspace Owner is required. You cannot remove the only remaining Workspace Owner.', '⚠️');
         return;
       }
 
-      LumioState.adminUsers = LumioState.adminUsers.filter(u => u.id !== id);
+      // Removes this user's MEMBERSHIP in the current workspace only — their
+      // users[] account (and any other workspace they belong to) is
+      // untouched. This is the correct semantics now that users[] is the
+      // sole user repository: "Remove" here always meant "remove from this
+      // workspace," never "delete the account."
+      const ws = getCurrentWorkspace();
+      if (ws) LumioState.workspaceMemberships = LumioState.workspaceMemberships.filter(m => !(m.userId === id && m.workspaceId === ws.id));
       toast(`Removed ${user.firstName} ${user.lastName}`, '🗑️');
       renderWorkspaceSettings();
       scheduleLumioSave();
@@ -495,7 +495,7 @@ function bindWorkspaceUsersTab() {
       createdAt: now,
       // SaaS foundation fields (Workspace & Authentication Foundation Sprint).
       workspaceId: LumioState.session?.currentWorkspaceId || null,
-      invitedBy: LumioState.session?.currentUserId || LumioState.currentUser.id,
+      invitedBy: LumioState.session?.currentUserId || getCurrentUser()?.id,
       expiresAt: now + 7 * 24 * 3600 * 1000, // 7 days
       acceptedAt: null,
     };

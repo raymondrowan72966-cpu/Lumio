@@ -99,6 +99,12 @@ const LumioState = {
   // pending workspace invitations
   invitations: [],
 
+  // Forgot Password requests (Account Management Finalization Sprint,
+  // Phase 4) — { id, token, userId, email, createdAt, expiresAt, used }.
+  // No real email delivery exists (same as invitations) — the reset link is
+  // shown directly on screen instead of being emailed.
+  passwordResets: [],
+
   // in-platform notification ledger (Governance & Review Workflow
   // Hardening Sprint, Phase 7) — { id, userId, message, projectId,
   // createdAt, read }, newest first.
@@ -119,7 +125,8 @@ const ROLE_LABELS = { owner: 'Workspace Owner', admin: 'Administrator' };
 const AUTH_PROVIDER_LABELS = { local: 'Lumio Account', microsoft: 'Microsoft SSO', google: 'Google SSO' };
 
 function isWorkspaceOwner() {
-  return LumioState.currentUser.role === 'owner';
+  const u = getCurrentUser();
+  return !!u && u.role === ROLE_WORKSPACE_OWNER;
 }
 function canAccessWorkspaceSettings() { return isWorkspaceOwner(); }
 function canManageUsers() { return isWorkspaceOwner(); }
@@ -280,6 +287,7 @@ const LumioAuth = (function () {
       displayName: `${fields.firstName} ${fields.lastName}`.trim(),
       avatar: null,
       role: ROLE_WORKSPACE_OWNER, // _bindNewUserToWorkspace always sets this for self-registration — see note there
+      status: 'active',
       createdAt: Date.now(),
       lastLoginAt: Date.now(),
       authProvider,
@@ -289,29 +297,14 @@ const LumioAuth = (function () {
     return user;
   }
 
-  // Keeps the legacy currentUser/adminUsers fields (read directly by every
-  // existing screen) in sync with whichever canonical user is now signed
-  // in — the same bridge pattern used for invitation acceptance.
-  function _syncLegacyCurrentUser(user) {
-    LumioState.currentUser = {
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      avatar: user.avatar,
-      role: toLegacyRole(user.role),
-      dateJoined: user.createdAt,
-      lastLogin: user.lastLoginAt,
-      password: user.passwordHash ? undefined : 'lumio123',
-      status: 'active',
-      authenticationProvider: (user.authProvider === 'google' || user.authProvider === 'microsoft') ? user.authProvider : 'local',
-    };
-    if (!LumioState.adminUsers.find(u => u.id === user.id) && user.id !== LumioState.users[0]?.id) {
-      // mirror non-primary signed-in users into adminUsers too, so the
-      // Workspace Settings user list (which reads adminUsers) stays complete
-      LumioState.adminUsers.push(Object.assign({}, LumioState.currentUser));
-    }
-  }
+  // Account Management Finalization Sprint, Phase 2: _syncLegacyCurrentUser
+  // (which used to build a parallel legacy-shaped LumioState.currentUser
+  // object and mirror non-primary users into LumioState.adminUsers[]) has
+  // been removed entirely. users[] is now the only authoritative user
+  // record — getCurrentUser() resolves "who is signed in" directly from
+  // users[] + session.currentUserId, with no separate mirror to keep in
+  // sync (and thus no way for it to drift out of sync, which is exactly
+  // what produced duplicate-looking rows on the Workspace Users screen).
 
   function _establishSession(user, rememberMe) {
     // A user now belongs to exactly the workspace(s) they own or were
@@ -322,7 +315,6 @@ const LumioAuth = (function () {
       currentWorkspaceId: membership ? membership.workspaceId : null,
       rememberMe: rememberMe !== false,
     };
-    _syncLegacyCurrentUser(user);
     // Marks this browser TAB as having an active session — present for the
     // life of the tab, cleared when the tab/browser closes. Used by
     // restoreSession() to distinguish "still the same tab, just refreshed"
@@ -370,15 +362,11 @@ const LumioAuth = (function () {
   }
 
   function logout() {
+    // getCurrentUser() resolves purely from session.currentUserId — clearing
+    // it here is the ONLY thing "signed out" needs to mean now that there is
+    // no separate LumioState.currentUser mirror that could otherwise hold
+    // stale data in the window before the next login.
     LumioState.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
-    // Issue 4 root cause: currentUser previously stayed populated with the
-    // just-signed-out identity after logout — purely cosmetic until the
-    // NEXT login overwrote it via _syncLegacyCurrentUser, but in the
-    // window between logout and the next real login, any code that read
-    // LumioState.currentUser directly (instead of going through the
-    // session) saw stale data. Clearing it here makes "signed out" mean
-    // exactly that.
-    LumioState.currentUser = null;
     try { sessionStorage.removeItem(SESSION_TAB_MARKER); } catch (e) {}
     scheduleLumioSave();
   }
@@ -399,9 +387,44 @@ const LumioAuth = (function () {
     }
     const user = LumioState.users.find(u => u.id === s.currentUserId);
     if (!user) { logout(); return false; }
-    _syncLegacyCurrentUser(user);
     try { sessionStorage.setItem(SESSION_TAB_MARKER, '1'); } catch (e) {}
     return true;
+  }
+
+  // Forgot Password (Account Management Finalization Sprint, Phase 4).
+  // No real email provider exists (same documented limitation as
+  // invitations) — the reset link is generated and returned/displayed
+  // directly instead of being emailed.
+  const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+  function requestPasswordReset(email) {
+    const user = LumioState.users.find(u => u.email.toLowerCase() === (email || '').toLowerCase() && u.authProvider === 'email');
+    if (!user) return { ok: false, reason: 'No account found with that email address.' };
+    const token = generateUniqueId('reset');
+    const link = `${location.origin}${location.pathname}#/reset-password/${token}`;
+    LumioState.passwordResets.push({
+      id: generateUniqueId('pr'), token, userId: user.id, email: user.email,
+      createdAt: Date.now(), expiresAt: Date.now() + PASSWORD_RESET_TTL_MS, used: false,
+    });
+    console.info(`[Lumio] Password reset email would be sent to ${user.email}:\n  Reset link: ${link}`);
+    scheduleLumioSave();
+    return { ok: true, link };
+  }
+  function validateResetToken(token) {
+    const reset = LumioState.passwordResets.find(r => r.token === token);
+    if (!reset || reset.used) return { ok: false, reason: 'This reset link is invalid or has already been used.' };
+    if (Date.now() > reset.expiresAt) return { ok: false, reason: 'This reset link has expired. Please request a new one.' };
+    return { ok: true, reset };
+  }
+  function resetPassword(token, newPassword) {
+    const check = validateResetToken(token);
+    if (!check.ok) return check;
+    if (!newPassword || newPassword.length < 6) return { ok: false, reason: 'Password must be at least 6 characters.' };
+    const user = LumioState.users.find(u => u.id === check.reset.userId);
+    if (!user) return { ok: false, reason: 'This account no longer exists.' };
+    user.passwordHash = _hashPassword(newPassword);
+    check.reset.used = true;
+    scheduleLumioSave();
+    return { ok: true };
   }
 
   return {
@@ -410,6 +433,9 @@ const LumioAuth = (function () {
     loginWithEmail,
     logout,
     restoreSession,
+    requestPasswordReset,
+    validateResetToken,
+    resetPassword,
     _hashPassword, // exposed for profile.js's existing password-change flow to adopt later
   };
 })();
@@ -447,7 +473,8 @@ const PROJECT_STATUS_TRANSITIONS = {
 };
 
 function isProjectOwner(project) {
-  return !!(project && project.ownerId === LumioState.currentUser.id);
+  const u = getCurrentUser();
+  return !!(project && u && project.ownerId === u.id);
 }
 
 // Ownership & Visibility Correction Sprint: a user sees a project ONLY if
@@ -460,7 +487,7 @@ function isProjectOwner(project) {
 function isProjectVisible(project) {
   if (!project || project.deleted) return false;
   if (isProjectOwner(project)) return true;
-  const uid = LumioState.currentUser.id;
+  const uid = getCurrentUser()?.id;
   return project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
 }
 function visibleProjects() {
@@ -479,7 +506,7 @@ function hasFullProjectAccess(project) {
 function canEditProject(project) {
   if (!project) return false;
   if (hasFullProjectAccess(project)) return true;
-  const uid = LumioState.currentUser.id;
+  const uid = getCurrentUser()?.id;
   const sharedToMe = project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
   return sharedToMe && project.sharedPermission === 'edit';
 }
@@ -491,7 +518,7 @@ function canEditProject(project) {
 function isProjectViewOnly(project) {
   if (!project) return false;
   if (hasFullProjectAccess(project)) return false;
-  const uid = LumioState.currentUser.id;
+  const uid = getCurrentUser()?.id;
   const sharedToMe = project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
   return sharedToMe && project.sharedPermission !== 'edit';
 }
@@ -519,7 +546,7 @@ function pushReviewHistory(project, action, comment) {
   if (!Array.isArray(project.reviewHistory)) project.reviewHistory = [];
   project.reviewHistory.push({
     action: REVIEW_HISTORY_ACTION_LABELS[action] || action,
-    userId: LumioState.currentUser.id,
+    userId: getCurrentUser()?.id,
     userName: currentUserDisplayName(),
     date: Date.now(),
     comment: comment || null,
@@ -537,7 +564,7 @@ function addNotification(userId, message, projectId) {
   });
 }
 function myNotifications() {
-  const uid = LumioState.currentUser.id;
+  const uid = getCurrentUser()?.id;
   return (LumioState.notifications || []).filter(n => n.userId === uid);
 }
 function myUnreadNotificationCount() {
@@ -565,7 +592,7 @@ function transitionProjectStatus(project, action, comment) {
   const title = projectDisplayTitle(project);
   if (action === 'submit_for_review') {
     project.reviewStatus = 'pending';
-    project.submittedBy = LumioState.currentUser.id;
+    project.submittedBy = getCurrentUser()?.id;
     project.submittedAt = now;
     project.reviewComments = null;
     // Issue 3 root cause: this used to notify the literal id 'u-owner',
@@ -577,13 +604,13 @@ function transitionProjectStatus(project, action, comment) {
     addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was submitted for review by ${currentUserDisplayName()}.`, project.id);
   } else if (action === 'approve') {
     project.reviewStatus = 'approved';
-    project.reviewedBy = LumioState.currentUser.id;
+    project.reviewedBy = getCurrentUser()?.id;
     project.reviewedAt = now;
     project.reviewComments = comment || null;
     addNotification(project.ownerId, `"${title}" was approved.`, project.id);
   } else if (action === 'reject') {
     project.reviewStatus = 'rejected';
-    project.reviewedBy = LumioState.currentUser.id;
+    project.reviewedBy = getCurrentUser()?.id;
     project.reviewedAt = now;
     project.reviewComments = comment;
     addNotification(project.ownerId, `"${title}" was rejected.`, project.id);
@@ -646,21 +673,16 @@ function authenticateApple() {
 // clicked. Not part of LumioState since it's pre-authentication UI state.
 const LumioUI = { rememberMe: true };
 
-// Returns only the members of the ACTIVE workspace, used for rendering the
-// Users tab and for the multi-owner safeguard checks.
-// Account Management Remediation Sprint, Priority 1 fix: this previously
-// returned [currentUser, ...adminUsers] unconditionally — i.e. every
-// identity that had EVER signed in on this browser, regardless of which
-// workspace they actually belong to. adminUsers is a flat, cross-workspace
-// mirror (every non-primary signed-in user gets pushed into it by
-// _syncLegacyCurrentUser/acceptInvitation), so two completely unrelated
-// SaaS account holders who each own their own separate workspace would both
-// show up in EITHER workspace's Users tab. Scoping by workspaceMemberships
-// for LumioState.session.currentWorkspaceId is the actual fix — every real
-// membership (owner at workspace creation, administrator at invitation
-// acceptance) already gets a workspaceMemberships row, so this filter
-// correctly includes the Owner, every Administrator, and every invited user
-// who has accepted, while excluding unrelated accounts.
+// Returns only the members of the ACTIVE workspace, resolved ENTIRELY from
+// users[] + workspaceMemberships[] — the only authoritative user store
+// (Account Management Finalization Sprint, Phase 2). Each returned object
+// is a live reference into LumioState.users[], so callers that mutate a
+// returned user's fields (role change, disable/enable) persist immediately
+// with no separate sync step needed. Every real membership (owner at
+// workspace creation, administrator at invitation acceptance) already gets
+// a workspaceMemberships row, so this filter correctly includes the Owner,
+// every Administrator, and every invited user who has accepted, while
+// excluding unrelated accounts that belong to other workspaces.
 function allWorkspaceUsers() {
   const workspaceId = LumioState.session?.currentWorkspaceId;
   const memberIds = new Set(
@@ -668,23 +690,26 @@ function allWorkspaceUsers() {
       .filter(m => m.workspaceId === workspaceId)
       .map(m => m.userId)
   );
-  return [LumioState.currentUser, ...LumioState.adminUsers].filter(u => u && memberIds.has(u.id));
+  return (LumioState.users || []).filter(u => memberIds.has(u.id));
 }
 
-// Counts how many workspace members currently hold the Owner role. Used to
-// guard against removing, demoting, or disabling the last remaining Owner.
+// Counts how many workspace members currently hold the Workspace Owner
+// role. Used to guard against removing, demoting, or disabling the last
+// remaining Owner.
 function workspaceOwnerCount() {
-  return allWorkspaceUsers().filter(u => u.role === 'owner').length;
+  return allWorkspaceUsers().filter(u => u.role === ROLE_WORKSPACE_OWNER).length;
 }
 
 // Returns the initials + display name + avatar for the signed-in user,
 // used everywhere the current user's identity is shown (sidebar, profile).
 function currentUserDisplayName() {
-  const u = LumioState.currentUser;
-  return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User';
+  const u = getCurrentUser();
+  if (!u) return 'User';
+  return u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User';
 }
 function currentUserInitials() {
-  const u = LumioState.currentUser;
+  const u = getCurrentUser();
+  if (!u) return '?';
   return ((u.firstName?.[0] || '') + (u.lastName?.[0] || '')).toUpperCase()
     || (u.email?.[0] || '?').toUpperCase();
 }
@@ -965,7 +990,7 @@ const LUMIO_PERSISTED_KEYS = [
   'interactionHistory', 'assessmentAttempts',
   'currentUser', 'workspace', 'adminUsers', 'invitations',
   'users', 'workspaces', 'workspaceMemberships', 'session',
-  'notifications', 'statusFilter',
+  'notifications', 'statusFilter', 'passwordResets',
 ];
 
 // Generates a stable local learner identifier in the form "local-xxxxxxxx".
@@ -1167,7 +1192,10 @@ function migrateLumioState(record) {
     // when the profile save had a bug that omitted them).
     if (state.currentUser) {
       const cu = state.currentUser;
-      const def = LumioState.currentUser; // always has good defaults from app.js
+      // LumioState.currentUser's default is null (true first-run, no seeded
+      // identity) — this old v9 step assumed a populated demo user existed
+      // to backfill from; guard against that no longer being true.
+      const def = LumioState.currentUser || {};
       if (!cu.firstName) cu.firstName = def.firstName;
       if (!cu.lastName)  cu.lastName  = def.lastName;
       if (!cu.email)     cu.email     = def.email;
@@ -1721,7 +1749,7 @@ function _restoreProjectPayload(payload) {
   p.lastAccessed = Date.now();
   p.deleted = false;
   p.deletedAt = null;
-  p.ownerId = LumioState.currentUser.id;
+  p.ownerId = getCurrentUser()?.id;
   p.sharedWith = [];
   p.sharedScope = null;
   p.sharedPermission = 'view';
@@ -1918,10 +1946,10 @@ function renderShell(activeId, contentHtml, opts = {}) {
           <span class="ic">↩️</span><span>Sign out</span>
         </div>
         <div class="nav-item ${activeId === 'profile' ? 'active' : ''}" data-nav="#/profile" style="border-top:1px solid var(--border); margin-top:8px; border-radius:0;">
-          ${avatarHtml(LumioState.currentUser)}
+          ${avatarHtml(getCurrentUser() || {})}
           <div style="font-size:13px; min-width:0;">
             <div style="font-weight:600; color:var(--ink-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${currentUserDisplayName()}</div>
-            <div class="text-muted" style="font-size:12px;">${ROLE_LABELS[LumioState.currentUser.role]}</div>
+            <div class="text-muted" style="font-size:12px;">${CANONICAL_ROLE_LABELS[getCurrentUser()?.role] || ''}</div>
           </div>
         </div>
       </aside>
@@ -1974,7 +2002,7 @@ function openNotificationsPanel(anchorEl) {
 // post-logout null currentUser would have crashed any directly-hit
 // protected route (hashchange, back/forward, a stale bookmark) instead of
 // gracefully redirecting.
-const PUBLIC_ROUTES = ['login', 'accept-invite'];
+const PUBLIC_ROUTES = ['login', 'accept-invite', 'reset-password'];
 function render() {
   const hash = location.hash || '#/login';
   const parts = hash.replace('#/', '').split('/');
@@ -1988,7 +2016,7 @@ function render() {
   // override) fires on every learner navigation and redirects to #/login,
   // silently overwriting the hash the bootstrap just set — the root cause of
   // "Start Course" (and all in-package navigation) doing nothing.
-  if (!LearnerUI.publishedMode && !LumioState.currentUser && !PUBLIC_ROUTES.includes(path)) {
+  if (!LearnerUI.publishedMode && !getCurrentUser() && !PUBLIC_ROUTES.includes(path)) {
     if (location.hash !== '#/login') { location.hash = '#/login'; return; }
     path = 'login';
   }
@@ -2026,6 +2054,9 @@ function render() {
       break;
     case 'accept-invite':
       renderAcceptInvite(param);
+      break;
+    case 'reset-password':
+      renderResetPassword(param);
       break;
     case 'wizard':
       renderWizard();

@@ -2,9 +2,11 @@
    MY PROFILE
    First-class screen for the signed-in user: profile photo,
    personal details, account information, and security.
-   Display name / avatar / email edits here are mirrored into the
-   canonical LumioState.users[] record (see _syncUserFromLegacyProfile
-   below) — the Auth Architecture Sprint's bridge pattern.
+   Account Management Finalization Sprint, Phase 2: reads and writes
+   ONLY LumioState.users[] (via getCurrentUser()) — there is no longer a
+   separate legacy currentUser mirror to keep in sync. Every input here
+   mutates the canonical record directly, since getCurrentUser() returns a
+   live reference into users[].
    ============================================================ */
 
 const AUTH_PROVIDER_DISPLAY_LABELS = {
@@ -13,8 +15,8 @@ const AUTH_PROVIDER_DISPLAY_LABELS = {
 };
 
 function renderProfile() {
-  const u = LumioState.currentUser;
-  const canonical = getCurrentUser();
+  const u = getCurrentUser();
+  if (!u) { navigate('#/login'); return; }
 
   const content = `
     <header class="app-topbar">
@@ -45,20 +47,20 @@ function renderProfile() {
           <div class="flex gap-16" style="flex-wrap:wrap;">
             <div class="field" style="flex:1; min-width:200px;">
               <label>First Name</label>
-              <input class="input" id="profile-first-name" type="text" value="${escapeHtml(u.firstName)}" />
+              <input class="input" id="profile-first-name" type="text" value="${escapeHtml(u.firstName || '')}" />
             </div>
             <div class="field" style="flex:1; min-width:200px;">
               <label>Last Name</label>
-              <input class="input" id="profile-last-name" type="text" value="${escapeHtml(u.lastName)}" />
+              <input class="input" id="profile-last-name" type="text" value="${escapeHtml(u.lastName || '')}" />
             </div>
           </div>
           <div class="field">
             <label>Display Name</label>
-            <input class="input" id="profile-display-name" type="text" value="${escapeHtml(canonical?.displayName || `${u.firstName} ${u.lastName}`.trim())}" placeholder="How your name appears to others" />
+            <input class="input" id="profile-display-name" type="text" value="${escapeHtml(u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim())}" placeholder="How your name appears to others" />
           </div>
           <div class="field">
             <label>Email Address</label>
-            <input class="input" id="profile-email" type="email" value="${escapeHtml(u.email)}" />
+            <input class="input" id="profile-email" type="email" value="${escapeHtml(u.email || '')}" />
           </div>
         </div>
 
@@ -67,24 +69,24 @@ function renderProfile() {
           <div class="flex-col gap-8">
             <div class="flex justify-between items-center" style="padding:8px 0; border-bottom:1px solid var(--border);">
               <span class="text-sm text-muted">User Role</span>
-              <span class="pill ${u.role === 'owner' ? 'pill-indigo' : 'pill-cyan'}">${ROLE_LABELS[u.role]}</span>
+              <span class="pill ${u.role === ROLE_WORKSPACE_OWNER ? 'pill-indigo' : 'pill-cyan'}">${CANONICAL_ROLE_LABELS[u.role] || u.role}</span>
             </div>
             <div class="flex justify-between items-center" style="padding:8px 0; border-bottom:1px solid var(--border);">
               <span class="text-sm text-muted">Sign-in Method</span>
-              <span class="pill pill-cyan">${AUTH_PROVIDER_DISPLAY_LABELS[canonical?.authProvider] || 'Lumio Account'}</span>
+              <span class="pill pill-cyan">${AUTH_PROVIDER_DISPLAY_LABELS[u.authProvider] || 'Lumio Account'}</span>
             </div>
             <div class="flex justify-between items-center" style="padding:8px 0; border-bottom:1px solid var(--border);">
               <span class="text-sm text-muted">Date Joined</span>
-              <span class="text-sm" style="font-weight:600;">${formatDateLong(u.dateJoined)}</span>
+              <span class="text-sm" style="font-weight:600;">${formatDateLong(u.createdAt)}</span>
             </div>
             <div class="flex justify-between items-center" style="padding:8px 0;">
               <span class="text-sm text-muted">Last Login</span>
-              <span class="text-sm" style="font-weight:600;">${formatDateLong(u.lastLogin)}</span>
+              <span class="text-sm" style="font-weight:600;">${formatDateLong(u.lastLoginAt)}</span>
             </div>
           </div>
         </div>
 
-        ${(!canonical || canonical.authProvider === 'email' || canonical.authProvider === 'local_demo') ? `
+        ${(u.authProvider === 'email' || u.authProvider === 'local_demo') ? `
         <div class="card card-pad mb-24">
           <div class="prop-section-title">Security</div>
           <p class="text-sm text-muted mb-16">Change your password. You'll need to enter your current password to confirm.</p>
@@ -107,7 +109,7 @@ function renderProfile() {
         </div>` : `
         <div class="card card-pad mb-24">
           <div class="prop-section-title">Security</div>
-          <p class="text-sm text-muted">Your password is managed by ${AUTH_PROVIDER_DISPLAY_LABELS[canonical.authProvider] || 'your identity provider'} — there's nothing to change here.</p>
+          <p class="text-sm text-muted">Your password is managed by ${AUTH_PROVIDER_DISPLAY_LABELS[u.authProvider] || 'your identity provider'} — there's nothing to change here.</p>
         </div>`}
 
       </div>
@@ -117,37 +119,22 @@ function renderProfile() {
   bindProfileEvents();
 }
 
-// Keeps the canonical LumioState.users[] record for the signed-in user in
-// sync whenever the legacy profile fields are edited on this screen — same
-// bridge pattern used everywhere else this sprint and the prior one.
-function _syncUserFromLegacyProfile(u, overrides) {
-  const canonical = getCurrentUser();
-  if (!canonical) return;
-  canonical.firstName = u.firstName;
-  canonical.lastName = u.lastName;
-  canonical.email = u.email;
-  canonical.avatar = u.avatar;
-  if (overrides && overrides.displayName !== undefined) canonical.displayName = overrides.displayName;
-}
-
 function bindProfileEvents() {
   const app = document.getElementById('app');
-  const u = LumioState.currentUser;
+  const u = getCurrentUser();
+  if (!u) return;
 
   app.querySelector('#profile-first-name').addEventListener('input', (e) => {
     u.firstName = e.target.value;
-    _syncUserFromLegacyProfile(u);
   });
   app.querySelector('#profile-last-name').addEventListener('input', (e) => {
     u.lastName = e.target.value;
-    _syncUserFromLegacyProfile(u);
   });
   app.querySelector('#profile-display-name').addEventListener('input', (e) => {
-    _syncUserFromLegacyProfile(u, { displayName: e.target.value });
+    u.displayName = e.target.value;
   });
   app.querySelector('#profile-email').addEventListener('input', (e) => {
     u.email = e.target.value;
-    _syncUserFromLegacyProfile(u);
   });
 
   app.querySelector('#profile-photo-upload').addEventListener('click', () => {
@@ -158,13 +145,11 @@ function bindProfileEvents() {
       currentFileName: null,
       onInsert: (result) => {
         u.avatar = result.src;
-        _syncUserFromLegacyProfile(u);
         renderProfile();
         scheduleLumioSave();
       },
       onRemove: () => {
         u.avatar = null;
-        _syncUserFromLegacyProfile(u);
         renderProfile();
         scheduleLumioSave();
       },
@@ -173,7 +158,6 @@ function bindProfileEvents() {
 
   app.querySelector('#profile-photo-remove')?.addEventListener('click', () => {
     u.avatar = null;
-    _syncUserFromLegacyProfile(u);
     renderProfile();
     scheduleLumioSave();
   });
@@ -194,7 +178,7 @@ function bindProfileEvents() {
       showFeedback('Please fill in all three password fields.', false);
       return;
     }
-    if (current !== u.password) {
+    if (LumioAuth._hashPassword(current) !== u.passwordHash) {
       showFeedback('Current password is incorrect.', false);
       return;
     }
@@ -207,9 +191,7 @@ function bindProfileEvents() {
       return;
     }
 
-    u.password = next;
-    const canonical = getCurrentUser();
-    if (canonical && canonical.authProvider === 'email') canonical.passwordHash = LumioAuth._hashPassword(next);
+    u.passwordHash = LumioAuth._hashPassword(next);
     app.querySelector('#profile-current-password').value = '';
     app.querySelector('#profile-new-password').value = '';
     app.querySelector('#profile-confirm-password').value = '';

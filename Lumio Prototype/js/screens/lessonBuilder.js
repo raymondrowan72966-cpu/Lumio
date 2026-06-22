@@ -120,7 +120,7 @@ function renderLessonBuilder(lessonId) {
 
   // Hydrate URL cache for any asset:// refs in this lesson, then re-render
   // once if new URLs were resolved (handles cold-start page reload).
-  const _avatarRef = (LumioState.currentUser || {}).avatar;
+  const _avatarRef = (getCurrentUser() || {}).avatar;
   AssetStore.preloadBlocks(blocks, _avatarRef ? [_avatarRef] : []).then(count => {
     if (count > 0) renderLessonBuilder(lessonId);
   });
@@ -2034,7 +2034,7 @@ function renderBlockContent(block, editable) {
       const btnStyle = continueButtonStyle(ds);
       const align = ds.align || 'center';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      return `<div style="${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
+      return `<div style="${dividerSpacingStyle(ds)} ${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
         <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span> ▾</button>
       </div>`;
     }
@@ -2045,7 +2045,7 @@ function renderBlockContent(block, editable) {
       const lineColor = ds.lineColor || 'var(--border)';
       const lineStyle = ds.lineStyle || 'solid';
       const lineThickness = ds.lineThickness ?? 1;
-      return `<div class="flex items-center gap-12">
+      return `<div class="flex items-center gap-12" style="${dividerSpacingStyle(ds)}">
         <div style="width:${markerSize}px; height:${markerSize}px; min-width:${markerSize}px; border-radius:${shapeRadiusMap[ds.markerShape] || '50%'}; background:${ds.markerFill || 'var(--gradient-primary)'}; color:${ds.markerTextColor || '#fff'}; border:${ds.markerBorderColor ? `2px solid ${ds.markerBorderColor}` : 'none'}; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:${fontSize}px; flex-shrink:0; overflow:hidden;">
           <span class="editable-text" data-field="marker" data-richtext="true" ${ce} data-placeholder="1" style="text-align:center; line-height:1.1;">${richTextOut(d.marker || '1')}</span>
         </div>
@@ -2059,7 +2059,7 @@ function renderBlockContent(block, editable) {
       const width = ds.width ?? 100;
       const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end', full: 'stretch' };
       const isFull = (ds.align || 'full') === 'full';
-      return `<div style="display:flex; justify-content:${alignMap[ds.align || 'full'] || 'center'};">
+      return `<div style="${dividerSpacingStyle(ds)} display:flex; justify-content:${alignMap[ds.align || 'full'] || 'center'};">
         <div style="width:${isFull ? '100%' : width + '%'}; ${style === 'solid' ? `height:${thickness}px; background:${lineColor};` : `height:0; border-top:${thickness}px ${style} ${lineColor};`}"></div>
       </div>`;
     }
@@ -2067,7 +2067,7 @@ function renderBlockContent(block, editable) {
       const heightMap = { xs: 16, sm: 32, md: 64, lg: 120, xl: 200 };
       const preset = ds.heightPreset || 'md';
       const h = preset === 'custom' ? (ds.customHeight ?? 64) : (heightMap[preset] ?? 64);
-      return `<div style="height:${h}px; width:100%; ${editable ? 'background:repeating-linear-gradient(45deg, var(--surface-50), var(--surface-50) 10px, transparent 10px, transparent 20px); border-radius:var(--r-sm);' : ''}"></div>`;
+      return `<div style="${dividerSpacingStyle(ds)} height:${h}px; width:100%; ${editable ? 'background:repeating-linear-gradient(45deg, var(--surface-50), var(--surface-50) 10px, transparent 10px, transparent 20px); border-radius:var(--r-sm);' : ''}"></div>`;
     }
 
     case 'kc_multiple_choice':
@@ -3723,6 +3723,32 @@ function dividerContentPanel(block) {
   }
 }
 
+// Account Management Finalization Sprint, Phase 7: Top/Bottom Padding for
+// Divider-family blocks (Continue, Numbered Divider, Line Divider, Spacer)
+// — these never had any padding controls at all (unlike Text-category
+// blocks, which already have their own Spacing section). Applied on the
+// block's own inner wrapper, layered on top of the shared .block-content-
+// area padding — same pattern Text/Statement/Quote blocks already use.
+function dividerSpacingStyle(ds) {
+  return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px;`;
+}
+function dividerSpacingFields(ds) {
+  return `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Spacing</div>
+      <p class="text-sm text-muted mb-8">Top Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="120" value="${ds.paddingTop ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="120" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
+      </div>
+    </div>`;
+}
+
 function dividerDesignPanel(block) {
   const ds = block.design;
   switch (block.type) {
@@ -3764,7 +3790,7 @@ function lineDividerDesignFields(ds) {
       <label>Style</label>
       ${segControl('design-linedivider-style', 'lineStyle', [{id:'solid',label:'Solid'},{id:'dashed',label:'Dashed'},{id:'dotted',label:'Dotted'}], ds.lineStyle || 'solid')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Layout</div>
       <label>Width</label>
       <div class="flex items-center gap-8 mb-8">
@@ -3773,7 +3799,8 @@ function lineDividerDesignFields(ds) {
       </div>
       <label class="mt-8">Alignment</label>
       ${segControl('design-linedivider-align', 'align', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'},{id:'full',label:'Full Width'}], ds.align || 'full')}
-    </div>`;
+    </div>
+    ${dividerSpacingFields(ds)}`;
 }
 
 function numberedDividerDesignFields(ds) {
@@ -3797,7 +3824,7 @@ function numberedDividerDesignFields(ds) {
       <label>Shape</label>
       ${segControl('design-numdivider-shape', 'markerShape', [{id:'circle',label:'Circle'},{id:'square',label:'Square'},{id:'rounded',label:'Rounded Square'}], ds.markerShape || 'circle')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Size</div>
       <label>Marker Size</label>
       <div class="flex items-center gap-8 mb-8">
@@ -3809,13 +3836,14 @@ function numberedDividerDesignFields(ds) {
         <input type="range" class="design-range" data-prop="fontSize" min="10" max="28" value="${ds.fontSize ?? 14}" style="flex:1;" />
         <span class="range-val text-sm text-muted">${ds.fontSize ?? 14}px</span>
       </div>
-    </div>`;
+    </div>
+    ${dividerSpacingFields(ds)}`;
 }
 
 function spacerDesignFields(ds) {
   const preset = ds.heightPreset || 'md';
   return `
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Height</div>
       ${segControl('design-spacer-height', 'heightPreset', [{id:'xs',label:'XS'},{id:'sm',label:'S'},{id:'md',label:'M'},{id:'lg',label:'L'},{id:'xl',label:'XL'},{id:'custom',label:'Custom'}], preset)}
       ${preset === 'custom' ? `
@@ -3823,7 +3851,8 @@ function spacerDesignFields(ds) {
           <input type="range" class="design-range" data-prop="customHeight" min="0" max="400" value="${ds.customHeight ?? 64}" style="flex:1;" />
           <span class="range-val text-sm text-muted">${ds.customHeight ?? 64}px</span>
         </div>` : ''}
-    </div>`;
+    </div>
+    ${dividerSpacingFields(ds)}`;
 }
 
 function continueDesignFields(ds) {
@@ -3870,10 +3899,11 @@ function continueDesignFields(ds) {
       <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="btnBorder" ${ds.btnBorder ? 'checked' : ''}/> Show border</label>
       ${ds.btnBorder ? colorSwatchInput('btnBorderColor', ds.btnBorderColor || '#000000', 'Border colour') : ''}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Alignment</div>
       ${segControl('design-continue-align', 'align', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'}], ds.align || 'center')}
-    </div>`;
+    </div>
+    ${dividerSpacingFields(ds)}`;
 }
 
 function segControl(id, prop, options, current) {

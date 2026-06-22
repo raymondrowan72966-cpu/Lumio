@@ -41,7 +41,7 @@ function renderProjects() {
   let projects = visibleProjects().filter(p => {
     // Item 4: Team Projects virtual folder.
     if (isTeamFolder) {
-      const uid = LumioState.currentUser.id;
+      const uid = getCurrentUser()?.id;
       return p.sharedScope === 'team' || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid));
     }
     if (LumioState.currentFolder && p.folder !== LumioState.currentFolder) return false;
@@ -155,7 +155,7 @@ function continueCard(p) {
 }
 
 function teamProjectsChip() {
-  const uid = LumioState.currentUser.id;
+  const uid = getCurrentUser()?.id;
   const count = LumioState.projects.filter(p => !p.deleted && (
     p.sharedScope === 'team' || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid))
   )).length;
@@ -983,10 +983,7 @@ function openShareModal(id) {
   const currentPermission = p.sharedPermission || 'view';
   const currentSharedWith = Array.isArray(p.sharedWith) ? p.sharedWith : [];
 
-  const otherUsers = [
-    ...LumioState.adminUsers,
-    ...(LumioState.currentUser ? [LumioState.currentUser] : []),
-  ].filter(u => u.id !== LumioState.currentUser.id);
+  const otherUsers = allWorkspaceUsers().filter(u => u.id !== getCurrentUser()?.id);
 
   const userOptions = otherUsers.map(u =>
     `<option value="${u.id}" ${currentSharedWith.includes(u.id) ? 'selected' : ''}>${u.firstName} ${u.lastName} (${u.email})</option>`

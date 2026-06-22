@@ -26,15 +26,42 @@ const SOCIAL_ICONS = {
   </svg>`,
 };
 
-let LumioLoginMode = 'signin'; // 'signin' | 'register'
+let LumioLoginMode = 'signin'; // 'signin' | 'register' | 'forgot'
+// Forgot Password flow state (Account Management Finalization Sprint,
+// Phase 4) — 'request' (enter email) -> 'sent' (link generated, no real
+// email delivery exists so the link is shown directly on screen, same
+// documented limitation as invitations).
+let LumioForgotState = { step: 'request', link: null };
 
 function renderLogin() {
   LumioLoginMode = 'signin';
   paintLogin();
 }
 
+function loginAuthCardShell(innerHtml) {
+  return `
+    <div class="login-shell" style="display:flex; min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden;">
+      <div class="login-backdrop" style="flex:1 1 0%; position:relative; z-index:1; min-width:0; overflow:hidden; background:var(--surface-50);">
+        <img src="assets/lumio-login-backdrop.png" alt="Lumio — Learn. Design. Inspire."
+          style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:30% center; display:block;" />
+        <div class="glass-card login-logo-badge" style="position:absolute; top:28px; left:28px; padding:8px 16px 8px 8px; display:flex; align-items:center; gap:10px;">
+          <img src="assets/lumio-logo-transparent.png" alt="Lumio logo" style="width:40px; height:40px; border-radius:10px; object-fit:cover; display:block;" />
+          <span style="font-weight:700; font-size:17px; font-family:var(--font-display); color:var(--ink-900); letter-spacing:0.04em;">LUMIO</span>
+        </div>
+      </div>
+      <div class="login-auth" style="flex:0 1 35%; max-width:560px; min-width:420px; background:var(--surface-0); display:flex; flex-direction:column; justify-content:center; padding:88px 48px 32px; box-shadow:-8px 0 32px rgba(31,27,58,0.04); position:relative; z-index:1;">
+        ${innerHtml}
+      </div>
+      <style>
+        .login-logo-badge, .login-info-pill { box-shadow: var(--shadow-soft); }
+      </style>
+    </div>
+  `;
+}
+
 function paintLogin() {
   const app = document.getElementById('app');
+  if (LumioLoginMode === 'forgot') { paintForgotPassword(); return; }
   const isRegister = LumioLoginMode === 'register';
   app.innerHTML = `
     <div class="login-shell" style="display:flex; min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden;">
@@ -67,11 +94,11 @@ function paintLogin() {
         <div class="flex gap-16" style="flex-wrap:wrap;">
           <div class="field" style="flex:1; min-width:160px;">
             <label>First Name</label>
-            <input class="input" id="login-first-name" type="text" placeholder="Jordan" />
+            <input class="input" id="login-first-name" type="text" placeholder="First name" />
           </div>
           <div class="field" style="flex:1; min-width:160px;">
             <label>Last Name</label>
-            <input class="input" id="login-last-name" type="text" placeholder="Reyes" />
+            <input class="input" id="login-last-name" type="text" placeholder="Last name" />
           </div>
         </div>` : ''}
 
@@ -79,14 +106,14 @@ function paintLogin() {
           <label>Email Address</label>
           <div class="input-icon-wrap">
             <span class="icon">✉️</span>
-            <input class="input" id="login-email" type="email" placeholder="you@company.com" value="${isRegister ? '' : 'raymondrowan72966@gmail.com'}" />
+            <input class="input" id="login-email" type="email" placeholder="you@company.com" />
           </div>
         </div>
         <div class="field">
           <label>Password</label>
           <div class="input-icon-wrap">
             <span class="icon">🔒</span>
-            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" value="${isRegister ? '' : 'md@7296666'}" />
+            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" />
           </div>
         </div>
         ${!isRegister ? `
@@ -94,7 +121,7 @@ function paintLogin() {
           <label class="flex items-center gap-8" style="cursor:pointer;">
             <input type="checkbox" id="login-remember-me" checked /> Remember me
           </label>
-          <a href="#" onclick="return false;">Forgot password?</a>
+          <a href="#" id="login-forgot-password">Forgot password?</a>
         </div>` : '<div class="mb-16"></div>'}
         <button class="btn btn-primary w-full btn-lg" id="signin-btn">${isRegister ? 'Create Account →' : 'Sign In →'}</button>
 
@@ -143,6 +170,13 @@ function bindLoginEvents() {
     paintLogin();
   });
 
+  app.querySelector('#login-forgot-password')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    LumioLoginMode = 'forgot';
+    LumioForgotState = { step: 'request', link: null };
+    paintLogin();
+  });
+
   app.querySelector('#signin-btn').addEventListener('click', () => {
     const email = app.querySelector('#login-email').value.trim();
     const password = app.querySelector('#login-password').value;
@@ -169,4 +203,120 @@ function bindLoginEvents() {
   app.querySelector('#microsoft-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateMicrosoft(); });
   app.querySelector('#google-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateGoogle(); });
   app.querySelector('#apple-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateApple(); });
+}
+
+/* ============================================================
+   FORGOT PASSWORD (Account Management Finalization Sprint, Phase 4)
+   Complete local-only workflow: email entry -> account validation ->
+   token generation -> reset link display (no real email provider exists,
+   same documented limitation as the invitation system) -> set new
+   password -> sign in with the new password.
+   ============================================================ */
+function paintForgotPassword() {
+  const app = document.getElementById('app');
+  const step = LumioForgotState.step;
+
+  const inner = `
+    <h2 style="font-size:24px; margin-bottom:8px;">Reset your password 🔑</h2>
+    <p class="text-muted mb-24" style="font-size:14px;">${step === 'request' ? "Enter the email on your account and we'll generate a reset link." : 'A reset link has been generated below.'}</p>
+    <div id="forgot-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+    ${step === 'request' ? `
+      <div class="field">
+        <label>Email Address</label>
+        <div class="input-icon-wrap">
+          <span class="icon">✉️</span>
+          <input class="input" id="forgot-email" type="email" placeholder="you@company.com" />
+        </div>
+      </div>
+      <button class="btn btn-primary w-full btn-lg" id="forgot-send-btn">Send Reset Link →</button>
+    ` : `
+      <div class="text-sm mb-16" style="padding:10px 12px; border-radius:8px; background:#EAF7F0; color:#22A06B; word-break:break-all;">
+        Email delivery isn't connected yet, so here's your reset link directly:<br/>
+        <a href="${LumioForgotState.link}" id="forgot-link-anchor">${LumioForgotState.link}</a>
+      </div>
+      <button class="btn btn-secondary w-full" id="forgot-continue-btn">Continue to Reset Password →</button>
+    `}
+    <p class="text-sm text-muted mt-16" style="text-align:center;">
+      <a href="#" id="forgot-back-to-login">Back to sign in</a>
+    </p>
+  `;
+
+  app.innerHTML = loginAuthCardShell(inner);
+
+  const showError = (msg) => {
+    const el = app.querySelector('#forgot-feedback');
+    el.textContent = msg;
+    el.style.display = 'block';
+  };
+
+  app.querySelector('#forgot-back-to-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    LumioLoginMode = 'signin';
+    paintLogin();
+  });
+
+  if (step === 'request') {
+    app.querySelector('#forgot-send-btn').addEventListener('click', () => {
+      const email = app.querySelector('#forgot-email').value.trim();
+      const result = LumioAuth.requestPasswordReset(email);
+      if (!result.ok) { showError(result.reason); return; }
+      LumioForgotState = { step: 'sent', link: result.link };
+      paintForgotPassword();
+      toast('Reset link generated', '🔑');
+    });
+  } else {
+    app.querySelector('#forgot-continue-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      navigate(LumioForgotState.link.split('#')[1] ? '#' + LumioForgotState.link.split('#')[1] : '#/login');
+    });
+    app.querySelector('#forgot-link-anchor').addEventListener('click', (e) => {
+      e.preventDefault();
+      navigate(LumioForgotState.link.split('#')[1] ? '#' + LumioForgotState.link.split('#')[1] : '#/login');
+    });
+  }
+}
+
+/* ---------------- SET NEW PASSWORD (from a reset link/token) ---------------- */
+function renderResetPassword(token) {
+  const app = document.getElementById('app');
+  const check = LumioAuth.validateResetToken(token);
+
+  const inner = !check.ok ? `
+    <h2 style="font-size:24px; margin-bottom:8px;">Reset link invalid</h2>
+    <p class="text-muted mb-24" style="font-size:14px;">${escapeHtml(check.reason)}</p>
+    <a href="#/login" class="btn btn-secondary w-full" style="text-align:center; display:block;">Back to sign in</a>
+  ` : `
+    <h2 style="font-size:24px; margin-bottom:8px;">Set a new password 🔒</h2>
+    <p class="text-muted mb-24" style="font-size:14px;">Choose a new password for ${escapeHtml(check.reset.email)}.</p>
+    <div id="reset-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+    <div class="field">
+      <label>New Password</label>
+      <input class="input" id="reset-new-password" type="password" placeholder="Create a password (min. 6 characters)" />
+    </div>
+    <div class="field">
+      <label>Confirm New Password</label>
+      <input class="input" id="reset-confirm-password" type="password" placeholder="Re-enter the new password" />
+    </div>
+    <button class="btn btn-primary w-full btn-lg" id="reset-submit-btn">Reset Password →</button>
+  `;
+
+  app.innerHTML = loginAuthCardShell(inner);
+  if (!check.ok) return;
+
+  const showError = (msg) => {
+    const el = app.querySelector('#reset-feedback');
+    el.textContent = msg;
+    el.style.display = 'block';
+  };
+
+  app.querySelector('#reset-submit-btn').addEventListener('click', () => {
+    const next = app.querySelector('#reset-new-password').value;
+    const confirm = app.querySelector('#reset-confirm-password').value;
+    if (next !== confirm) { showError('Passwords do not match.'); return; }
+    const result = LumioAuth.resetPassword(token, next);
+    if (!result.ok) { showError(result.reason); return; }
+    toast('Password reset — please sign in', '✅');
+    LumioLoginMode = 'signin';
+    navigate('#/login');
+  });
 }

@@ -693,7 +693,7 @@ function createCourseFromWizard(blueprint) {
     thumb: Math.floor(Math.random()*LumioData.thumbGradients.length),
     health: 60,
     lastAccessed: Date.now(),
-    ownerId: LumioState.currentUser.id,
+    ownerId: getCurrentUser()?.id,
     sharedWith: [],
     sharedScope: null,
     sharedPermission: 'view',
