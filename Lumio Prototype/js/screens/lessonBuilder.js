@@ -254,7 +254,13 @@ function canvasStyles() {
          is shared for the @container quote-layout queries below. */
       .canvas-block .editable-text { cursor:text; }
       .canvas-block .editable-text:hover { background:rgba(20,20,30,0.025); }
-      .canvas-block .editable-text:focus { background:rgba(20,20,30,0.035); }
+      /* Sprint 5A, Phase 6/7 fix: a focus-time background tint covering the
+         WHOLE contenteditable element (not just the selected range) read as
+         a permanent grey overlay the instant you clicked in to edit — it
+         visually competed with the real (smaller) text-selection highlight
+         underneath, making "I selected only the word X" look like "the
+         whole line is highlighted". Removed; :hover (pre-edit affordance,
+         gone once focus/typing starts) is kept. */
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
 
       /* Document-style insertion points — single reusable component used
@@ -1547,7 +1553,7 @@ function renderBlockContent(block, editable) {
       if (layout === 'full') imgStyle = 'width:100%; height:auto;';
       else if (layout === 'banner') imgStyle = 'width:100%; height:260px; object-fit:cover;';
       else imgStyle = 'max-width:480px; width:100%; height:auto; margin:0 auto;';
-      imgStyle += ` display:block; border-radius:${radius};`;
+      imgStyle += ` display:block; border-radius:${radius}; border:${interactiveBorderStyle(ds)};`;
       const imgHtml = src
         ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="${imgStyle} cursor:${editable ? 'pointer' : 'zoom-in'};" />`
         : `<div style="${layout === 'centered' ? 'max-width:480px; margin:0 auto;' : ''}">${imagePlaceholder(d.label || 'Image placeholder', layout === 'banner' ? 200 : 160)}</div>`;
@@ -1555,7 +1561,7 @@ function renderBlockContent(block, editable) {
       const captionHtml = showCaption
         ? `<div class="editable-text text-sm text-muted mt-8" data-role="caption" data-field="caption" data-richtext="true" ${ce} data-placeholder="Add a caption (optional)" style="text-align:center;">${richTextOut(d.caption || '')}</div>`
         : '';
-      return `<div>${imgHtml}${captionHtml}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)}">${imgHtml}${captionHtml}</div>`;
     }
     case 'image_text': {
       const pos = ds.imagePosition || 'left';
@@ -1564,14 +1570,15 @@ function renderBlockContent(block, editable) {
       const gridCols = pos === 'right' ? `${cols[1]} ${cols[0]}` : `${cols[0]} ${cols[1]}`;
       const src = AssetStore.resolveMediaSrc(d.src);
       const alt = d.alt || d.imageLabel || '';
+      const itRadius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
       const imageBlock = src
-        ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="width:100%; height:100%; min-height:140px; object-fit:cover; border-radius:var(--r-md); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
+        ? `<img src="${src}" alt="${escapeHtml(alt)}" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${src}" data-zoom-alt="${escapeHtml(alt)}" style="width:100%; height:100%; min-height:140px; object-fit:cover; border-radius:${itRadius}; border:${interactiveBorderStyle(ds)}; display:block; cursor:${editable ? 'pointer' : 'zoom-in'};" />`
         : imagePlaceholder(alt || 'Image placeholder', 140);
       const textBlock = `<div>
         <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 16)}">${richTextOut(d.heading || '')}</h3>
         <div class="editable-text text-sm mt-8" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Supporting paragraph text goes here." style="line-height:1.7; ${textTypographyStyle(ds, 14)}">${richTextOut(d.body || '')}</div>
       </div>`;
-      return `<div class="image-text-layout" style="display:grid; grid-template-columns:${gridCols}; gap:20px; align-items:center;">
+      return `<div class="image-text-layout" style="${interactiveSpacingStyle(ds)} display:grid; grid-template-columns:${gridCols}; gap:20px; align-items:center;">
         ${pos === 'right' ? `${textBlock}${imageBlock}` : `${imageBlock}${textBlock}`}
       </div>`;
     }
@@ -1581,8 +1588,9 @@ function renderBlockContent(block, editable) {
       const textColor = ds.textColor === 'dark' ? '#1a1a1a' : '#ffffff';
       const position = ds.textPosition || 'center';
       const justifyMap = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
+      const toiRadius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
       const bgStyle = (d.src || d.imageUrl) ? `background-image:url('${src}'); background-size:cover; background-position:center;` : 'background:var(--gradient-warm);';
-      return `<div style="${bgStyle} border-radius:var(--r-md); min-height:320px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
+      return `<div style="${interactiveSpacingStyle(ds)} ${bgStyle} border-radius:${toiRadius}; border:${interactiveBorderStyle(ds)}; min-height:320px; position:relative; overflow:hidden; display:flex; align-items:${justifyMap[position] || 'center'}; justify-content:center;">
         ${src ? `<div class="text-on-image-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)});"></div>` : ''}
         <div style="position:relative; z-index:1; padding:32px; text-align:center; max-width:520px;">
           <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Bold headline on image" style="color:${textColor}; ${textTypographyStyle(ds, 20)}">${richTextOut(d.heading || '')}</h3>
@@ -1594,7 +1602,9 @@ function renderBlockContent(block, editable) {
     case 'carousel': {
       const items = normalizeCarouselItems(d);
       const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
-      return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
+      const carRadius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
+      const carBorder = interactiveBorderStyle(ds);
+      return `<div class="flex gap-12" style="${interactiveSpacingStyle(ds)} overflow-x:auto; align-items:flex-start;">
         ${items.map((item, i) => {
           const fit = item.imageFit || 'cover';
           const rSrc = item.src ? AssetStore.resolveMediaSrc(item.src) : null;
@@ -1602,10 +1612,10 @@ function renderBlockContent(block, editable) {
           if (!item.src) {
             imageHtml = imagePlaceholder(item.title || item.description || `Slide ${i + 1}`, 160);
           } else if (fit === 'full') {
-            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-sm); overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+            imageHtml = `<div class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:${carRadius}; border:${carBorder}; overflow:hidden; cursor:${editable ? 'default' : 'zoom-in'};"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
           } else {
             const of = fitMap[fit] || 'cover';
-            imageHtml = `<img src="${rSrc}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-sm); display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
+            imageHtml = `<img src="${rSrc}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:${carRadius}; border:${carBorder}; display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
           }
           return `
           <div class="card card-pad" style="min-width:180px; max-width:220px;">
@@ -1620,12 +1630,14 @@ function renderBlockContent(block, editable) {
     case 'column_grid': {
       const items = normalizeColumnGridItems(d);
       const columns = Math.max(2, Math.min(6, ds.columns || 3));
-      return `<div style="display:grid; grid-template-columns:repeat(${columns},1fr); gap:12px;">
+      const cgRadius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
+      const cgBorder = interactiveBorderStyle(ds);
+      return `<div style="${interactiveSpacingStyle(ds)} display:grid; grid-template-columns:repeat(${columns},1fr); gap:12px;">
         ${items.map((item, i) => `
           <div class="card card-pad text-center" style="position:relative;">
             ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
             ${item.imageUrl
-              ? `<img src="${AssetStore.resolveMediaSrc(item.imageUrl)}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${AssetStore.resolveMediaSrc(item.imageUrl)}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:var(--r-sm); display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
+              ? `<img src="${AssetStore.resolveMediaSrc(item.imageUrl)}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${AssetStore.resolveMediaSrc(item.imageUrl)}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:${cgRadius}; border:${cgBorder}; display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
               : imagePlaceholder(item.title || 'Item', 150)}
             <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
@@ -1791,7 +1803,7 @@ function renderBlockContent(block, editable) {
       const rowStyle = variant === 'minimal'
         ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
         : variant === 'boxed'
-          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:1px solid var(--border);`
+          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:${interactiveBorderStyle(ds)};`
           : `background:${rowBg}; color:${textColor}; border-radius:${radius};`;
       // Editable canvas only: which rows are open persists across
       // re-renders (keyed by stable block.id), so attaching media to a
@@ -1802,7 +1814,7 @@ function renderBlockContent(block, editable) {
         openRows = new Set(expandFirst ? [0] : []);
         BuilderUI.openItemState[block.id] = openRows;
       }
-      return `<div class="lumio-accordion" style="display:flex; flex-direction:column; gap:${rowSpacing}px;">
+      return `<div class="lumio-accordion" style="${interactiveSpacingStyle(ds)} display:flex; flex-direction:column; gap:${rowSpacing}px;">
         ${items.map((item, i) => {
           const open = editable ? openRows.has(i) : (expandFirst && i === 0);
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
@@ -1839,11 +1851,11 @@ function renderBlockContent(block, editable) {
       const textColor = surfaceTextColor(ds);
       const tabStyle = ds.tabStyle || 'underline';
       const animate = settings.animation !== false;
-      return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}">
+      return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}" style="${interactiveSpacingStyle(ds)}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
           ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(${i}===${active} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
-        <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
+        <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
             ${itemImageHtml(item, 220)}
             <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab content...">${richTextOut(item.body || '')}</div>
@@ -1871,8 +1883,8 @@ function renderBlockContent(block, editable) {
       const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
       const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
       const objectFit = fitMap[ds.imageFit] || 'cover';
-      return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto;">
-        <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; background:${bg}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
+      return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto; ${interactiveSpacingStyle(ds)}">
+        <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; background:${bg}; border:${interactiveBorderStyle(ds)}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
           ${d.image ? `<img src="${AssetStore.resolveMediaSrc(d.image)}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
           ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor};" data-hindex="${i}"
               onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
@@ -1910,10 +1922,10 @@ function renderBlockContent(block, editable) {
       // lumioProcessGoto) so re-renders don't jump back to step 0.
       const persistedStep = editable ? BuilderUI.openItemState[block.id] : undefined;
       const currentStep = (typeof persistedStep === 'number' && persistedStep < items.length) ? persistedStep : 0;
-      return `<div class="lumio-process" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0"
+      return `<div class="lumio-process" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0" style="${interactiveSpacingStyle(ds)}"
           onkeydown="if(event.key==='ArrowLeft')lumioProcessNav(this,-1); if(event.key==='ArrowRight')lumioProcessNav(this,1);"
           ontouchstart="lumioProcessTouchStart(event,this)" ontouchend="lumioProcessTouchEnd(event,this)">
-        <div class="lumio-process-panel" style="background:${panelBg}; color:${textColor}; border-radius:${radius};">
+        <div class="lumio-process-panel" style="background:${panelBg}; color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-process-step ${i === currentStep ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
             ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
@@ -1950,7 +1962,7 @@ function renderBlockContent(block, editable) {
       const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
       const dialogueStyle = ds.dialoguePanelStyle || 'card';
       const completionMessage = settings.completionMessage || 'Scenario complete!';
-      return `<div class="lumio-scenario" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="0" style="border-radius:${radius}; overflow:hidden;">
+      return `<div class="lumio-scenario" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="0" style="border-radius:${radius}; overflow:hidden; border:${interactiveBorderStyle(ds)}; ${interactiveSpacingStyle(ds)}">
         ${scenes.map((scene, i) => `<div class="lumio-scenario-scene ${i === 0 ? 'active' : ''}" data-scene="${i}">
           <div class="lumio-scenario-bg" style="${scene.backgroundImage ? `background-image:url('${AssetStore.resolveMediaSrc(scene.backgroundImage)}'); background-size:cover; background-position:center;` : `background:${bg};`}">
             ${scene.backgroundVideo ? `<video class="lumio-scenario-bgvideo" autoplay muted loop playsinline src="${AssetStore.resolveMediaSrc(scene.backgroundVideo)}"></video>` : ''}
@@ -1981,16 +1993,27 @@ function renderBlockContent(block, editable) {
       const cols = ds.cardSize === 'lg' ? 2 : 3;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
+      // Sprint 3E, Phase 1 root cause: the existing outer Background swatch
+      // control (ds.bg) and Alignment control (ds.align) were never read
+      // by this renderer at all — ds.align is now consumed (justify-content
+      // below); ds.bg is applied to the back face (the front face keeps its
+      // deliberate themed gradient + white text, which a light pastel
+      // background would make unreadable — back face has no such
+      // constraint, so it's the correct place for a user-chosen background
+      // to actually show up). flashcardSpacingStyle mirrors the
+      // divider-family Top/Bottom Padding pattern.
+      const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
+      const borderStyle = ds.cardBorder === false ? 'none' : `1px solid ${ds.cardBorderColor || 'var(--border)'}`;
+      return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
         <div style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:12px; width:100%;">
           ${items.map((item, i) => `
             <div>
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
-                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
+                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
-                  <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
+                  <div class="flip-card-face flip-card-back" style="background:${backBg}; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.back, i, 'back', ce, editable)}
                   </div>
                 </div>
@@ -2006,16 +2029,18 @@ function renderBlockContent(block, editable) {
       const flipHint = ds.flipHint !== false;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      return `<div style="display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
+      const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
+      const borderStyle = ds.cardBorder === false ? 'none' : `1px solid ${ds.cardBorderColor || 'var(--border)'}`;
+      return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
         <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:220px; cursor:pointer;">
                 <div class="flip-card-inner">
-                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius};">
+                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
-                  <div class="flip-card-face flip-card-back" style="background:var(--surface-0); border-radius:${radius};">
+                  <div class="flip-card-face flip-card-back" style="background:${backBg}; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.back, i, 'back', ce, editable)}
                   </div>
                 </div>
@@ -2110,15 +2135,15 @@ function renderBlockContent(block, editable) {
     }
 
     case 'kc_multiple_choice':
-      return knowledgeCheckMC(d, editable);
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMC(d, editable)}</div>`;
     case 'kc_multiple_response':
-      return knowledgeCheckMR(d, editable);
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMR(d, editable)}</div>`;
     case 'kc_matching':
-      return knowledgeCheckMatching(d, editable);
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatching(d, editable)}</div>`;
     case 'kc_fill_gap':
-      return knowledgeCheckFillGap(d, editable);
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable)}</div>`;
     case 'kc_ordering':
-      return knowledgeCheckOrdering(d, editable);
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable)}</div>`;
 
     default:
       return `<div class="text-center" style="padding:24px; color:var(--ink-400);">
@@ -3057,20 +3082,26 @@ function renderImageFamilyPanel(block, index) {
           <div class="prop-section-title">Layout</div>
           ${segControl('design-imglayout', 'layout', [{id:'centered',label:'Centered'},{id:'full',label:'Full Width'},{id:'banner',label:'Banner'}], ds.layout || 'centered')}
         </div>
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Corner Radius</div>
           ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
-        </div>`;
+        </div>
+        ${interactiveBorderPaddingFields(ds)}`;
     case 'image_text':
       return `
         <div class="prop-section">
           <div class="prop-section-title">Image Position</div>
           ${segControl('design-imgpos', 'imagePosition', [{id:'left',label:'Left'},{id:'right',label:'Right'}], ds.imagePosition || 'left')}
         </div>
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Image Size</div>
           ${segControl('design-imgsize', 'imageSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.imageSize || 'md')}
         </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Corner Radius</div>
+          ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
+        </div>
+        ${interactiveBorderPaddingFields(ds)}
         <p class="text-sm text-muted mt-16">On narrow screens, the image and text stack vertically.</p>`;
     case 'text_on_image': {
       const activeTextColor = ds.textColor === 'dark' ? 'dark' : 'light';
@@ -3086,20 +3117,36 @@ function renderImageFamilyPanel(block, index) {
           <div class="prop-section-title">Text Colour</div>
           ${segControl('design-textcolor', 'textColor', [{id:'light',label:'Light'},{id:'dark',label:'Dark'}], activeTextColor)}
         </div>
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Text Position</div>
           ${segControl('design-textpos', 'textPosition', [{id:'top',label:'Top'},{id:'center',label:'Center'},{id:'bottom',label:'Bottom'}], ds.textPosition || 'center')}
         </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Corner Radius</div>
+          ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
+        </div>
+        ${interactiveBorderPaddingFields(ds)}
         <p class="text-sm text-muted mt-16">Increase overlay darkness or switch to dark text to keep content readable over bright images.</p>`;
     }
     case 'carousel':
-      return `<p class="text-sm text-muted">Use the Content tab to manage slides — add images, titles, descriptions and reorder.</p>`;
+      return `
+        <div class="prop-section">
+          <div class="prop-section-title">Image Corner Radius</div>
+          ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
+        </div>
+        ${interactiveBorderPaddingFields(ds)}
+        <p class="text-sm text-muted mt-16">Use the Content tab to manage slides — add images, titles, descriptions and reorder.</p>`;
     case 'column_grid':
       return `
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Columns</div>
           ${segControl('design-gridcols', 'columns', [2,3,4,5,6].map(n => ({id:String(n), label:String(n)})), String(ds.columns || 3))}
         </div>
+        <div class="prop-section">
+          <div class="prop-section-title">Image Corner Radius</div>
+          ${segControl('design-imgradius', 'imageRadius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.imageRadius || 'soft')}
+        </div>
+        ${interactiveBorderPaddingFields(ds)}
         <p class="text-sm text-muted mt-16">Manage items directly on the canvas — upload images and edit titles/descriptions using the controls on each item.</p>`;
     default:
       return '';
@@ -3809,7 +3856,7 @@ function dividerContentPanel(block) {
 // block's own inner wrapper, layered on top of the shared .block-content-
 // area padding — same pattern Text/Statement/Quote blocks already use.
 function dividerSpacingStyle(ds) {
-  return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px;`;
+  return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px; padding-left:${ds.paddingLeft ?? 0}px; padding-right:${ds.paddingRight ?? 0}px;`;
 }
 function dividerSpacingFields(ds) {
   return `
@@ -3824,6 +3871,16 @@ function dividerSpacingFields(ds) {
       <div class="flex items-center gap-8">
         <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="120" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
         <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Left Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingLeft" min="0" max="120" value="${ds.paddingLeft ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingLeft ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Right Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingRight" min="0" max="120" value="${ds.paddingRight ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingRight ?? 0}px</span>
       </div>
     </div>`;
 }
@@ -4331,6 +4388,8 @@ function renderFileBlockPanel(block, index) {
 function blockTypeDesignFields(block, ds) {
   const cat = blockCategory(block.type);
   switch (cat) {
+    case 'Knowledge Checks':
+      return interactiveBorderPaddingFields(ds);
     case 'Text':
       return `
         <div class="prop-section" style="border-bottom:none;">
@@ -4488,21 +4547,89 @@ function flashcardContentPanel(block, d) {
 }
 
 /* Flashcard Grid / Flashcard Stack — Format design-tab fields. */
-function flashcardDesignFields(block, ds) {
-  const flipHintField = `
+// Sprint 3E, Phase 1/2/6 fix: shared by Flashcard Grid and Stack — same
+// padding pattern used for the Divider family (lineDividerDesignFields etc).
+function flashcardSpacingStyle(ds) {
+  return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px;`;
+}
+
+// Sprint 3D-A fix: shared by Accordion/Tabs/Process/Labelled Graphic/
+// Scenario — none of these exposed a Border on/off or Padding control at
+// all (Accordion's "boxed" variant had a hardcoded, undisable border;
+// Tabs/Process/Labelled Graphic's panel surfaces had background+radius but
+// no border option whatsoever). Same benchmark pattern as Flashcards.
+function interactiveBorderStyle(ds) {
+  return ds.panelBorder === false ? 'none' : `1px solid ${ds.panelBorderColor || 'var(--border)'}`;
+}
+function interactiveSpacingStyle(ds) {
+  return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px;`;
+}
+function interactiveBorderPaddingFields(ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Border</div>
+      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="panelBorder" ${ds.panelBorder !== false ? 'checked' : ''}/> Show border</label>
+      ${ds.panelBorder !== false ? `<input type="color" class="design-color-input" data-prop="panelBorderColor" value="${ds.panelBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
+    </div>
     <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Spacing</div>
+      <p class="text-sm text-muted mb-8">Top Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
+      </div>
+    </div>`;
+}
+
+function flashcardDesignFields(block, ds) {
+  // Sprint 3E, Phase 1/2 root cause: the OUTER generic Interactive-category
+  // panel (renderRightTabContentInner, shown for every block in this
+  // category before this function runs) already renders a real, working
+  // Background swatch picker (ds.bg) and Alignment/Corner Radius segControls
+  // (ds.align/ds.radius) — these are the controls an author actually sees
+  // and tries first. This function used to add a SECOND, differently-styled
+  // Alignment section and never read ds.bg at all in the renderer, which is
+  // exactly "Alignment does not function correctly" / "Background colour
+  // does not function correctly": the visible control they used had no
+  // effect, while a redundant second one (in an earlier draft of this fix)
+  // would have silently done nothing useful either. Fix: make the card
+  // faces actually consume ds.bg instead of adding parallel controls.
+  const borderField = `
+    <div class="prop-section">
+      <div class="prop-section-title">Border</div>
+      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="cardBorder" ${ds.cardBorder !== false ? 'checked' : ''}/> Show card border</label>
+      ${ds.cardBorder !== false ? `<input type="color" class="design-color-input" data-prop="cardBorderColor" value="${ds.cardBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
+    </div>`;
+  const spacingField = `
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Spacing</div>
+      <p class="text-sm text-muted mb-8">Top Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
+      </div>
+    </div>`;
+  const flipHintField = `
+    <div class="prop-section">
       <div class="prop-section-title">Flip Hint</div>
       <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="flipHint" ${ds.flipHint !== false ? 'checked' : ''}/> Show "Click to flip" hint</label>
     </div>`;
-  if (block.type === 'flashcard_grid') {
-    return `
-      <div class="prop-section">
-        <div class="prop-section-title">Card Size</div>
-        ${segControl('design-cardsize', 'cardSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.cardSize || 'md')}
-      </div>
-      ${flipHintField}`;
-  }
-  return flipHintField;
+  const sizeField = block.type === 'flashcard_grid' ? `
+    <div class="prop-section">
+      <div class="prop-section-title">Card Size</div>
+      ${segControl('design-cardsize', 'cardSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.cardSize || 'md')}
+    </div>` : '';
+  return sizeField + borderField + flipHintField + spacingField;
 }
 
 /* ============================================================
@@ -4753,13 +4880,14 @@ function accordionDesignFields(block, ds) {
       <div class="prop-section-title">Chevron Style</div>
       ${segControl('design-chevronstyle', 'chevronStyle', [{id:'chevron',label:'Chevron'},{id:'plusminus',label:'+ / −'},{id:'arrow',label:'Arrow'}], ds.chevronStyle || 'chevron')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Row Spacing</div>
       <div class="flex items-center gap-8">
         <input type="range" class="design-range" data-prop="rowSpacing" min="0" max="24" value="${ds.rowSpacing ?? 8}" style="flex:1;" />
         <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.rowSpacing ?? 8}px</span>
       </div>
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* ============================================================
@@ -4784,10 +4912,11 @@ function tabsDesignFields(block, ds) {
       <div class="prop-section-title">Background Style</div>
       ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Tab Style</div>
       ${segControl('design-tabstyle', 'tabStyle', [{id:'underline',label:'Underline'},{id:'pill',label:'Pill'},{id:'boxed',label:'Boxed'}], ds.tabStyle || 'underline')}
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* ============================================================
@@ -4816,10 +4945,11 @@ function processDesignFields(block, ds) {
       <div class="prop-section-title">Background Style</div>
       ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Indicator Style</div>
       ${segControl('design-indicatorstyle', 'indicatorStyle', [{id:'dots',label:'Dots'},{id:'numbers',label:'Numbers'}], ds.indicatorStyle || 'dots')}
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* ============================================================
@@ -4881,10 +5011,11 @@ function labelledGraphicDesignFields(block, ds) {
       <div class="prop-section-title">Marker Size</div>
       ${segControl('design-markersize', 'markerSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.markerSize || 'md')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Visited State Style</div>
       ${segControl('design-visitedstyle', 'visitedStyle', [{id:'filled',label:'Filled'},{id:'checkmark',label:'Checkmark'},{id:'theme',label:'Theme Fill'}], ds.visitedStyle || 'filled')}
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* ============================================================
@@ -4979,10 +5110,11 @@ function scenarioDesignFields(block, ds) {
       <div class="prop-section-title">Dialogue Panel Style</div>
       ${segControl('design-dialoguestyle', 'dialoguePanelStyle', [{id:'card',label:'Card'},{id:'banner',label:'Banner'},{id:'minimal',label:'Minimal'}], ds.dialoguePanelStyle || 'card')}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Character Placement</div>
       ${segControl('design-charplacement', 'characterPlacement', [{id:'left',label:'Left'},{id:'right',label:'Right'},{id:'center',label:'Center'},{id:'none',label:'None'}], ds.characterPlacement || 'left')}
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* ============================================================

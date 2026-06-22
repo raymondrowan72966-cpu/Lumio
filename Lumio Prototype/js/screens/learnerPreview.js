@@ -1031,28 +1031,35 @@ function learnerAudioBlock(block, index, ctx) {
 /* ---- Carousel ---- */
 function learnerCarouselBlock(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const slides = normalizeCarouselItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.carouselIndex[key] || 0) % slides.length + slides.length) % slides.length;
   CompletionEngine.markVisited(ctx, index, active);
   const slide = slides[active];
   const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
+  // Sprint 3D-B/C remaining-work fix: this dedicated learner renderer had
+  // hardcoded image radius and no Border/Padding at all — diverged from the
+  // Builder's carousel case (lessonBuilder.js renderBlockContent), which now
+  // reads ds.imageRadius/panelBorder/paddingTop. Brought into parity here.
+  const carRadius = IMAGE_RADIUS_MAP[ds.imageRadius || 'soft'];
+  const carBorder = interactiveBorderStyle(ds);
   let slideHtml;
   if (!slide.src) {
-    slideHtml = `<div style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender); border-radius:var(--r-md); box-shadow:none; border:none; padding:24px;">
+    slideHtml = `<div style="text-align:center; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--pastel-lavender); border-radius:${carRadius}; box-shadow:none; border:none; padding:24px;">
         <span style="font-weight:600; font-size:14px;">${escapeHtml(slide.title || slide.description || `Slide ${active + 1}`)}</span>
       </div>`;
   } else if ((slide.imageFit || 'cover') === 'full') {
     const rSrc = AssetStore.resolveMediaSrc(slide.src);
-    slideHtml = `<div class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:var(--r-md); overflow:hidden; cursor:zoom-in;"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
+    slideHtml = `<div class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="position:relative; width:100%; aspect-ratio:16/9; border-radius:${carRadius}; border:${carBorder}; overflow:hidden; cursor:zoom-in;"><img src="${rSrc}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" /></div>`;
   } else {
     const of = fitMap[slide.imageFit] || 'cover';
     const rSrc = AssetStore.resolveMediaSrc(slide.src);
-    slideHtml = `<img src="${rSrc}" alt="" class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:var(--r-md); display:block; cursor:zoom-in;" />`;
+    slideHtml = `<img src="${rSrc}" alt="" class="image-zoom-trigger" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:${carRadius}; border:${carBorder}; display:block; cursor:zoom-in;" />`;
   }
   const textHtml = `${slide.title ? `<div class="text-sm mt-8" style="font-weight:600; text-align:center;">${escapeHtml(slide.title)}</div>` : ''}${slide.description ? `<div class="text-sm text-muted mt-4" style="text-align:center;">${escapeHtml(slide.description)}</div>` : ''}`;
   return `
-    <div>
+    <div style="${interactiveSpacingStyle(ds)}">
       ${slideHtml}
       ${textHtml}
       <div class="flex items-center justify-between mt-8">
@@ -1181,8 +1188,19 @@ function kcPostSubmitFooter(ans, settings, key) {
     </div>`;
 }
 
+// Sprint 3D-C, Phase 7 fix: Knowledge Checks have a dedicated learner-runtime
+// renderer (this file), separate from the Builder's shared renderBlockContent
+// — a Builder-only Border/Padding fix there does not reach here. Each
+// learnerKc* function below now wraps its markup the same way the Builder's
+// case 'kc_*' does (interactiveBorderStyle/interactiveSpacingStyle, shared
+// with Accordion/Tabs/Process/Flashcards), so the two renderers stay in sync.
+function learnerKcWrap(ds, html) {
+  return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${html}</div>`;
+}
+
 function learnerKcMultipleChoice(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const options = normalizeKcOptions(d);
   const correct = d.correct ?? 0;
   const key = ctx.lessonId + ':' + (block.id || index);
@@ -1191,7 +1209,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const submitted = !!(ans && ans.submitted);
   const reveal = shouldRevealCorrect(ans, settings);
   const canSubmit = ans && ans.selected !== undefined;
-  return `
+  return learnerKcWrap(ds, `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
     <fieldset style="border:none; margin:0; padding:0;">
       <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following is correct?'}</legend>
@@ -1215,11 +1233,12 @@ function learnerKcMultipleChoice(block, index, ctx) {
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${canSubmit ? '' : 'disabled'}>Check Answer</button>`
       : kcPostSubmitFooter(ans, settings, key)}
-  `;
+  `);
 }
 
 function learnerKcMultipleResponse(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const options = normalizeKcOptions(d);
   const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || { selected: [] };
@@ -1227,7 +1246,7 @@ function learnerKcMultipleResponse(block, index, ctx) {
   const submitted = ans.submitted;
   const hasCorrect = Array.isArray(d.correct);
   const reveal = shouldRevealCorrect(ans, settings);
-  return `
+  return learnerKcWrap(ds, `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
     <fieldset style="border:none; margin:0; padding:0;">
       <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Select all that apply.'}</legend>
@@ -1250,11 +1269,12 @@ function learnerKcMultipleResponse(block, index, ctx) {
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
       : kcPostSubmitFooter(ans, settings, key)}
-  `;
+  `);
 }
 
 function learnerKcMatching(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const left  = normalizeKcLeft(d);
   const right = normalizeKcRight(d);
   const key = ctx.lessonId + ':' + (block.id || index);
@@ -1264,7 +1284,7 @@ function learnerKcMatching(block, index, ctx) {
   const submitted = ans.submitted;
   const locked    = !!(ans.locked);
   const reveal    = shouldRevealCorrect(ans, settings);
-  return `
+  return learnerKcWrap(ds, `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
     <p class="text-sm text-muted mb-8">Tap an item on the left, then its match on the right.</p>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -1293,11 +1313,12 @@ function learnerKcMatching(block, index, ctx) {
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-match-submit" data-kc-key="${key}" ${Object.keys(pairs).length === left.length ? '' : 'disabled'}>Check Matches</button>`
       : kcPostSubmitFooter(ans, settings, key)}
-  `;
+  `);
 }
 
 function learnerKcOrdering(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const items = normalizeKcItems(d);
   const key = ctx.lessonId + ':' + (block.id || index);
   let ans = ctx.progress.kcAnswers[key];
@@ -1309,7 +1330,7 @@ function learnerKcOrdering(block, index, ctx) {
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
-  return `
+  return learnerKcWrap(ds, `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
     <p class="text-sm text-muted mb-8">Use the arrows to arrange these in the correct order.</p>
     <div class="flex-col gap-8 mt-8">
@@ -1332,18 +1353,19 @@ function learnerKcOrdering(block, index, ctx) {
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-order-submit" data-kc-key="${key}">Check Order</button>`
       : kcPostSubmitFooter(ans, settings, key)}
-  `;
+  `);
 }
 
 function learnerKcFillGap(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || {};
   const text = d.text || 'Complete this sentence: ____.';
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
-  return `
+  return learnerKcWrap(ds, `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
     <p style="font-size:15px; line-height:2;">${text}</p>
     <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..."
@@ -1359,7 +1381,7 @@ function learnerKcFillGap(block, index, ctx) {
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
       : kcPostSubmitFooter(ans, settings, key)}
-  `;
+  `);
 }
 
 /* ---------------- SCORING ---------------- */
