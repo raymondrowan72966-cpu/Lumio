@@ -90,6 +90,14 @@ function renderLessonBuilder(lessonId) {
 
   const prevScroll = document.getElementById('lesson-canvas-wrap')?.scrollTop || 0;
   const prevLibraryScroll = document.getElementById('block-library-scroll')?.scrollTop || 0;
+  // Sprint 3, Phase 10 fix: the right Design/Settings panel had no scroll-
+  // position capture at all (unlike the canvas and block library just
+  // above, which already did this correctly) — every property change
+  // calls renderLessonBuilder(), which rebuilds the whole #app subtree
+  // including this panel, silently resetting it to scrollTop 0. On a long
+  // panel (Statement blocks, colour-heavy panels) that made every single
+  // edit jump the panel back to the top.
+  const prevRightScroll = document.getElementById('right-panel-scroll')?.scrollTop || 0;
 
   applyThemeVars(course);
 
@@ -117,6 +125,8 @@ function renderLessonBuilder(lessonId) {
   if (wrap) wrap.scrollTop = prevScroll;
   const libraryScroll = document.getElementById('block-library-scroll');
   if (libraryScroll) libraryScroll.scrollTop = prevLibraryScroll;
+  const rightScroll = document.getElementById('right-panel-scroll');
+  if (rightScroll) rightScroll.scrollTop = prevRightScroll;
 
   // Hydrate URL cache for any asset:// refs in this lesson, then re-render
   // once if new URLs were resolved (handles cold-start page reload).
@@ -1387,15 +1397,29 @@ function renderBlockContent(block, editable) {
     case 'table': {
       const rows = d.rows || DEFAULT_TABLE_ROWS;
       const cellAlign = d.cellAlign || [];
+      const colWidths = d.colWidths || [];
       const headerBg = ds.tableHeaderBg || 'var(--pastel-lavender)';
       const headerTextColor = ds.tableHeaderTextColor || '';
       const borderColor = ds.tableBorderColor || 'var(--border)';
       const bodyFill = ds.tableBodyFill || '';
-      return `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+      // Table Block Controls Sprint, Phase 6 root cause: the table block
+      // already shows the generic "Typography > Text Alignment" control
+      // (ds.align, data-prop="align") — the same one every Text-category
+      // block has — but the table renderer never read ds.align at all, so
+      // setting it to Center visibly did nothing. The fix is to make the
+      // table actually consume the control that was already there, not to
+      // invent a second, differently-named one. A cell's own cellAlign
+      // (set via the floating per-cell rich-text toolbar) still overrides
+      // this table-wide default.
+      const tableAlign = ds.align || 'left';
+      const colCount = rows[0] ? rows[0].length : 0;
+      const colGroup = colWidths.length ? `<colgroup>${Array.from({length: colCount}, (_, i) => `<col style="${colWidths[i] ? `width:${colWidths[i]}%;` : ''}" />`).join('')}</colgroup>` : '';
+      return `<table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:${colWidths.length ? 'fixed' : 'auto'};">
+        ${colGroup}
         ${rows.map((row, ri) => `<tr style="background:${ri === 0 ? headerBg : (bodyFill || 'transparent')};">${row.map((cell, ci) => {
           const tag = ri === 0 ? 'th' : 'td';
-          const align = (cellAlign[ri] || [])[ci];
-          return `<${tag} style="padding:8px; text-align:left; border:1px solid ${borderColor};${ri === 0 && headerTextColor ? ` color:${headerTextColor};` : ''}"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" data-richtext="true" ${ce} style="${textTypographyStyle(ds, 13)}${align ? `text-align:${align};` : ''}">${richTextOut(cell)}</div></${tag}>`;
+          const align = (cellAlign[ri] || [])[ci] || tableAlign;
+          return `<${tag} style="padding:8px; text-align:${align}; border:1px solid ${borderColor}; overflow-wrap:break-word;${ri === 0 && headerTextColor ? ` color:${headerTextColor};` : ''}"><div class="editable-text" data-role="cell" data-field="cell" data-row="${ri}" data-col="${ci}" data-richtext="true" ${ce} style="${textTypographyStyle(ds, 13)}text-align:${align};">${richTextOut(cell)}</div></${tag}>`;
         }).join('')}</tr>`).join('')}
       </table>`;
     }
@@ -1478,9 +1502,24 @@ function renderBlockContent(block, editable) {
     }
     case 'quote_carousel': {
       const quotes = normalizeQuoteItems(d);
-      return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start;">
+      // Sprint 3B, Phase 3 fix: the card background was hardcoded to
+      // var(--pastel-lavender) regardless of the Style Variant control
+      // (ds.accent) or the Background colour control — neither had ANY
+      // effect on rendering, which is exactly the reported defect. Now
+      // reads the same QUOTE_ACCENT_BG_MAP every other quote block already
+      // uses for ds.accent, and a custom background colour (ds.bgType
+      // 'custom'/ds.bgColor, the same generic Background section shown for
+      // every Text-category block) overrides it when set.
+      const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
+      const cardBg = ds.bgType === 'custom' && ds.bgColor ? ds.bgColor : accentBg;
+      // "Card Alignment" (component alignment) — separate from each quote's
+      // own text/author alignment, which only ever affected the TEXT inside
+      // a card, never how the row of cards is positioned within the block.
+      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+      const cardAlign = justifyMap[ds.cardAlign] || 'flex-start';
+      return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start; justify-content:${cardAlign};">
         ${quotes.map((q, i) => `
-          <div class="card card-pad" style="min-width:200px; background:var(--pastel-lavender); border:none;">
+          <div class="card card-pad" style="min-width:200px; background:${cardBg}; border:none;">
             ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
             <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
             <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
@@ -2506,7 +2545,7 @@ function renderRightPanel(blocks, course, lesson) {
 
   if (!block) {
     return `
-      <div style="width:300px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;">
+      <div style="width:300px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
         <div class="flex items-center justify-between">
           <h3 style="font-size:14px;">Lesson Insights</h3>
           <button class="btn-icon" id="collapse-right" title="Collapse panel">»</button>
@@ -2536,7 +2575,7 @@ function renderRightPanel(blocks, course, lesson) {
         </div>
         <button class="btn-icon" id="collapse-right" title="Collapse panel">»</button>
       </div>
-      <div style="padding:18px; flex:1; overflow-y:auto;">
+      <div style="padding:18px; flex:1; overflow-y:auto;" id="right-panel-scroll">
         ${renderRightTabContent(block, BuilderUI.selected, course)}
       </div>
     </div>
@@ -2617,9 +2656,12 @@ function renderTextBlockPanel(block, index) {
       `;
     }
     if (block.type === 'table') {
+      const rows = d.rows || DEFAULT_TABLE_ROWS;
+      const colCount = rows[0] ? rows[0].length : 0;
+      const colWidths = d.colWidths || [];
       return `
         <p class="text-sm text-muted">Click directly on a cell in the canvas to edit its text.</p>
-        <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section">
           <div class="prop-section-title">Rows &amp; Columns</div>
           <div class="flex gap-8" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="table-row-add">+ Row</button>
@@ -2627,6 +2669,18 @@ function renderTextBlockPanel(block, index) {
             <button class="btn btn-secondary btn-sm" id="table-col-add">+ Column</button>
             <button class="btn btn-secondary btn-sm" id="table-col-del">– Column</button>
           </div>
+        </div>
+        <div class="prop-section" style="border-bottom:none;">
+          <div class="prop-section-title">Column Width</div>
+          <p class="text-xs text-muted mb-8">Percent of table width per column. Leave blank for automatic sizing.</p>
+          ${Array.from({length: colCount}, (_, i) => `
+            <div class="flex items-center gap-8 mb-8">
+              <label class="text-sm" style="width:64px; flex-shrink:0;">Col ${i + 1}</label>
+              <input type="number" class="input table-col-width" data-col="${i}" min="5" max="90" placeholder="auto" value="${colWidths[i] || ''}" style="width:80px;" />
+              <span class="text-sm text-muted">%</span>
+            </div>
+          `).join('')}
+          ${colWidths.some(w => w) ? `<button class="btn btn-ghost btn-sm" id="table-col-width-reset">Reset to automatic</button>` : ''}
         </div>
       `;
     }
@@ -3072,6 +3126,31 @@ function completionRequirementPanel(block) {
   const s = block.settings || {};
   const required = s.completionRequired === true;
   const options = CompletionEngine.ruleOptionsFor(block.type);
+  // Sprint 2, Phase 1 fix: assessment blocks (Knowledge Checks) already have
+  // a dedicated, more specific "Assessment Rules" panel (kcSettingsPanel)
+  // with its own Completion Rule / Require Correct Answer / Passing
+  // Requirement controls. Showing this generic Rule dropdown ALONGSIDE it
+  // used to be actively misleading — both looked like they controlled
+  // completion, but only the KC panel's fields actually fed scoring, while
+  // this dropdown (completionRuleType) was the only one read by the
+  // Next-button gate. Both checks now read the same fields (see
+  // completionEngine.js isNextRequirementMet), so this dropdown is fully
+  // redundant for assessed blocks — hide it instead of leaving a second,
+  // confusing control that visually implies it does something it doesn't.
+  const cap = BlockCapabilities.COMPLETION[block.type];
+  if (cap && cap.strategy === 'assessed') {
+    const required = (block.settings || {}).completionRequired === true;
+    return `
+      <div class="prop-section-title mt-16">Completion</div>
+      <div class="field">
+        <label class="flex items-center gap-8">
+          <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
+          Required for Lesson Completion
+        </label>
+        <p class="text-xs text-muted mt-4">Pass/submit behaviour is configured in Assessment Rules above.</p>
+      </div>
+    `;
+  }
   const currentRule = CompletionEngine.effectiveRule(block);
   const RULE_LABELS = {
     viewed: 'Viewed', watched_50: 'Watched 50%', watched_75: 'Watched 75%', watched_100: 'Watched 100%',
@@ -4271,6 +4350,12 @@ function blockTypeDesignFields(block, ds) {
           <div class="prop-section-title">Style Variant</div>
           ${segControl('design-variant', 'accent', [{id:'lavender',label:'Lavender'},{id:'cyan',label:'Cyan'},{id:'pink',label:'Pink'},{id:'peach',label:'Peach'}], ds.accent || 'lavender')}
         </div>
+        ${block.type === 'quote_carousel' ? `
+        <div class="prop-section">
+          <div class="prop-section-title">Card Alignment</div>
+          <p class="text-xs text-muted mb-8">How the row of cards sits within the block — separate from each quote's own text alignment.</p>
+          ${segControl('design-cardalign', 'cardAlign', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'}], ds.cardAlign || 'left')}
+        </div>` : ''}
         ${block.type === 'quote_image' ? `
         <div class="prop-section">
           <div class="prop-section-title">Text Colour</div>
@@ -4574,7 +4659,7 @@ function itemListContentPanel(block, d, listKey, itemLabel, factory, opts) {
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
-        <div class="prop-section-title" style="margin:0;">${itemLabel} ${i + 1}</div>
+        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">${item.title ? escapeHtml(item.title) : `${itemLabel} ${i + 1}`}</div>
         ${itemManageToolbar(listKey, i, items.length)}
       </div>
       ${opts.canvasEditable
@@ -4622,7 +4707,7 @@ function galleryCarouselContentPanel(block, d) {
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
-        <div class="prop-section-title" style="margin:0;">Slide ${i + 1}</div>
+        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">${item.title ? escapeHtml(item.title) : `Slide ${i + 1}`}</div>
         ${itemManageToolbar('items', i, items.length)}
       </div>
       <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
@@ -6942,6 +7027,27 @@ function bindBuilderEvents(course, lesson, blocks) {
     block.data = block.data || {};
     const rows = block.data.rows || (block.data.rows = DEFAULT_TABLE_ROWS.map(r => r.slice()));
     if (rows[0].length > 1) rows.forEach(row => row.pop());
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  });
+
+  // Table Block Controls Sprint, Phase 7: per-column width (percent).
+  app.querySelectorAll('.table-col-width').forEach(inp => inp.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.data = block.data || {};
+    const colWidths = block.data.colWidths || (block.data.colWidths = []);
+    const i = parseInt(inp.dataset.col, 10);
+    const val = parseInt(inp.value, 10);
+    colWidths[i] = (val > 0) ? val : null;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelector('#table-col-width-reset')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.data = block.data || {};
+    block.data.colWidths = [];
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   });

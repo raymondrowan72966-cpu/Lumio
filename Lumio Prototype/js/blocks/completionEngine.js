@@ -279,9 +279,16 @@ const CompletionEngine = (function () {
       return itemRuleCount(rule, bp.flipped || [], itemCount(block, d));
     }
     if (cap.strategy === 'assessed') {
-      const ans = ctx.progress.kcAnswers[progressKey(ctx.lessonId, block.id || index)];
-      if (!ans || (ans.attempts || 0) === 0) return false;
-      return rule === 'correct' ? !!ans.passed : true; // 'submitted'
+      // Sprint 2, Phase 1 fix: this used to branch on `rule` (effectiveRule(),
+      // backed by block.settings.completionRuleType) — a completely separate
+      // field from the one the KC "Assessment Rules" panel actually exposes
+      // and writes (requireCorrectAnswer / completionRule === 'passed').
+      // Author-visible toggles like "Require Correct Answer to Complete" had
+      // zero effect on the Next/Finish-Course button because this check
+      // never read them — only isBlockCompleted (the Continue-block gate)
+      // did. Both gates now read the same fields, so a single setting
+      // change affects both consistently.
+      return isBlockCompleted(block, index, ctx);
     }
     return isBlockCompleted(block, index, ctx);
   }

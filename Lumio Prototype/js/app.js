@@ -2108,6 +2108,20 @@ function openLearnerPreviewFor(courseId, returnTo, lessonId) {
     if (project) tmpl.title = project.title;
     LumioState.courses[courseId] = tmpl;
   }
+  // Sprint 2, Phase 5 fix: LumioState.learnerProgress[courseId] previously
+  // persisted indefinitely once created (ensureLearnerProgress only
+  // initializes it if missing — never resets an existing one), so it
+  // silently carried over between separate Preview launches. An author
+  // testing a lesson, exiting, editing content, then re-entering Preview
+  // would see stale completedLessons/kcAnswers/blockProgress from the
+  // PRIOR test — a false "already complete" result with no relationship
+  // to the content as it now exists. Every Preview launch (this is the
+  // single authoring-side entry point) now starts a genuinely clean
+  // learner attempt; this never touches a real exported package's own
+  // learner state, which lives in a completely separate per-package
+  // localStorage key (see publish.js's bootstrap), not this one.
+  delete LumioState.learnerProgress?.[courseId];
+  LearnerUI.revealedContinues = {};
   LumioState.learnerPreview = { returnTo: returnTo || '#/projects' };
   navigate('#/learner/' + courseId + (lessonId ? '/' + lessonId : ''));
 }

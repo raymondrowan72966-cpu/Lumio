@@ -734,7 +734,17 @@ function renderLearnerLesson(course, lessonId) {
 
   const lesson = isAssessment ? course.assessments[assessmentIdx] : course.lessons[lessonIdx];
   const blocks = LumioState.lessons[lessonId] || [];
-  const ctx = { courseId: course.id, lessonId, progress };
+  // ctx.blocks must be set BEFORE any CompletionEngine call (isLessonReadyForNext
+  // below runs immediately) — CompletionEngine.resolveBlockKey() falls back to
+  // the raw array index when ctx.blocks is missing, instead of the block's
+  // stable id, silently writing/reading progress under the WRONG key
+  // (lessonId:0 instead of lessonId:<blockId>). That stale, permanently-empty
+  // index-keyed entry is what isLessonReadyForNext's first call was reading
+  // from — so a real interaction recorded under the correct id-keyed entry
+  // (by renderLearnerBlocks/bindLearnerBlockEvents, which set ctx.blocks
+  // before any block ever interacts) was never seen by the lesson-wide
+  // Next-button gate computed here.
+  const ctx = { courseId: course.id, lessonId, progress, blocks };
   LearnerUI.activeCtx = ctx;
 
   const isLastLesson = !isAssessment && lessonIdx === course.lessons.length - 1;
@@ -1058,14 +1068,23 @@ function learnerCarouselBlock(block, index, ctx) {
 /* ---- Quote Carousel ---- */
 function learnerQuoteCarouselBlock(block, index, ctx) {
   const d = block.data || {};
+  const ds = block.design || {};
   const quotes = normalizeQuoteItems(d);
   const key = ctx.lessonId + ':' + index;
   const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
   CompletionEngine.markVisited(ctx, index, active);
   const q = quotes[active];
+  // Sprint 3B, Phase 3 fix: this learner-runtime renderer is a SEPARATE
+  // code path from the Builder canvas's renderBlockContent (single-card
+  // Prev/Next view here vs. a scrolling row of cards in the Builder) — it
+  // had the exact same hardcoded background, so Style Variant/Background
+  // colour silently had no effect specifically in Learner Preview/exports
+  // even after the Builder canvas itself was fixed.
+  const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
+  const cardBg = ds.bgType === 'custom' && ds.bgColor ? ds.bgColor : accentBg;
   return `
     <div>
-      <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--pastel-lavender); border-radius:var(--r-md); box-shadow:none; padding:20px 24px;">
+      <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:${cardBg}; border-radius:var(--r-md); box-shadow:none; padding:20px 24px;">
         ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
         <p class="text-sm"${q.textAlign ? ` style="text-align:${q.textAlign};"` : ''}>${richTextOut(q.text || '')}</p>
         ${q.author ? `<p class="text-sm text-muted mt-8"${q.authorAlign ? ` style="text-align:${q.authorAlign};"` : ''}>${richTextOut(q.author)}</p>` : ''}
