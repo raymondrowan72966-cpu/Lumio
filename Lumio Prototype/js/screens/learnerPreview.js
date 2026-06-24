@@ -890,9 +890,18 @@ function renderLearnerBlocks(blocks, ctx) {
       wrapperStyle = `background:transparent; box-shadow:none; border:none; border-radius:0; margin-bottom:${flowMargin}; padding:3px 22px; ${extraStyle}`;
     } else {
       // Card-treatment: white background, 1px border, NO shadow (Preview = Published rule).
+      // Sprint 3C fix: this border was hardcoded to var(--border) (flat
+      // system grey) regardless of the course's selected Page Background —
+      // root cause of the "grey box on a white page" report, shared by
+      // every 'card'-treatment block (Tabs, Accordion, Process, Labelled
+      // Graphic, Scenario, Knowledge Checks, Charts). Single source of truth:
+      // DesignSystem.resolveBlockStyle()'s 'card' branch, fixed once here.
+      // --theme-bg-solid (set per-course in themeVarStyle, wizard.js) is a
+      // guaranteed-solid colour even for the two gradient Page Background
+      // presets, so the border can blend into ANY selected background.
       const bgStyle = ds.bg && ds.bg !== 'transparent' ? `background:${ds.bg};` : 'background:var(--surface-0);';
       const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
-      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:none; border:1px solid var(--border); margin-bottom:${FLOW_SPACING}; padding:3px 22px; ${extraStyle}`;
+      wrapperStyle = `${bgStyle} ${radiusStyle} box-shadow:none; border:1px solid var(--theme-bg-solid, var(--border)); margin-bottom:${FLOW_SPACING}; padding:3px 22px; ${extraStyle}`;
     }
     html += `<div data-lp-lesson="${ctx.lessonId}" data-lp-index="${i}" style="${wrapperStyle}">${renderLearnerBlock(block, i, ctx)}</div>`;
     if (block.type === 'continue' && !revealed.has(i)) break;

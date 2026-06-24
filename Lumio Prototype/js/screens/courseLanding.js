@@ -4,11 +4,7 @@
 
 function ensureCourseDesign(course) {
   if (!course.themeDesign) {
-    const preset = LumioData.themeDesigner.presetPalettes[0];
-    course.themeDesign = {
-      primary: preset.primary, secondary: preset.secondary, accent: preset.accent,
-      fontId: 'poppins-inter', fontSizeId: 'md', buttonStyleId: 'pill', radiusId: 'soft', bgStyleId: 'flat',
-    };
+    course.themeDesign = defaultThemeDesign();
   }
   if (!course.landingLayout) course.landingLayout = 'A';
   if (!course.language) course.language = 'English';

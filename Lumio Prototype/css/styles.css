@@ -993,17 +993,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .lumio-accordion-header {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 14px 16px; cursor: pointer; user-select: none;
-  /* Sprint 3B: theme-aware separator. A separate --surface-separator custom
-     property declared once on :root was tried first and rejected — its
-     var(--theme-primary) reference baked in :root's own default (#7C3AED)
-     at declaration time instead of the per-course override applied lower
-     down on #app, so every course showed the same violet-tinted line
-     regardless of theme (confirmed via getComputedStyle before fixing).
-     Inlining the color-mix() directly in each consuming rule lets it
-     resolve var(--theme-primary) using this rule's own cascade (a
-     descendant of #app, where applyThemeVars() sets the real per-course
-     value), which is the only way that's resolved correctly. */
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-primary, var(--indigo)) 14%, var(--border));
+  border-bottom: 1px solid var(--border);
 }
 .lumio-accordion-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .lumio-accordion-title > * { margin: 0; }
@@ -1036,7 +1026,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 /* --- Tabs --- */
 .lumio-tabs-strip {
-  display: flex; gap: 4px; border-bottom: 1px solid color-mix(in srgb, var(--theme-primary, var(--indigo)) 14%, var(--border)); flex-wrap: wrap;
+  display: flex; gap: 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap;
 }
 .lumio-tab-btn {
   appearance: none; border: none; background: none; cursor: pointer;

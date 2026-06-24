@@ -1901,7 +1901,7 @@ function renderBlockContent(block, editable) {
       const textColor = archATextColor(ds);
       const markerStyle = ds.markerStyle || 'none';
       const rowStyle = variant === 'minimal'
-        ? `background:transparent; border-bottom:1px solid color-mix(in srgb, var(--theme-primary, var(--indigo)) 14%, var(--border)); border-radius:0;`
+        ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
         : variant === 'boxed'
           ? `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:${interactiveBorderStyle(ds)};`
           : `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius};`;
@@ -2091,7 +2091,26 @@ function renderBlockContent(block, editable) {
       const flipHint = ds.flipHint !== false;
       const sizeMap = { sm: 140, md: 180, lg: 220 };
       const cardH = sizeMap[ds.cardSize] || sizeMap.md;
-      const cols = ds.cardSize === 'lg' ? 2 : 3;
+      // Sprint 3E root cause: cols was fixed at the intended column count
+      // regardless of actual item count. With fewer items than columns
+      // (e.g. 2 items, cols=3), grid-template-columns still declared 3
+      // tracks — an invisible trailing "ghost column" the visible cards
+      // never occupy. width:fit-content sized to the explicit 3-track
+      // definition, not the 2 actually-placed cards, so the cards ended up
+      // left-packed inside an oversized box: mathematically positioned per
+      // the (oversized) grid, but visually off-centre relative to what's
+      // actually visible. Capping cols at the real item count removes the
+      // ghost column for any count, including counts that don't evenly
+      // divide (4, 5, ...), where it only affects the otherwise-unrelated
+      // last-row wrap, not the single-row case this was reported against.
+      const intendedCols = ds.cardSize === 'lg' ? 2 : 3;
+      const cols = Math.max(1, Math.min(intendedCols, items.length));
+      // Column width is independent from card height (cardH) — needed as an
+      // explicit size so the grid can use width:fit-content below (1fr
+      // columns have no intrinsic size to fit to, which would collapse the
+      // grid to ~0 width instead of sizing to its actual content).
+      const colWidthMap = { sm: 160, md: 200, lg: 260 };
+      const colWidth = colWidthMap[ds.cardSize] || colWidthMap.md;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       // Sprint 3E, Phase 1 root cause: the existing outer Background swatch
@@ -2105,8 +2124,17 @@ function renderBlockContent(block, editable) {
       // divider-family Top/Bottom Padding pattern.
       const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
       const borderStyle = ds.cardBorder === true ? `1px solid ${ds.cardBorderColor || 'var(--border)'}` : 'none';
-      return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
-        <div style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:12px; width:100%;">
+      // Sprint 3D root cause: the grid wrapper below was hardcoded to
+      // width:100% — its only sibling-flex-relationship is with THIS outer
+      // div, so a 100%-wide child has no room to shift left/center/right;
+      // justify-content was correctly reading ds.align all along, but had
+      // nothing visible to do. Quote Carousel never had this problem since
+      // its cards (the actual flex children) aren't forced to full width.
+      // Fix: let the grid size to its natural content width (3 cards ×
+      // fixed column width + gaps), capped at 100% so it never overflows on
+      // narrow screens — now there's real room for justify-content to move.
+      return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'}; width:100%;">
+        <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; width:fit-content; max-width:100%;">
           ${items.map((item, i) => `
             <div>
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">

@@ -938,3 +938,18 @@ const LumioData = {
     }
   }
 };
+
+// Config Update: single source of truth for the default themeDesign given to
+// a brand-new course. Previously duplicated verbatim (and independently
+// drifting) in wizard.js's ensureThemeDesign() and courseLanding.js's
+// ensureCourseDesign() — both now call this instead of hardcoding their own
+// copy. Does not affect any course that already has a themeDesign object
+// (existing/imported/exported courses), since both call sites only invoke
+// this when themeDesign is missing entirely.
+function defaultThemeDesign() {
+  const preset = LumioData.themeDesigner.presetPalettes[0];
+  return {
+    primary: preset.primary, secondary: preset.secondary, accent: preset.accent,
+    fontId: 'poppins-inter', fontSizeId: 'md', buttonStyleId: 'pill', radiusId: 'soft', bgStyleId: 'white',
+  };
+}

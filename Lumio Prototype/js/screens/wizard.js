@@ -240,31 +240,37 @@ function wizardStepContent(stepKey, w) {
 /* ---------------- THEME DESIGNER (Wizard Step 7) ---------------- */
 function ensureThemeDesign(w) {
   if (!w.themeDesign) {
-    const preset = LumioData.themeDesigner.presetPalettes[0];
-    w.themeDesign = {
-      primary: preset.primary,
-      secondary: preset.secondary,
-      accent: preset.accent,
-      fontId: 'poppins-inter',
-      fontSizeId: 'md',
-      buttonStyleId: 'pill',
-      radiusId: 'soft',
-      bgStyleId: 'flat',
-    };
+    w.themeDesign = defaultThemeDesign();
   }
   return w.themeDesign;
 }
 
+// Sprint 3C: a guaranteed-SOLID companion to each Page Background preset.
+// --theme-bg-style itself is sometimes a gradient (Aurora Mesh, Soft
+// Gradient), which is invalid as a border-color — browsers silently drop an
+// invalid border-color, which would leave the outer card border unstyled
+// rather than matching the theme. Each entry here is the same surface tone
+// the preset already uses (or its nearest solid anchor for the two gradient
+// presets), so the outer block border can blend into the page background
+// for every preset without introducing a second background system.
+const THEME_BG_SOLID_MAP = {
+  white: '#FFFFFF',
+  'light-grey': '#F1F1F4',
+  flat: 'var(--surface-50)',
+  mesh: 'var(--surface-50)',
+  'soft-gradient': 'var(--surface-0)',
+};
 function themeVarStyle(td) {
   const font = LumioData.themeDesigner.fontFamilies.find(f => f.id === td.fontId) || LumioData.themeDesigner.fontFamilies[0];
   const size = LumioData.themeDesigner.fontSizes.find(f => f.id === td.fontSizeId) || LumioData.themeDesigner.fontSizes[1];
   const btn = LumioData.themeDesigner.buttonStyles.find(b => b.id === td.buttonStyleId) || LumioData.themeDesigner.buttonStyles[0];
   const radius = LumioData.themeDesigner.cornerRadii.find(r => r.id === td.radiusId) || LumioData.themeDesigner.cornerRadii[1];
   const bg = LumioData.themeDesigner.backgroundStyles.find(b => b.id === td.bgStyleId) || LumioData.themeDesigner.backgroundStyles[0];
+  const bgSolid = THEME_BG_SOLID_MAP[bg.id] || 'var(--surface-50)';
   return `--theme-primary:${td.primary}; --theme-secondary:${td.secondary}; --theme-accent:${td.accent};
           --theme-font-display:${font.display}; --theme-font-body:${font.body}; --theme-font-size:${size.value};
           --theme-button-style:${btn.value}; --theme-radius:${radius.value};
-          --theme-bg-style:${bg.value};`;
+          --theme-bg-style:${bg.value}; --theme-bg-solid:${bgSolid};`;
 }
 
 function renderThemeDesignerStep(w) {
