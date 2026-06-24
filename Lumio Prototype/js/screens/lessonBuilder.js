@@ -557,6 +557,50 @@ const TEXT_BG_MAP = { light: '#ffffff', grey: '#f1f1f4', dark: 'var(--ink-900)' 
 const TEXT_COLOR_MAP = { black: '#1a1a1a', white: '#ffffff', grey: '#8a8a94' };
 const QUOTE_ACCENT_BG_MAP = { lavender: 'var(--pastel-lavender)', cyan: 'var(--pastel-cyan)', pink: 'var(--pastel-pink)', peach: 'var(--pastel-peach)' };
 
+// Remediation Sprint 1, Workstream 2: Quote 1-4 previously had a "Style
+// Variant" control (lavender/cyan/pink/peach) that was a second, redundant
+// background-colour picker — duplicating the generic Background swatch
+// shown above it in the same panel for every block — and for quote1/2/3 it
+// did nothing at all (they render no card/box). This adopts the same
+// Theme/Light/Grey/Dark/Custom/Image architecture already used by
+// Statements and Text blocks (see statementBlockExtraStyle), so quote
+// background is governed by exactly one control, platform-wide.
+function quoteCardBgStyle(ds) {
+  let style = '';
+  if (ds.bgType === 'light') style += `background:${TEXT_BG_MAP.light};`;
+  else if (ds.bgType === 'grey') style += `background:${TEXT_BG_MAP.grey};`;
+  else if (ds.bgType === 'dark') style += `background:${TEXT_BG_MAP.dark};`;
+  else if (ds.bgType === 'custom') style += `background:${ds.bgColor || '#ffffff'};`;
+  else if (ds.bgType === 'image' && ds.bgImage) {
+    const fit = ds.bgFit === 'contain' ? 'contain' : ds.bgFit === 'stretch' ? '100% 100%' : 'cover';
+    style += `background-image:url(${AssetStore.resolveMediaSrc(ds.bgImage)}); background-size:${fit}; background-position:center; background-repeat:no-repeat;`;
+  } else { // theme (default)
+    style += `background:color-mix(in srgb, var(--theme-primary, #7C3AED) 6%, var(--surface-0, #ffffff));`;
+  }
+  return style;
+}
+// Remediation Sprint 1, Phase 2: text-colour contrast switch for Architecture
+// A, parallel to surfaceTextColor() for the old per-block bgStyle systems —
+// used by every block migrated onto bgType (Accordion/Tabs/Process/Labelled
+// Graphic/Quote Carousel), not just Quotes, despite the function's name.
+function archATextColor(ds) {
+  return ds && ds.bgType === 'dark' ? '#ffffff' : 'var(--ink-900)';
+}
+function quoteCardBgFields(ds) {
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Background</div>
+      <p class="text-sm text-muted mb-8">By default, this block inherits your course theme colours.</p>
+      ${segControl('design-bgtype', 'bgType', [{ id: 'theme', label: 'Theme' }, { id: 'light', label: 'Light' }, { id: 'grey', label: 'Grey' }, { id: 'dark', label: 'Dark' }, { id: 'custom', label: 'Custom' }, { id: 'image', label: 'Image' }], ds.bgType || 'theme')}
+      ${ds.bgType === 'custom' ? `<input type="color" class="input mt-8 text-bg-custom-color" value="${ds.bgColor || '#ffffff'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />` : ''}
+      ${ds.bgType === 'image' ? `
+        ${mediaPickerImageField(ds, 'bgImage', 'Background Image', 'Background Image', false, 'design')}
+        <p class="text-sm text-muted mt-8 mb-8">Image Fit</p>
+        ${segControl('design-bgfit', 'bgFit', [{ id: 'cover', label: 'Cover' }, { id: 'contain', label: 'Contain' }, { id: 'stretch', label: 'Stretch' }], ds.bgFit || 'cover')}
+      ` : ''}
+    </div>`;
+}
+
 /* Default icon + accent colour per Statement type. Background/border inherit the theme by default. */
 const STATEMENT_DEFAULTS = {
   stmt_info:    { icon: 'ℹ️', label: 'Information', iconColor: '#6366F1' },
@@ -876,7 +920,11 @@ function applyLivePreview(block, index) {
   // until some unrelated action (e.g. a checkbox, which DOES force a full
   // renderLessonBuilder) happened to trigger a real re-render. Routing these
   // through the same full-rebuild path Charts/Dividers already used fixes it.
-  else if (['Interactive', 'Knowledge Checks'].includes(blockCategory(block.type)) || block.type === 'flashcard_grid' || block.type === 'flashcard_stack' || block.type === 'button' || block.type === 'continue') refreshGenericCanvas(block, index);
+  // Sprint 2, Workstream 1/2 fix: Video and File Attachment had fully
+  // working padding controls and renderers (confirmed via Sprint 2 audit)
+  // but were simply never added when this dispatcher fix was first made —
+  // an omission, not a new defect class. Same fix, same reuse.
+  else if (['Interactive', 'Knowledge Checks'].includes(blockCategory(block.type)) || block.type === 'flashcard_grid' || block.type === 'flashcard_stack' || block.type === 'button' || block.type === 'continue' || block.type === 'video' || block.type === 'file') refreshGenericCanvas(block, index);
   else if (blockCategory(block.type) === 'Charts' || blockCategory(block.type) === 'Dividers') refreshGenericCanvas(block, index);
   else applyBlockStylesToDom(block, index);
 }
@@ -1486,7 +1534,8 @@ function renderBlockContent(block, editable) {
       // Elegant/simple testimonial — small circular avatar centred above, quote centred, author centred below.
       const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
-      return `<div style="text-align:center;">
+      const cardStyle = `text-align:center; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'}; padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px; ${quoteCardBgStyle(ds)}`;
+      return `<div style="${cardStyle}">
         ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 12px; display:block;" />` : ''}
         <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
         <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
@@ -1496,7 +1545,8 @@ function renderBlockContent(block, editable) {
       // Avatar centred above, large quote typography, author highlighted in theme/accent colour.
       const textStyle = `${textTypographyStyle(ds, 22)}${d.textAlign ? `text-align:${d.textAlign};` : 'text-align:center;'}`;
       const authorStyle = `${textTypographyStyle(ds, 14)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
-      return `<div style="text-align:center;">
+      const cardStyle = `text-align:center; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'}; padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px; ${quoteCardBgStyle(ds)}`;
+      return `<div style="${cardStyle}">
         ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; margin:0 auto 14px; display:block;" />` : ''}
         <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-weight:600; line-height:1.4; ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
         <div class="editable-text mt-12" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="font-weight:600; color:var(--theme-primary, var(--indigo)); ${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
@@ -1506,7 +1556,8 @@ function renderBlockContent(block, editable) {
       // Avatar left, quote and author right — horizontal layout, stacks on mobile.
       const textStyle = `${textTypographyStyle(ds, 16)}${d.textAlign ? `text-align:${d.textAlign};` : ''}`;
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : ''}`;
-      return `<div class="quote3-layout" style="display:flex; gap:16px; align-items:flex-start;">
+      const cardStyle = `display:flex; gap:16px; align-items:flex-start; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'}; padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px; ${quoteCardBgStyle(ds)}`;
+      return `<div class="quote3-layout" style="${cardStyle}">
         ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0;" />` : ''}
         <div style="flex:1; min-width:0;">
           <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Quote text..." style="font-style:italic; color:var(--ink-700); ${textStyle}">${richTextOut(d.text || 'Great onboarding isn’t a single day — it’s the first chapter of a much longer story.')}</div>
@@ -1515,11 +1566,14 @@ function renderBlockContent(block, editable) {
       </div>`;
     }
     case 'quote4': {
-      // Editorial/testimonial style — avatar offset beside quote in an accent-tinted card, distinct hierarchy from quote3.
-      const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
+      // Editorial/testimonial style — avatar offset beside quote in a themed card, distinct hierarchy from quote3.
+      // Remediation Sprint 1: previously hardcoded to QUOTE_ACCENT_BG_MAP[ds.accent]
+      // (the removed duplicate "Style Variant" control) — now uses the same
+      // Theme/Light/Grey/Dark/Custom/Image Background system as quote1-3.
       const textStyle = `${textTypographyStyle(ds, 17)}${d.textAlign ? `text-align:${d.textAlign};` : ''}`;
       const authorStyle = `${textTypographyStyle(ds, 13)}${d.authorAlign ? `text-align:${d.authorAlign};` : 'text-align:center;'}`;
-      return `<div class="quote4-layout" style="display:flex; gap:20px; align-items:center; background:${accentBg}; border-radius:var(--r-md); padding:24px;">
+      const cardStyle = `display:flex; gap:20px; align-items:center; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'}; padding-top:${24 + (ds.paddingTop ?? 0)}px; padding-bottom:${24 + (ds.paddingBottom ?? 0)}px; padding-left:24px; padding-right:24px; ${quoteCardBgStyle(ds)}`;
+      return `<div class="quote4-layout" style="${cardStyle}">
         <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:8px; width:80px;">
           ${d.avatar ? `<img src="${AssetStore.resolveMediaSrc(d.avatar)}" alt="" style="width:64px; height:64px; border-radius:50%; object-fit:cover;" />` : ''}
           <div class="editable-text text-sm text-muted" data-role="author" data-field="author" data-richtext="true" ${ce} data-placeholder="Attribution" style="${authorStyle}">${richTextOut(d.author || 'Lumio Team')}</div>
@@ -1546,27 +1600,32 @@ function renderBlockContent(block, editable) {
     }
     case 'quote_carousel': {
       const quotes = normalizeQuoteItems(d);
-      // Sprint 3B, Phase 3 fix: the card background was hardcoded to
-      // var(--pastel-lavender) regardless of the Style Variant control
-      // (ds.accent) or the Background colour control — neither had ANY
-      // effect on rendering, which is exactly the reported defect. Now
-      // reads the same QUOTE_ACCENT_BG_MAP every other quote block already
-      // uses for ds.accent, and a custom background colour (ds.bgType
-      // 'custom'/ds.bgColor, the same generic Background section shown for
-      // every Text-category block) overrides it when set.
-      const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
-      const cardBg = ds.bgType === 'custom' && ds.bgColor ? ds.bgColor : accentBg;
+      // Remediation Sprint 1, Phase 2: migrated off the "Style Variant"
+      // (ds.accent → QUOTE_ACCENT_BG_MAP) + partial ds.bgType-custom hybrid
+      // (Sprint 3B) onto the same single Architecture A system Quote 1-4 use
+      // (quoteCardBgStyle) — eliminates the duplicate control entirely
+      // rather than papering over it with a second override.
+      const cardBgStyleStr = quoteCardBgStyle(ds);
       // "Card Alignment" (component alignment) — separate from each quote's
       // own text/author alignment, which only ever affected the TEXT inside
       // a card, never how the row of cards is positioned within the block.
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       const cardAlign = justifyMap[ds.cardAlign] || 'flex-start';
+      // Sprint 1 Final Validation, Workstream 1 finding: the Architecture A
+      // migration moved the background but not the text colour — on a Dark
+      // background, quoteText/quoteAuthor still used .text-sm/.text-muted's
+      // fixed dark ink colour, rendering near-illegible dark-on-dark text.
+      // Caught via real HTML export computed-style check (qcTextColor
+      // rgb(58,54,85) on rgb(31,27,58) background), not assumed. Accordion/
+      // Tabs/Process already correctly apply archATextColor; Quote Carousel
+      // did not.
+      const qcTextColor = archATextColor(ds);
       return `<div class="flex gap-12" style="overflow-x:auto; align-items:flex-start; justify-content:${cardAlign};">
         ${quotes.map((q, i) => `
-          <div class="card card-pad" style="min-width:200px; background:${cardBg}; border:none;">
+          <div class="card card-pad" style="min-width:200px; ${cardBgStyleStr} border:none; color:${qcTextColor};">
             ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block;" />` : ''}
-            <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
-            <div class="editable-text text-sm text-muted mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
+            <div class="editable-text text-sm" data-role="body" data-field="quoteText" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Quote text..." style="color:${qcTextColor}; ${textTypographyStyle(ds, 14)}${q.textAlign ? `text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</div>
+            <div class="editable-text text-sm mt-8" data-role="author" data-field="quoteAuthor" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Attribution" style="color:${qcTextColor}; opacity:0.7; ${textTypographyStyle(ds, 13)}${q.authorAlign ? `text-align:${q.authorAlign};` : ''}">${q.author ? richTextOut(q.author) : ''}</div>
           </div>
         `).join('')}
       </div>`;
@@ -1835,14 +1894,17 @@ function renderBlockContent(block, editable) {
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const rowSpacing = ds.rowSpacing ?? 8;
       const variant = ds.variant || 'default';
-      const rowBg = surfaceBg(ds);
-      const textColor = surfaceTextColor(ds);
+      // Remediation Sprint 1, Phase 2: migrated from surfaceBg/surfaceTextColor
+      // (the old Light/Gray/Theme/Dark/Black bgStyle system) onto Architecture
+      // A (quoteCardBgStyle/archATextColor) — same Theme/Light/Grey/Dark/
+      // Custom/Image options Statements and Quotes already use.
+      const textColor = archATextColor(ds);
       const markerStyle = ds.markerStyle || 'none';
       const rowStyle = variant === 'minimal'
-        ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
+        ? `background:transparent; border-bottom:1px solid color-mix(in srgb, var(--theme-primary, var(--indigo)) 14%, var(--border)); border-radius:0;`
         : variant === 'boxed'
-          ? `background:${rowBg}; color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:${interactiveBorderStyle(ds)};`
-          : `background:${rowBg}; color:${textColor}; border-radius:${radius};`;
+          ? `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:${interactiveBorderStyle(ds)};`
+          : `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius};`;
       // Editable canvas only: which rows are open persists across
       // re-renders (keyed by stable block.id), so attaching media to a
       // collapsed-by-default row doesn't immediately hide it again.
@@ -1885,15 +1947,15 @@ function renderBlockContent(block, editable) {
       if (active < 0 || active >= items.length) active = 0;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      const panelBg = surfaceBg(ds);
-      const textColor = surfaceTextColor(ds);
+      // Remediation Sprint 1, Phase 2: migrated onto Architecture A.
+      const textColor = archATextColor(ds);
       const tabStyle = ds.tabStyle || 'underline';
       const animate = settings.animation !== false;
       return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}" style="${interactiveSpacingStyle(ds)}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
           ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(${i}===${active} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
-        <div class="lumio-tabs-panels" style="background:${panelBg}; color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
+        <div class="lumio-tabs-panels" style="${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
             ${itemImageHtml(item, 220)}
             <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab content...">${richTextOut(item.body || '')}</div>
@@ -1918,11 +1980,12 @@ function renderBlockContent(block, editable) {
       const markerStyle = ds.markerStyle || 'numbers';
       const markerGlyph = (i) => markerStyle === 'numbers' ? String(i + 1) : (MARKER_ICONS[markerStyle] || String(i + 1));
       const visitedStyle = ds.visitedStyle || 'filled';
-      const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
+      // Remediation Sprint 1, Phase 2: migrated onto Architecture A.
+      const bgStyleStr = quoteCardBgStyle(ds);
       const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
       const objectFit = fitMap[ds.imageFit] || 'cover';
       return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto; ${interactiveSpacingStyle(ds)}">
-        <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; background:${bg}; border:${interactiveBorderStyle(ds)}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
+        <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; ${bgStyleStr} border:${interactiveBorderStyle(ds)}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
           ${d.image ? `<img src="${AssetStore.resolveMediaSrc(d.image)}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
           ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor};" data-hindex="${i}"
               onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
@@ -1952,8 +2015,8 @@ function renderBlockContent(block, editable) {
       const showNumbers = settings.showStepNumbers !== false;
       const headingTag = ds.headingLevel || 'h4';
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
-      const panelBg = surfaceBg(ds);
-      const textColor = surfaceTextColor(ds);
+      // Remediation Sprint 1, Phase 2: migrated onto Architecture A.
+      const textColor = archATextColor(ds);
       const indicatorStyle = ds.indicatorStyle || 'dots';
       const swipe = settings.enableSwipe !== false;
       // Builder-only: prefer the persisted current step (see
@@ -1963,7 +2026,7 @@ function renderBlockContent(block, editable) {
       return `<div class="lumio-process" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0" style="${interactiveSpacingStyle(ds)}"
           onkeydown="if(event.key==='ArrowLeft')lumioProcessNav(this,-1); if(event.key==='ArrowRight')lumioProcessNav(this,1);"
           ontouchstart="lumioProcessTouchStart(event,this)" ontouchend="lumioProcessTouchEnd(event,this)">
-        <div class="lumio-process-panel" style="background:${panelBg}; color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
+        <div class="lumio-process-panel" style="${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-process-step ${i === currentStep ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
             ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
@@ -2136,7 +2199,7 @@ function renderBlockContent(block, editable) {
       const btnStyle = continueButtonStyle(ds);
       const align = ds.align || 'center';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-      return `<div style="${dividerSpacingStyle(ds)} ${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
+      return `<div style="${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
         <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span> ▾</button>
       </div>`;
     }
@@ -2852,6 +2915,51 @@ function renderTextBlockPanel(block, index) {
 /* ============================================================
    STATEMENT BLOCK SETTINGS PANEL (Content / Icon / Typography / Spacing / Background / Border)
    ============================================================ */
+// Remediation Sprint 1, Workstream 2: dedicated panel for Quote 1-4, mirroring
+// renderStatementBlockPanel's structure so the same Theme/Light/Grey/Dark/
+// Custom/Image Background architecture is used consistently, instead of the
+// removed "Style Variant" (lavender/cyan/pink/peach) control that duplicated
+// the generic Background swatch panel and did nothing for quote1/2/3.
+function renderQuoteCardBlockPanel(block, index) {
+  block.design = block.design || {};
+  const ds = block.design;
+
+  if (BuilderUI.rightTab === 'settings') {
+    return `
+      <div class="field">
+        <label>Block ID</label>
+        <input class="input" value="block-${index + 1}" disabled style="opacity:0.6;" />
+      </div>
+      <p class="text-sm text-muted">No additional settings for this block.</p>
+    `;
+  }
+
+  if (BuilderUI.rightTab === 'content') {
+    return `<p class="text-sm text-muted">Click directly on the quote text or attribution in the canvas to edit it. Select text to format it (bold, italic, underline, size, colour, alignment).</p>` +
+      quoteAvatarOnlyFields(block) + aiActions();
+  }
+
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Corner Radius</div>
+      ${segControl('design-radius', 'radius', [{id:'sharp',label:'Sharp'},{id:'soft',label:'Soft'},{id:'round',label:'Round'}], ds.radius || 'soft')}
+    </div>
+    ${quoteCardBgFields(ds)}
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Spacing</div>
+      <p class="text-sm text-muted mb-8">Top Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 0}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
+      </div>
+    </div>`;
+}
+
 function renderStatementBlockPanel(block, index) {
   block.design = block.design || {};
   const ds = block.design;
@@ -3283,6 +3391,9 @@ function renderRightTabContentInner(block, index, course) {
   if (blockCategory(block.type) === 'Lists') {
     return renderListBlockPanel(block, index);
   }
+  if (['quote1', 'quote2', 'quote3', 'quote4'].includes(block.type)) {
+    return renderQuoteCardBlockPanel(block, index);
+  }
   if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') {
     return renderImageFamilyPanel(block, index);
   }
@@ -3304,7 +3415,20 @@ function renderRightTabContentInner(block, index, course) {
   if (BuilderUI.rightTab === 'design') {
     block.design = block.design || {};
     const ds = block.design;
+    // Remediation Sprint 1, Phase 1 root cause: this generic "Background"
+    // swatch (ds.bg) was shown for every block reaching this fallback panel,
+    // but only Flashcard Grid/Stack ever reads ds.bg — for Accordion, Tabs,
+    // Process, Scenario, Labelled Graphic, Button, and all 5 Knowledge Check
+    // types, it rendered a control that visibly did nothing (each of those
+    // either has its own separate background system further down via
+    // blockTypeDesignFields, or no background concept at all). Confirmed via
+    // direct read of every consuming renderer — not assumed. Removing the
+    // dead control for everything except the one type that actually
+    // consumes it; no renderer, persistence, Preview, or export behaviour
+    // changes for any block, since ds.bg was never read by them.
+    const showLegacyBgSwatch = block.type === 'flashcard_grid' || block.type === 'flashcard_stack';
     return `
+      ${showLegacyBgSwatch ? `
       <div class="prop-section">
         <div class="prop-section-title">Background</div>
         <div class="flex gap-8">
@@ -3314,7 +3438,7 @@ function renderRightTabContentInner(block, index, course) {
               border:${(ds.bg===c || (!ds.bg && c==='transparent')) ? '2px solid var(--indigo)' : '1px solid var(--border)'}; cursor:pointer;"></div>
           `).join('')}
         </div>
-      </div>
+      </div>` : ''}
       <div class="prop-section">
         <div class="prop-section-title">Alignment</div>
         ${segControl('design-align', 'align', [{id:'left',label:'Left'},{id:'center',label:'Center'},{id:'right',label:'Right'}], ds.align || 'left')}
@@ -4443,10 +4567,7 @@ function blockTypeDesignFields(block, ds) {
       ];
       const activeQuoteFontColor = (!ds.fontColor || ds.fontColor === 'theme') ? 'theme' : (TEXT_COLOR_MAP[ds.fontColor] ? ds.fontColor : 'custom');
       return `
-        <div class="prop-section">
-          <div class="prop-section-title">Style Variant</div>
-          ${segControl('design-variant', 'accent', [{id:'lavender',label:'Lavender'},{id:'cyan',label:'Cyan'},{id:'pink',label:'Pink'},{id:'peach',label:'Peach'}], ds.accent || 'lavender')}
-        </div>
+        ${block.type === 'quote_carousel' ? quoteCardBgFields(ds) : ''}
         ${block.type === 'quote_carousel' ? `
         <div class="prop-section">
           <div class="prop-section-title">Card Alignment</div>
@@ -4707,16 +4828,31 @@ function surfaceTextColor(ds) { return (ds && (ds.bgStyle === 'dark' || ds.bgSty
 /* Continue block — outer surface (Theme/Tint/Light/Dark/Black/Custom/Image presets). */
 function continueWrapperStyle(ds) {
   const radius = RADIUS_MAP[ds.radius] || RADIUS_MAP.soft;
+  // Sprint 2, Workstream 3 fix: the Design panel's Top/Bottom/Left/Right
+  // Padding sliders (ds.paddingTop/Bottom/Left/Right) were never read here
+  // at all — completely dead controls. Per the approved remediation, author
+  // padding is ADDITIVE on top of the existing background-aware base inset
+  // (not a replacement), so every existing Continue block with default
+  // (unset) padding renders pixel-identical to before this fix.
+  const extraTop = ds.paddingTop ?? 0;
+  const extraBottom = ds.paddingBottom ?? 0;
+  const extraLeft = ds.paddingLeft ?? 0;
+  const extraRight = ds.paddingRight ?? 0;
+  let baseTop, baseBottom, baseLeft, baseRight, bgPart = '';
   if (ds.bgStyle === 'image' && ds.bgImage) {
-    return `background:url('${AssetStore.resolveMediaSrc(ds.bgImage)}') center/cover; padding:16px; border-radius:${radius};`;
+    bgPart = `background:url('${AssetStore.resolveMediaSrc(ds.bgImage)}') center/cover;`;
+    baseTop = baseBottom = baseLeft = baseRight = 16;
+  } else if (ds.bgStyle === 'custom') {
+    bgPart = `background:${ds.customBg || 'transparent'};`;
+    baseTop = baseBottom = baseLeft = baseRight = 16;
+  } else if (ds.bgStyle && ds.bgStyle !== 'theme') {
+    bgPart = `background:${surfaceBg(ds)}; color:${surfaceTextColor(ds)};`;
+    baseTop = baseBottom = baseLeft = baseRight = 16;
+  } else {
+    baseTop = baseBottom = 8;
+    baseLeft = baseRight = 0;
   }
-  if (ds.bgStyle === 'custom') {
-    return `background:${ds.customBg || 'transparent'}; padding:16px; border-radius:${radius};`;
-  }
-  if (ds.bgStyle && ds.bgStyle !== 'theme') {
-    return `background:${surfaceBg(ds)}; color:${surfaceTextColor(ds)}; padding:16px; border-radius:${radius};`;
-  }
-  return 'padding:8px 0;';
+  return `${bgPart} border-radius:${radius}; padding-top:${baseTop + extraTop}px; padding-bottom:${baseBottom + extraBottom}px; padding-left:${baseLeft + extraLeft}px; padding-right:${baseRight + extraRight}px;`;
 }
 
 /* Continue block — button styling (Width/Height/Radius/Fill/Text/Border). */
@@ -4912,10 +5048,7 @@ function accordionDesignFields(block, ds) {
       <div class="prop-section-title">Theme Variant</div>
       ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
     </div>
-    <div class="prop-section">
-      <div class="prop-section-title">Background Style</div>
-      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
-    </div>
+    ${quoteCardBgFields(ds)}
     <div class="prop-section">
       <div class="prop-section-title">Marker Style</div>
       ${segControl('design-markerstyle', 'markerStyle', [{id:'none',label:'None'},{id:'number',label:'Numbered'}], ds.markerStyle || 'none')}
@@ -4952,10 +5085,7 @@ function tabsDesignFields(block, ds) {
       <div class="prop-section-title">Theme Variant</div>
       ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
     </div>
-    <div class="prop-section">
-      <div class="prop-section-title">Background Style</div>
-      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
-    </div>
+    ${quoteCardBgFields(ds)}
     <div class="prop-section">
       <div class="prop-section-title">Tab Style</div>
       ${segControl('design-tabstyle', 'tabStyle', [{id:'underline',label:'Underline'},{id:'pill',label:'Pill'},{id:'boxed',label:'Boxed'}], ds.tabStyle || 'underline')}
@@ -4985,10 +5115,7 @@ function processDesignFields(block, ds) {
       <div class="prop-section-title">Theme Variant</div>
       ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
     </div>
-    <div class="prop-section">
-      <div class="prop-section-title">Background Style</div>
-      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'dark',label:'Dark'},{id:'black',label:'Black'}], ds.bgStyle || 'light')}
-    </div>
+    ${quoteCardBgFields(ds)}
     <div class="prop-section">
       <div class="prop-section-title">Indicator Style</div>
       ${segControl('design-indicatorstyle', 'indicatorStyle', [{id:'dots',label:'Dots'},{id:'numbers',label:'Numbers'}], ds.indicatorStyle || 'dots')}
@@ -5030,10 +5157,7 @@ function labelledGraphicDesignFields(block, ds) {
       <div class="prop-section-title">Image Fit</div>
       ${segControl('design-imagefit', 'imageFit', [{id:'cover',label:'Cover'},{id:'contain',label:'Contain'},{id:'stretch',label:'Stretch'},{id:'center',label:'Center'}], ds.imageFit || 'cover')}
     </div>
-    <div class="prop-section">
-      <div class="prop-section-title">Background Style</div>
-      ${segControl('design-bgstyle', 'bgStyle', [{id:'light',label:'Light'},{id:'gray',label:'Gray'},{id:'theme',label:'Theme'},{id:'tint',label:'Theme Tint'}], ds.bgStyle || 'theme')}
-    </div>
+    ${quoteCardBgFields(ds)}
     <div class="prop-section">
       <div class="prop-section-title">Marker Style</div>
       <select class="input design-select" data-prop="markerStyle">

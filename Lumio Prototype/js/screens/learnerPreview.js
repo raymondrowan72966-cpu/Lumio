@@ -1081,20 +1081,22 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
   const active = ((LearnerUI.quoteCarouselIndex[key] || 0) % quotes.length + quotes.length) % quotes.length;
   CompletionEngine.markVisited(ctx, index, active);
   const q = quotes[active];
-  // Sprint 3B, Phase 3 fix: this learner-runtime renderer is a SEPARATE
-  // code path from the Builder canvas's renderBlockContent (single-card
-  // Prev/Next view here vs. a scrolling row of cards in the Builder) — it
-  // had the exact same hardcoded background, so Style Variant/Background
-  // colour silently had no effect specifically in Learner Preview/exports
-  // even after the Builder canvas itself was fixed.
-  const accentBg = QUOTE_ACCENT_BG_MAP[ds.accent] || QUOTE_ACCENT_BG_MAP.lavender;
-  const cardBg = ds.bgType === 'custom' && ds.bgColor ? ds.bgColor : accentBg;
+  // Remediation Sprint 1, Phase 2: this learner-runtime renderer is a
+  // SEPARATE code path from the Builder canvas's renderBlockContent — it
+  // must independently adopt the same Architecture A migration
+  // (quoteCardBgStyle) or the dedicated renderer would silently diverge
+  // from the Builder again, exactly as happened with the old accent system.
+  const cardBgStyleStr = quoteCardBgStyle(ds);
+  // Sprint 1 Final Validation finding: same missing text-colour contrast
+  // switch as the Builder renderer — fixed in both independently, since
+  // this is the dedicated learner-runtime code path.
+  const qcTextColor = archATextColor(ds);
   return `
     <div>
-      <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:${cardBg}; border-radius:var(--r-md); box-shadow:none; padding:20px 24px;">
+      <div style="min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; ${cardBgStyleStr} border-radius:var(--r-md); box-shadow:none; padding:20px 24px; color:${qcTextColor};">
         ${q.avatar ? `<img src="${AssetStore.resolveMediaSrc(q.avatar)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-bottom:8px;" />` : ''}
-        <p class="text-sm"${q.textAlign ? ` style="text-align:${q.textAlign};"` : ''}>${richTextOut(q.text || '')}</p>
-        ${q.author ? `<p class="text-sm text-muted mt-8"${q.authorAlign ? ` style="text-align:${q.authorAlign};"` : ''}>${richTextOut(q.author)}</p>` : ''}
+        <p class="text-sm" style="color:${qcTextColor};${q.textAlign ? ` text-align:${q.textAlign};` : ''}">${richTextOut(q.text || '')}</p>
+        ${q.author ? `<p class="text-sm mt-8" style="color:${qcTextColor}; opacity:0.7;${q.authorAlign ? ` text-align:${q.authorAlign};` : ''}">${richTextOut(q.author)}</p>` : ''}
       </div>
       <div class="flex items-center justify-between mt-8">
         <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Previous quote">← Prev</button>
