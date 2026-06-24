@@ -124,7 +124,17 @@ img { max-width: 100%; display: block; }
 
 button { font-family: var(--font-body); cursor: pointer; }
 
-::selection { background: var(--pastel-lavender); }
+/* Sprint: Workstream B fix. var(--pastel-lavender) (#F2EEFB) is a near-white
+   tint — against white/light/theme-tinted surfaces (the majority of editable
+   blocks) it has ~1.05:1 contrast and is effectively invisible, which is
+   exactly the reported "light/theme/custom backgrounds = difficult
+   selection" pattern; it only worked on dark/black surfaces, where the same
+   near-white color reads as a strong highlight. A single semi-transparent
+   indigo scales its visible contribution with whatever is underneath it
+   (lighter tint on light surfaces, richer tint on dark ones), so one rule
+   now gives a visible highlight across the full light-to-dark range this
+   platform supports, including arbitrary photo backgrounds. */
+::selection { background: rgba(79, 70, 229, 0.35); }
 
 /* ============================================================
    GRADIENT TEXT

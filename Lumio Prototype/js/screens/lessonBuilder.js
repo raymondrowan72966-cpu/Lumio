@@ -850,8 +850,33 @@ function applyLivePreview(block, index) {
   if (blockCategory(block.type) === 'Statements') applyStatementStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Quotes') applyQuoteStylesToDom(block, index);
   else if (blockCategory(block.type) === 'Lists') applyListStylesToDom(block, index);
-  else if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') applyImageStylesToDom(block, index);
+  // Workstream 1 follow-up fix: Carousel/Column Grid (category 'Gallery')
+  // were unreachable dead code in the branch below — this Images/Gallery
+  // check runs first and caught them, routing to applyImageStylesToDom,
+  // which only ever patches text_on_image's overlay opacity and silently
+  // does nothing for every other type, including Image/Image&Text/Carousel/
+  // Column Grid's own padding/border sliders (same root cause class as the
+  // Interactive/KC/Button fix above — wrong/no DOM layer updated). Only
+  // text_on_image still gets the original targeted opacity-only patch
+  // (cheap, avoids rebuilding the background-image div on every drag tick);
+  // every other Images/Gallery type now gets the full live rebuild.
+  else if (block.type === 'text_on_image') applyImageStylesToDom(block, index);
+  else if (blockCategory(block.type) === 'Images' || blockCategory(block.type) === 'Gallery') refreshGenericCanvas(block, index);
   else if (block.type === 'audio') applyAudioStylesToDom(block, index);
+  // Workstream 1 root cause fix: Charts/Dividers already used refreshGenericCanvas
+  // (a full renderBlockContent rebuild) for live slider drags. Every other
+  // category that adopted the interactiveSpacingStyle/interactiveBorderStyle
+  // pattern this sprint (Interactive, Flashcards, Knowledge Checks, Button/
+  // Continue) — i.e. anything whose Design panel includes
+  // interactiveBorderPaddingFields — was instead falling through to
+  // applyBlockStylesToDom, which only ever touches the outer .block-content-
+  // area's unrelated fixed inset (3px 22px) and the editable-text typography;
+  // it has no knowledge of each block's own inner padding/border element, so
+  // dragging Top/Bottom Padding or toggling Border never updated the canvas
+  // until some unrelated action (e.g. a checkbox, which DOES force a full
+  // renderLessonBuilder) happened to trigger a real re-render. Routing these
+  // through the same full-rebuild path Charts/Dividers already used fixes it.
+  else if (['Interactive', 'Knowledge Checks'].includes(blockCategory(block.type)) || block.type === 'flashcard_grid' || block.type === 'flashcard_stack' || block.type === 'button' || block.type === 'continue') refreshGenericCanvas(block, index);
   else if (blockCategory(block.type) === 'Charts' || blockCategory(block.type) === 'Dividers') refreshGenericCanvas(block, index);
   else applyBlockStylesToDom(block, index);
 }
@@ -1356,7 +1381,20 @@ function positionRichTextToolbar() {
   RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
   const blockEl = active.elx.closest('.canvas-block');
   if (!blockEl) { hideRichTextToolbar(); return; }
-  const rect = blockEl.getBoundingClientRect();
+  // Workstream 4 fix: this anchored to the whole .canvas-block's bottom
+  // edge, not the actual selection — on any multi-row/tall block (Table,
+  // Accordion, Tabs, Quote Carousel, Process, Flashcard Grid) selecting
+  // text near the top placed the toolbar far below the selection (measured:
+  // a top-row table selection at y~185-201 produced a toolbar at y~320-360,
+  // a 120px+ gap), which is exactly the reported "editing is difficult on
+  // some blocks" — the toolbar wasn't where the user was looking. Anchoring
+  // to the selection's own bounding rect (falling back to the block's rect
+  // only if the selection has no visible rect, e.g. a fully-collapsed
+  // range) fixes it for every block uniformly, matching how short blocks
+  // like Paragraph already happened to look correct (their block rect and
+  // selection rect are nearly the same there, masking the bug).
+  const selRect = sel.getRangeAt(0).getBoundingClientRect();
+  const rect = (selRect.width || selRect.height) ? selRect : blockEl.getBoundingClientRect();
   toolbar.style.display = 'flex';
   const left = Math.max(8, Math.min(rect.left + rect.width / 2 - toolbar.offsetWidth / 2, window.innerWidth - toolbar.offsetWidth - 8));
   let top = rect.bottom + 8;
@@ -1618,7 +1656,7 @@ function renderBlockContent(block, editable) {
             imageHtml = `<img src="${rSrc}" alt="" class="${editable ? '' : 'image-zoom-trigger'}" data-zoom-src="${rSrc}" data-zoom-alt="" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:${of}; ${of === 'none' ? 'background:var(--surface-50);' : ''} border-radius:${carRadius}; border:${carBorder}; display:block; cursor:${editable ? 'default' : 'zoom-in'};" />`;
           }
           return `
-          <div class="card card-pad" style="min-width:180px; max-width:220px;">
+          <div class="card card-pad" style="min-width:180px; max-width:220px; border:${carBorder};">
             ${imageHtml}
             ${(item.title || editable) ? `<div class="editable-text text-sm mt-8" data-role="title" data-field="carouselSlideTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Slide title" style="font-weight:600;">${richTextOut(item.title || '')}</div>` : ''}
             ${(item.description || editable) ? `<div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="carouselSlideDesc" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Slide description">${richTextOut(item.description || '')}</div>` : ''}
@@ -1634,7 +1672,7 @@ function renderBlockContent(block, editable) {
       const cgBorder = interactiveBorderStyle(ds);
       return `<div style="${interactiveSpacingStyle(ds)} display:grid; grid-template-columns:repeat(${columns},1fr); gap:12px;">
         ${items.map((item, i) => `
-          <div class="card card-pad text-center" style="position:relative;">
+          <div class="card card-pad text-center" style="position:relative; border:${cgBorder};">
             ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
             ${item.imageUrl
               ? `<img src="${AssetStore.resolveMediaSrc(item.imageUrl)}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${AssetStore.resolveMediaSrc(item.imageUrl)}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:${cgRadius}; border:${cgBorder}; display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
@@ -2003,7 +2041,7 @@ function renderBlockContent(block, editable) {
       // to actually show up). flashcardSpacingStyle mirrors the
       // divider-family Top/Bottom Padding pattern.
       const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
-      const borderStyle = ds.cardBorder === false ? 'none' : `1px solid ${ds.cardBorderColor || 'var(--border)'}`;
+      const borderStyle = ds.cardBorder === true ? `1px solid ${ds.cardBorderColor || 'var(--border)'}` : 'none';
       return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
         <div style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:12px; width:100%;">
           ${items.map((item, i) => `
@@ -2030,7 +2068,7 @@ function renderBlockContent(block, editable) {
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
-      const borderStyle = ds.cardBorder === false ? 'none' : `1px solid ${ds.cardBorderColor || 'var(--border)'}`;
+      const borderStyle = ds.cardBorder === true ? `1px solid ${ds.cardBorderColor || 'var(--border)'}` : 'none';
       return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
         <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
           ${items.map((item, i) => `
@@ -2069,7 +2107,7 @@ function renderBlockContent(block, editable) {
       const widthStyle = ds.btnWidth === 'full' ? 'width:100%;' : '';
       const label = escapeHtml(d.label || 'Button');
       const icon = d.icon ? `${escapeHtml(d.icon)} ` : '';
-      const btnStyle = `padding:${sz.pad}; font-size:${sz.font}; border-radius:${radius}; ${widthStyle} background:${bg}; color:${textColor}; ${shadow} border:none; font-weight:600; text-decoration:none; cursor:pointer;`;
+      const btnStyle = `padding:${sz.pad}; font-size:${sz.font}; border-radius:${radius}; ${widthStyle} background:${bg}; color:${textColor}; ${shadow} border:${interactiveBorderStyle(ds)}; font-weight:600; text-decoration:none; cursor:pointer;`;
       let inner;
       if (editable) {
         inner = `<span class="lumio-cta-btn" style="${btnStyle} pointer-events:none;">${icon}${label}</span>`;
@@ -2084,7 +2122,7 @@ function renderBlockContent(block, editable) {
       } else {
         inner = `<span class="lumio-cta-btn" style="${btnStyle} opacity:0.7;">${icon}${label}</span>`;
       }
-      return `<div style="display:flex; justify-content:${justifyMap[align] || 'center'};">${inner}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">${inner}</div>`;
     }
 
     case 'chart_bar':
@@ -4494,10 +4532,11 @@ function buttonDesignFields(ds) {
           <input type="color" class="design-color-input" data-prop="btnTextColor" value="${ds.btnTextColor || '#ffffff'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
         </div>` : ''}
     </div>
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section">
       <div class="prop-section-title">Shadow</div>
       <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="shadow" ${ds.shadow !== false ? 'checked' : ''}/> Drop shadow</label>
-    </div>`;
+    </div>
+    ${interactiveBorderPaddingFields(ds)}`;
 }
 
 /* Flashcard Grid / Flashcard Stack — Content tab: per-card management
@@ -4558,8 +4597,13 @@ function flashcardSpacingStyle(ds) {
 // all (Accordion's "boxed" variant had a hardcoded, undisable border;
 // Tabs/Process/Labelled Graphic's panel surfaces had background+radius but
 // no border option whatsoever). Same benchmark pattern as Flashcards.
+// Sprint 3F, Phase 1 fix: this defaulted to BORDER ON (panelBorder===false
+// was the only way to turn it off) — since every pre-existing block has
+// panelBorder===undefined, every block this control was added to started
+// showing an unrequested border by default, in Builder AND Preview. Default
+// is now OFF; an author must explicitly enable it.
 function interactiveBorderStyle(ds) {
-  return ds.panelBorder === false ? 'none' : `1px solid ${ds.panelBorderColor || 'var(--border)'}`;
+  return ds.panelBorder === true ? `1px solid ${ds.panelBorderColor || 'var(--border)'}` : 'none';
 }
 function interactiveSpacingStyle(ds) {
   return `padding-top:${ds.paddingTop ?? 0}px; padding-bottom:${ds.paddingBottom ?? 0}px;`;
@@ -4568,8 +4612,8 @@ function interactiveBorderPaddingFields(ds) {
   return `
     <div class="prop-section">
       <div class="prop-section-title">Border</div>
-      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="panelBorder" ${ds.panelBorder !== false ? 'checked' : ''}/> Show border</label>
-      ${ds.panelBorder !== false ? `<input type="color" class="design-color-input" data-prop="panelBorderColor" value="${ds.panelBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
+      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="panelBorder" ${ds.panelBorder === true ? 'checked' : ''}/> Show border</label>
+      ${ds.panelBorder === true ? `<input type="color" class="design-color-input" data-prop="panelBorderColor" value="${ds.panelBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
     </div>
     <div class="prop-section" style="border-bottom:none;">
       <div class="prop-section-title">Spacing</div>
@@ -4602,8 +4646,8 @@ function flashcardDesignFields(block, ds) {
   const borderField = `
     <div class="prop-section">
       <div class="prop-section-title">Border</div>
-      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="cardBorder" ${ds.cardBorder !== false ? 'checked' : ''}/> Show card border</label>
-      ${ds.cardBorder !== false ? `<input type="color" class="design-color-input" data-prop="cardBorderColor" value="${ds.cardBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
+      <label class="flex items-center gap-8 mb-8"><input type="checkbox" class="design-checkbox" data-prop="cardBorder" ${ds.cardBorder === true ? 'checked' : ''}/> Show card border</label>
+      ${ds.cardBorder === true ? `<input type="color" class="design-color-input" data-prop="cardBorderColor" value="${ds.cardBorderColor || '#E2E4EA'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />` : ''}
     </div>`;
   const spacingField = `
     <div class="prop-section" style="border-bottom:none;">

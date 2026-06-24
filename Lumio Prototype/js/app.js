@@ -2121,7 +2121,17 @@ function openLearnerPreviewFor(courseId, returnTo, lessonId) {
   // learner state, which lives in a completely separate per-package
   // localStorage key (see publish.js's bootstrap), not this one.
   delete LumioState.learnerProgress?.[courseId];
+  // Sprint 3G fix: revealedContinues was reset here but carouselIndex/
+  // quoteCarouselIndex/listChecked were not — these are keyed by
+  // "lessonId:blockIndex" (not courseId), so they survived this reset and
+  // carried a learner's prior slide/quote/checklist position into the next,
+  // supposedly-fresh Preview launch of the SAME lesson (e.g. "Carousel
+  // starts on Slide 4"). All transient per-block interaction state now
+  // resets together on every fresh Preview entry.
   LearnerUI.revealedContinues = {};
+  LearnerUI.carouselIndex = {};
+  LearnerUI.quoteCarouselIndex = {};
+  LearnerUI.listChecked = {};
   LumioState.learnerPreview = { returnTo: returnTo || '#/projects' };
   navigate('#/learner/' + courseId + (lessonId ? '/' + lessonId : ''));
 }
