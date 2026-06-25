@@ -253,14 +253,16 @@ function canvasStyles() {
          they never fire inside the learner preview even though canvasStyles()
          is shared for the @container quote-layout queries below. */
       .canvas-block .editable-text { cursor:text; }
-      .canvas-block .editable-text:hover { background:rgba(20,20,30,0.025); }
       /* Sprint 5A, Phase 6/7 fix: a focus-time background tint covering the
          WHOLE contenteditable element (not just the selected range) read as
          a permanent grey overlay the instant you clicked in to edit — it
          visually competed with the real (smaller) text-selection highlight
          underneath, making "I selected only the word X" look like "the
-         whole line is highlighted". Removed; :hover (pre-edit affordance,
-         gone once focus/typing starts) is kept. */
+         whole line is highlighted". Removed.
+         Sprint 4B fix: the pre-edit hover affordance kept after Sprint 5A
+         is also removed — per spec, hover must show no highlight at all;
+         only an actual text selection (::selection, indigo) may render a
+         highlight. cursor:text above remains as the only hover affordance. */
       .editable-text[data-placeholder]:empty:before { content: attr(data-placeholder); color: var(--ink-400); }
 
       /* Document-style insertion points — single reusable component used
@@ -717,7 +719,7 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
       </div>` : '';
     return `<div class="list-item-row flex items-start gap-4" data-itemindex="${i}" role="listitem" style="margin-bottom:8px;">
       ${marker}
-      <div class="editable-text list-item-text" data-role="body" data-field="listItem" data-col="${i}" data-richtext="true" ${editable ? 'contenteditable="true"' : ''} data-placeholder="List item" style="flex:1; line-height:1.7; font-size:15px;${item.textAlign ? ` text-align:${item.textAlign};` : ''}">${richTextOut(item.text || '')}</div>
+      <div class="editable-text list-item-text" data-role="body" data-field="listItem" data-col="${i}" data-richtext="true" ${editable ? 'contenteditable="true" spellcheck="false"' : ''} data-placeholder="List item" style="flex:1; line-height:1.7; font-size:15px;${item.textAlign ? ` text-align:${item.textAlign};` : ''}">${richTextOut(item.text || '')}</div>
       ${controls}
     </div>`;
   }).join('');
@@ -1470,7 +1472,7 @@ const DEFAULT_TABLE_ROWS = [
 function renderBlockContent(block, editable) {
   const d = block.data || {};
   const ds = block.design || {};
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   switch (block.type) {
     case 'heading':
       return `<h2 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}${d.headingAlign ? `text-align:${d.headingAlign};` : ''}">${richTextOut(d.heading)}</h2>`;
@@ -2228,7 +2230,7 @@ function renderBlockContent(block, editable) {
       const align = ds.align || 'center';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       return `<div style="${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
-        <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span> ▾</button>
+        <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span></button>
       </div>`;
     }
     case 'numbered_divider': {
@@ -2409,7 +2411,7 @@ function chartTitleHtml(d, ds, editable) {
     if (!d.title) return '';
     return `<${tag} class="lumio-chart-title" style="font-size:${sizeMap[tag]};">${richTextOut(d.title)}</${tag}>`;
   }
-  return `<${tag} class="lumio-chart-title editable-text" data-field="title" data-richtext="true" contenteditable="true" data-placeholder="Chart title" style="font-size:${sizeMap[tag]};">${richTextOut(d.title || '')}</${tag}>`;
+  return `<${tag} class="lumio-chart-title editable-text" data-field="title" data-richtext="true" contenteditable="true" spellcheck="false" data-placeholder="Chart title" style="font-size:${sizeMap[tag]};">${richTextOut(d.title || '')}</${tag}>`;
 }
 
 /* Outer wrapper style for all 3 chart types: Background Style preset (incl.
@@ -2581,7 +2583,7 @@ function renderPieChart(block, editable) {
 
 function knowledgeCheckMC(d, editable) {
   const options = normalizeKcOptions(d);
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
     <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
@@ -2604,7 +2606,7 @@ function knowledgeCheckMC(d, editable) {
 
 function knowledgeCheckMR(d, editable) {
   const options = normalizeKcOptions(d);
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
     <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
@@ -2628,7 +2630,7 @@ function knowledgeCheckMR(d, editable) {
 function knowledgeCheckMatching(d, editable) {
   const left = normalizeKcLeft(d);
   const right = normalizeKcRight(d);
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   const rowBase = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md); font-size:13px; outline:none;';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
@@ -2654,7 +2656,7 @@ function knowledgeCheckMatching(d, editable) {
 
 function knowledgeCheckFillGap(d, editable) {
   const answers = normalizeKcAnswers(d);
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
     <div class="editable-text" data-field="kcGapText" data-richtext="true" ${ce}
@@ -2667,7 +2669,7 @@ function knowledgeCheckFillGap(d, editable) {
 
 function knowledgeCheckOrdering(d, editable) {
   const items = normalizeKcItems(d);
-  const ce = editable ? 'contenteditable="true"' : '';
+  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
     <div class="flex-col gap-6 mt-8">
@@ -3641,7 +3643,7 @@ function chartContentPanel(block, d, isPie) {
   return `
     <div class="prop-section">
       <div class="prop-section-title">Chart Title</div>
-      <input class="input chart-field" data-field="title" value="${escapeHtml(d.title || '')}" placeholder="Chart title" />
+      <p class="text-sm text-muted">Edit the chart title directly on the canvas.</p>
     </div>
     ${isPie ? '' : `
     <div class="prop-section">
@@ -4006,8 +4008,7 @@ function dividerContentPanel(block) {
       return `
         <div class="prop-section">
           <div class="prop-section-title">Label</div>
-          <input class="input divider-field" data-field="label" value="${escapeHtml(d.label || 'Continue')}" placeholder="Continue" />
-          <p class="text-sm text-muted mt-4">You can also edit this directly on the canvas.</p>
+          <p class="text-sm text-muted">Edit the button label directly on the canvas.</p>
         </div>
         <div class="prop-section">
           <div class="prop-section-title">Hint Text</div>
@@ -4027,8 +4028,7 @@ function dividerContentPanel(block) {
       return `
         <div class="prop-section" style="border-bottom:none;">
           <div class="prop-section-title">Marker Text</div>
-          <input class="input divider-field" data-field="marker" value="${escapeHtml(d.marker || '1')}" placeholder="1, A, STEP 1..." />
-          <p class="text-sm text-muted mt-4">You can also edit this directly on the canvas.</p>
+          <p class="text-sm text-muted">Edit the marker text directly on the canvas.</p>
         </div>`;
     case 'line_divider':
       return `<p class="text-sm text-muted">This block has no content options — use the Design tab to style the line.</p>`;

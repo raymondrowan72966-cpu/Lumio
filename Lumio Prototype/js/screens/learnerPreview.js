@@ -1001,7 +1001,7 @@ function learnerContinueBlock(block, index, ctx) {
     <div style="${continueWrapperStyle(ds)} display:flex; flex-direction:column; align-items:${justifyMap[align] || 'center'}; gap:8px;">
       ${revealed
         ? `<span class="pill pill-grey">✓ Continued</span>`
-        : `<button class="btn lumio-continue-btn lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}" style="${continueButtonStyle(ds)} ${locked ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${locked ? 'disabled' : ''}>${richTextOut(d.label || 'Continue')} ▾</button>`}
+        : `<button class="btn lumio-continue-btn lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}" style="${continueButtonStyle(ds)} ${locked ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${locked ? 'disabled' : ''}>${richTextOut(d.label || 'Continue')}</button>`}
       ${locked && d.hint ? `<p class="text-sm text-muted lumio-continue-hint" style="text-align:${align}; margin:0;">${escapeHtml(d.hint)}</p>` : ''}
       <span aria-live="polite" style="${srOnlyStyle}">${revealed ? 'Additional content revealed below.' : ''}</span>
     </div>`;
