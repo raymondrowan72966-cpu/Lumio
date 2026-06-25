@@ -749,7 +749,7 @@ function openPublishModal(course) {
     // every other format id in PUBLISH_FORMATS (SCORM 2004 2nd/3rd
     // Edition, xAPI, PDF) remains "Coming Soon" — see Sprint 7A's
     // recommendation against implementing 2004 2nd/3rd Edition.
-    const IMPLEMENTED_FORMATS = ['html', 'scorm12', 'scorm2004_2', 'scorm2004_3', 'scorm2004_4'];
+    const IMPLEMENTED_FORMATS = ['html', 'scorm12', 'scorm2004_2', 'scorm2004_3', 'scorm2004_4', 'xapi', 'pdf'];
     const formatsHtml = PUBLISH_FORMATS.map(f => `
       <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
         <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
@@ -929,6 +929,8 @@ function openPublishModal(course) {
     else if (btn.dataset.publishFormat === 'scorm2004_2') publishScorm2004_2ndPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm2004_3') publishScorm2004_3rdPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm2004_4') publishScorm2004Package(course, btn);
+    else if (btn.dataset.publishFormat === 'xapi') publishXapiPackage(course, btn);
+    else if (btn.dataset.publishFormat === 'pdf') publishPdfPackage(course, btn);
   });
 }
 

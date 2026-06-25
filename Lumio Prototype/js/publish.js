@@ -143,27 +143,28 @@ const PUBLISH_JS_FILES = [
    zip packaging, download, and publish-history bookkeeping are all
    performed exactly once, here, for every adapter.
    ============================================================ */
-async function buildExportPackage(course, triggerBtn, adapter) {
-  // Status gate: only approved/published projects may publish (draft/
-  // in_review/archived cannot). Re-checked here regardless of what the UI
-  // already hid, so publishing never depends solely on a button being
-  // absent — the same rule that hides the Publish button in courseLanding.js.
+// Single source of truth for the publish-eligibility gate (status/
+// permission/readiness) — shared by every export adapter, interactive
+// (buildExportPackage) or static (publishPdfPackage). Returns null when
+// publishing may proceed, or a user-facing message to toast and abort on.
+function checkPublishGate(course) {
   const project = LumioState.projects.find(p => p.id === course.id);
   if (!canPublishProjectStatus(project)) {
     const statusLabel = project ? (PROJECT_STATUS_LABELS[project.status] || project.status) : 'unknown';
-    toast(`Cannot publish — project status is "${statusLabel}". It must be Approved first.`, '⚠️');
-    return;
+    return `Cannot publish — project status is "${statusLabel}". It must be Approved first.`;
   }
   if (project && !canEditProject(project)) {
-    toast('You do not have permission to publish this project.', '⚠️');
-    return;
+    return 'You do not have permission to publish this project.';
   }
-
   const issues = getCourseReadinessIssues(course);
-  if (issues.length > 0) {
-    toast('Course not ready: ' + issues[0], '⚠️');
-    return;
-  }
+  if (issues.length > 0) return 'Course not ready: ' + issues[0];
+  return null;
+}
+
+async function buildExportPackage(course, triggerBtn, adapter) {
+  const gateError = checkPublishGate(course);
+  if (gateError) { toast(gateError, '⚠️'); return; }
+  const project = LumioState.projects.find(p => p.id === course.id);
 
   const originalLabel = triggerBtn ? triggerBtn.textContent : '';
   if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
@@ -823,6 +824,248 @@ const SCORM2004_3RD_EXPORT_ADAPTER = {
 
 async function publishScorm2004_3rdPackage(course, triggerBtn) {
   return buildExportPackage(course, triggerBtn, SCORM2004_3RD_EXPORT_ADAPTER);
+}
+
+/* ============================================================
+   xAPI (TIN CAN) EXPORT ADAPTER
+   Sprint 3F. Reuses the shared export engine exactly as every SCORM
+   adapter does — validation, asset handling, CSS/JS bundling, HTML
+   assembly, and zip packaging are all inherited from buildExportPackage().
+   The only xAPI-specific pieces are: the bundled runtime file (xapi.js,
+   added to the base PUBLISH_JS_FILES list — not the SCORM-specific list,
+   since xAPI shares nothing with the SCORM runtime), an optional
+   tincan.xml launch manifest, and the bootstrap's tracking block, which
+   talks to XapiRuntime instead of ScormRuntime/ScormRuntime2004.
+   ============================================================ */
+const PUBLISH_XAPI_JS_FILES = PUBLISH_JS_FILES.concat(['js/xapi.js']);
+
+// tincan.xml — the de facto launch manifest for xAPI content, analogous
+// to imsmanifest.xml for SCORM. Optional per the xAPI spec (statements
+// can be sent without one), but included for LRS/LMS platforms that use
+// it for activity discovery and launch configuration.
+function buildTincanManifest(course, project) {
+  const courseId = escapeHtml(String(course.id).replace(/[^A-Za-z0-9_.-]/g, '_'));
+  const title = escapeHtml(course.title || 'Course');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<tincan xmlns="http://projecttincan.com/tincan.xsd">
+  <activities>
+    <activity id="https://lumio.app/xapi/activities/course/${courseId}" type="http://adlnet.gov/expapi/activities/course">
+      <name>${title}</name>
+      <description lang="en-US">${title}</description>
+      <launch lang="en-US">index.html</launch>
+    </activity>
+  </activities>
+</tincan>`;
+}
+
+// Bootstrap: identical navigation/media wiring to every other export
+// adapter. The tracking block differs from SCORM's in two ways: (1) state
+// load/save goes through XapiRuntime's async State API rather than a
+// synchronous RTE call, and (2) rather than projecting one completion
+// snapshot per save (SCORM's model), it diffs the previous and current
+// learnerProgress/assessmentAttempts snapshots to emit the specific
+// xAPI statement for whatever just changed — Course Launched (once, on
+// load), Lesson Viewed (first time a lesson is reached), Continue
+// Completed (a lesson's completedLessons entry is new), Knowledge Check
+// Completed/Passed (an assessment attempt is new, or newly passed), and
+// Course Completed (courseStatus transitions to 'completed'). This reuses
+// the exact same persisted state shape every other export reads/writes —
+// no parallel completion logic, only a diff over it.
+function buildXapiBootstrapScript() {
+  return `(function(){
+  var __cd=window.__LUMIO_COURSE_DATA__;
+  var cid=__cd.course.id;
+  var __lk='lumio-learner-'+cid;
+  var __assessmentIds=(__cd.course.assessments||[]).map(function(a){return a.id;});
+  var __xapiOk=false;
+  try{__xapiOk=XapiRuntime.init();}catch(e){__xapiOk=false;}
+
+  // Bookkeeping of which statements have already been sent — persisted
+  // alongside the rest of the suspend state so reloads/resumes don't
+  // resend statements for progress the learner made in a prior session.
+  var __sent={lessonsViewed:[],continuesCompleted:[],kcCompleted:[],kcPassed:[],courseCompleted:false,launched:false};
+
+  function __emitDiffStatements(progress){
+    var lessons=__cd.course.lessons||[];
+    var assessments=__cd.course.assessments||[];
+    if(progress.lastLessonId && __sent.lessonsViewed.indexOf(progress.lastLessonId)===-1){
+      __sent.lessonsViewed.push(progress.lastLessonId);
+      var lesson=lessons.find(function(l){return l.id===progress.lastLessonId;});
+      try{XapiRuntime.sendLessonViewed(cid, progress.lastLessonId, lesson&&lesson.title);}catch(e){}
+    }
+    (progress.completedLessons||[]).forEach(function(lid){
+      if(__sent.continuesCompleted.indexOf(lid)===-1){
+        __sent.continuesCompleted.push(lid);
+        var lesson=lessons.find(function(l){return l.id===lid;});
+        try{XapiRuntime.sendContinueCompleted(cid, lid, lid+':continue', lesson&&lesson.title);}catch(e){}
+      }
+    });
+    assessments.forEach(function(a){
+      var att=((LumioState.assessmentAttempts||{})[cid]||{})[a.id];
+      if(!att||!(att.attempts>0))return;
+      if(__sent.kcCompleted.indexOf(a.id)===-1){
+        __sent.kcCompleted.push(a.id);
+        try{XapiRuntime.sendKnowledgeCheckCompleted(cid, a.lessonId||a.id, a.id, a.title);}catch(e){}
+      }
+      if(typeof att.passed==='boolean' && __sent.kcPassed.indexOf(a.id)===-1){
+        __sent.kcPassed.push(a.id);
+        var scaled=typeof att.score==='number'?att.score/100:0;
+        try{XapiRuntime.sendKnowledgeCheckPassed(cid, a.lessonId||a.id, a.id, a.title, scaled, att.passed);}catch(e){}
+      }
+    });
+    if(progress.courseStatus==='completed' && !__sent.courseCompleted){
+      __sent.courseCompleted=true;
+      var bestScore=null;
+      assessments.forEach(function(a){
+        var att=((LumioState.assessmentAttempts||{})[cid]||{})[a.id];
+        if(att&&typeof att.score==='number'&&(bestScore===null||att.score>bestScore))bestScore=att.score;
+      });
+      try{XapiRuntime.sendCourseCompleted(cid, __cd.course.title, bestScore!==null?bestScore/100:undefined);}catch(e){}
+    }
+  }
+
+  function __loadLearnerState(){
+    function applyRecord(rec){
+      if(!rec)return;
+      if(rec.learnerProfile)LumioState.learnerProfile=rec.learnerProfile;
+      if(rec.resume)LumioState.resume=rec.resume;
+      if(rec.learnerProgress){if(!LumioState.learnerProgress)LumioState.learnerProgress={};LumioState.learnerProgress[cid]=rec.learnerProgress;}
+      if(rec.interactionHistory){if(!LumioState.interactionHistory)LumioState.interactionHistory={};LumioState.interactionHistory[cid]=rec.interactionHistory;}
+      if(rec.assessmentAttempts){if(!LumioState.assessmentAttempts)LumioState.assessmentAttempts={};LumioState.assessmentAttempts[cid]=rec.assessmentAttempts;}
+      if(rec.__sent)__sent=rec.__sent;
+    }
+    if(__xapiOk){
+      XapiRuntime.getState(cid,'suspendData').then(function(rec){
+        applyRecord(rec);
+        if(!__sent.launched){__sent.launched=true;try{XapiRuntime.sendCourseLaunched(cid, __cd.course.title);}catch(e){}}
+        if(rec&&rec.learnerProgress)__emitDiffStatements(rec.learnerProgress);
+        if(window.render)window.render();
+      }).catch(function(){});
+      return;
+    }
+    try{
+      var raw=localStorage.getItem(__lk);
+      if(raw)applyRecord(JSON.parse(raw));
+    }catch(e){}
+  }
+  function __saveLearnerState(){
+    var assessmentAttempts={};
+    var byCourse=(LumioState.assessmentAttempts||{})[cid]||{};
+    __assessmentIds.forEach(function(id){if(byCourse[id])assessmentAttempts[id]=byCourse[id];});
+    var learnerProgress=(LumioState.learnerProgress||{})[cid];
+    if(learnerProgress)__emitDiffStatements(learnerProgress);
+    var rec={
+      learnerProfile:LumioState.learnerProfile,
+      resume:LumioState.resume,
+      learnerProgress:learnerProgress,
+      interactionHistory:(LumioState.interactionHistory||{})[cid],
+      assessmentAttempts:assessmentAttempts,
+      __sent:__sent,
+    };
+    if(__xapiOk){ XapiRuntime.setState(cid,'suspendData',rec); return; }
+    try{ localStorage.setItem(__lk,JSON.stringify(rec)); }catch(e){}
+  }
+  var __saveTimer=null;
+  window.loadLumioState=function(){__loadLearnerState();return null;};
+  window.saveLumioState=__saveLearnerState;
+  window.scheduleLumioSave=function(){if(__saveTimer)clearTimeout(__saveTimer);__saveTimer=setTimeout(__saveLearnerState,400);};
+  window.addEventListener('beforeunload',__saveLearnerState);
+  LumioState.courses[cid]=__cd.course;
+  Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  LumioState.learnerPreview={returnTo:''};
+  LearnerUI.publishedMode=true;
+  var __am=window.__LUMIO_ASSET_MAP__;
+  AssetStore.resolveMediaSrc=function(src){if(!src)return'';return(__am&&__am[src])||src;};
+  AssetStore.preloadBlocks=async function(){return 0;};
+  AssetStore.resolveUrl=async function(src){return((__am&&__am[src])||src)||null;};
+  window.navigate=function(hash){
+    if(location.hash===hash){window.render();}
+    else{location.hash=hash;}
+    window.scrollTo(0,0);
+  };
+  window.render=function(){
+    LumioState.courses[cid]=__cd.course;
+    Object.assign(LumioState.lessons,__cd.lessons);
+    var m=(location.hash||'').match(/^#\\/learner\\/[^\\/]+\\/(.+)$/);
+    renderLearnerPreview(cid,m?m[1]:null);
+  };
+  window.addEventListener('hashchange',window.render);
+  if(!__xapiOk && !__sent.launched){__sent.launched=true;try{XapiRuntime.sendCourseLaunched(cid, __cd.course.title);}catch(e){}}
+})();`;
+}
+
+const XAPI_EXPORT_ADAPTER = {
+  jsFiles: PUBLISH_XAPI_JS_FILES,
+  formatLabel: 'xAPI (Tin Can)',
+  successIcon: '🧩',
+  zipFileName: (safeName) => `${safeName}-xapi.zip`,
+  successMessage: ({ assetEntries }) =>
+    `xAPI package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
+  buildManifestFile: (course, project) => ({ name: 'tincan.xml', content: buildTincanManifest(course, project) }),
+  buildBootstrapScript: buildXapiBootstrapScript,
+};
+
+async function publishXapiPackage(course, triggerBtn) {
+  return buildExportPackage(course, triggerBtn, XAPI_EXPORT_ADAPTER);
+}
+
+/* ============================================================
+   PDF EXPORT
+   Sprint 3G. Unlike every adapter above, PDF has no learner runtime to
+   bundle — there is no later execution, so buildExportPackage's HTML/JS/
+   CSS-bundling pipeline does not apply here and is correctly NOT reused
+   for that part. What IS reused: the shared publish gate
+   (checkPublishGate), the shared lesson/asset collection pattern, and
+   the shared asset pipeline (AssetStore.exportAll) — the same data this
+   function reads is byte-identical to what every other adapter reads.
+   The course parser is not duplicated: renderCoursePdf (pdf.js) reads
+   block.data through the SAME normalizer functions (normalizeListItems,
+   normalizeItemList, normalizeKcOptions, normalizeFlashcardItems)
+   lessonBuilder.js already defines, not a second parser.
+   ============================================================ */
+async function publishPdfPackage(course, triggerBtn) {
+  const gateError = checkPublishGate(course);
+  if (gateError) { toast(gateError, '⚠️'); return; }
+
+  const originalLabel = triggerBtn ? triggerBtn.textContent : '';
+  if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
+
+  try {
+    const lessonData = {};
+    (course.lessons || []).forEach(l => {
+      if (LumioState.lessons[l.id]) lessonData[l.id] = LumioState.lessons[l.id];
+    });
+    (course.assessments || []).forEach(a => {
+      if (LumioState.lessons[a.id]) lessonData[a.id] = LumioState.lessons[a.id];
+    });
+
+    const assetRefs = _collectProjectAssetRefs(course, lessonData);
+    const assetEntries = await AssetStore.exportAll(assetRefs);
+
+    const pdfBytes = await renderCoursePdf(course, lessonData, assetEntries);
+
+    const safeName = (course.title || 'course').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    if (!course.publishHistory) course.publishHistory = [];
+    course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'success' });
+    scheduleLumioSave();
+    toast(`PDF downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, '📄');
+  } catch (err) {
+    console.error('[Lumio Publish] PDF publish failed:', err);
+    toast('PDF publish failed — see console', '❌');
+    if (!course.publishHistory) course.publishHistory = [];
+    course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'failed' });
+    scheduleLumioSave();
+  } finally {
+    if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
+  }
 }
 
 function buildZip(files) {
