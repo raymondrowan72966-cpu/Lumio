@@ -5619,10 +5619,6 @@ function renderAIPanel(lesson, blocks) {
           <button class="btn btn-secondary btn-sm chat-suggestion" data-msg="suggest a knowledge check">Suggest a knowledge check</button>
           <button class="btn btn-secondary btn-sm chat-suggestion" data-msg="how am i doing">How am I doing?</button>
         </div>
-        <div class="input-icon-wrap">
-          <span class="icon">✨</span>
-          <input class="input" id="chat-input" placeholder="Ask Lumio AI..." />
-        </div>
       </div>
     </div>
   `;
@@ -7386,12 +7382,9 @@ function bindBuilderEvents(course, lesson, blocks) {
     const labels = { rewrite: 'Rewrote for clarity', simplify: 'Simplified language', shorten: 'Shortened text', alt: 'Generated alt text' };
     toast('✨ ' + labels[action], '✨');
   }));
-  app.querySelector('#ai-gen-kc')?.addEventListener('click', () => {
-    toast('✨ Generated a new question from this lesson\'s content', '✨');
-  });
   app.querySelector('#ai-add-kc')?.addEventListener('click', (e) => {
     e.preventDefault();
-    blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: {} });
+    blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
     renderLessonBuilder(lesson.id);
     toast('✨ Added a knowledge check based on this lesson', '✨');
   });
@@ -7423,12 +7416,6 @@ function bindBuilderEvents(course, lesson, blocks) {
   if (BuilderUI.aiOpen) {
     app.querySelector('#close-ai').addEventListener('click', () => { BuilderUI.aiOpen = false; renderLessonBuilder(lesson.id); });
     app.querySelectorAll('.chat-suggestion').forEach(b => b.addEventListener('click', () => sendChatMessage(b.dataset.msg, lesson, blocks)));
-    const chatInput = app.querySelector('#chat-input');
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && chatInput.value.trim()) {
-        sendChatMessage(chatInput.value.trim(), lesson, blocks);
-      }
-    });
   }
 }
 

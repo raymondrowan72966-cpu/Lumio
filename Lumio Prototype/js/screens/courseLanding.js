@@ -744,10 +744,12 @@ function openPublishModal(course) {
         </div>
       </div>`;
 
-    // SCORM 1.2 Export Implementation Sprint: 'scorm12' is now a real,
-    // implemented format alongside 'html' — every other format id in
-    // PUBLISH_FORMATS (SCORM 2004 editions, xAPI, PDF) remains "Coming Soon".
-    const IMPLEMENTED_FORMATS = ['html', 'scorm12'];
+    // SCORM 1.2 Export Implementation Sprint / Sprint 7C: 'scorm12' and
+    // 'scorm2004_4' are real, implemented formats alongside 'html' —
+    // every other format id in PUBLISH_FORMATS (SCORM 2004 2nd/3rd
+    // Edition, xAPI, PDF) remains "Coming Soon" — see Sprint 7A's
+    // recommendation against implementing 2004 2nd/3rd Edition.
+    const IMPLEMENTED_FORMATS = ['html', 'scorm12', 'scorm2004_4'];
     const formatsHtml = PUBLISH_FORMATS.map(f => `
       <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
         <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
@@ -924,6 +926,7 @@ function openPublishModal(course) {
     if (!btn) return;
     if (btn.dataset.publishFormat === 'html') publishHtmlPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm12') publishScormPackage(course, btn);
+    else if (btn.dataset.publishFormat === 'scorm2004_4') publishScorm2004Package(course, btn);
   });
 }
 
