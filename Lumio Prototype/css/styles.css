@@ -997,24 +997,29 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .lumio-accordion-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .lumio-accordion-title > * { margin: 0; }
-.lumio-accordion-marker { font-weight: 700; color: var(--ink-400); flex-shrink: 0; }
+/* Marker and chevron use currentColor (not a hardcoded var) so they
+   always inherit whatever colour the accordion header's own `color:`
+   is set to (archATextColor(ds), the same single source of truth the
+   title text already uses) — themed text colour, custom colour, and
+   dark/light backgrounds all stay consistent with zero extra controls. */
+.lumio-accordion-marker { font-weight: 700; color: currentColor; flex-shrink: 0; }
 .lumio-accordion-chevron {
   flex-shrink: 0; width: 18px; height: 18px; position: relative;
   transition: transform 0.25s ease;
 }
 .lumio-accordion-chevron::before {
   content: ''; position: absolute; inset: 0;
-  border-right: 2px solid var(--ink-400); border-bottom: 2px solid var(--ink-400);
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
   width: 8px; height: 8px; margin: auto; transform: rotate(45deg);
 }
 .lumio-accordion-chevron[data-style="plusminus"]::before {
   border-right: none; border-bottom: none;
-  border-top: 2px solid var(--ink-400); width: 10px; height: 0; transform: none;
+  border-top: 2px solid currentColor; width: 10px; height: 0; transform: none;
   top: 8px;
 }
 .lumio-accordion-chevron[data-style="plusminus"]::after {
   content: ''; position: absolute; left: 4px; top: 0;
-  border-left: 2px solid var(--ink-400); width: 0; height: 10px;
+  border-left: 2px solid currentColor; width: 0; height: 10px;
   transition: opacity 0.2s ease;
 }
 .lumio-accordion-row.open .lumio-accordion-chevron[data-style="plusminus"]::after { opacity: 0; }

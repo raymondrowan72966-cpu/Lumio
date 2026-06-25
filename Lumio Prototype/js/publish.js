@@ -581,7 +581,17 @@ async function publishScormPackage(course, triggerBtn) {
 // sequencing rules, so the <imsss:sequencing> block is intentionally
 // omitted (a conformant LMS treats an SCO with no sequencing info as
 // always-available, which matches Lumio's actual navigation model).
-function buildImsManifest2004(course, project) {
+// Sprint 3D audit finding: the IMS CP / ADL CAM namespaces (imscp_v1p1,
+// adlcp_v1p3, adlseq_v1p3, adlnav_v1p3, imsss) did not change across the
+// 2004 2nd/3rd/4th Editions — those editions differ only in sequencing/
+// navigation clarifications and errata that matter for multi-SCO,
+// sequenced courses. Lumio publishes a single-SCO package with no
+// <imsss:sequencing> block (intentionally omitted — see the 4th Edition
+// comment below), so for Lumio's package shape the three editions are
+// byte-identical except for the <schemaversion> string the LMS reads to
+// know which edition's conformance rules to apply. `edition` is that one
+// varying value; everything else is the single shared manifest shape.
+function buildImsManifest2004(course, project, edition) {
   const id = (s) => escapeHtml(String(s).replace(/[^A-Za-z0-9_.-]/g, '_'));
   const courseId = id(course.id);
   const title = escapeHtml(course.title || 'Course');
@@ -600,7 +610,7 @@ function buildImsManifest2004(course, project) {
                          http://www.imsglobal.org/xsd/imsss imsss_v1p0.xsd">
   <metadata>
     <schema>ADL SCORM</schema>
-    <schemaversion>2004 4th Edition</schemaversion>
+    <schemaversion>${edition}</schemaversion>
   </metadata>
   <organizations default="LUMIO_ORG_${courseId}">
     <organization identifier="LUMIO_ORG_${courseId}">
@@ -618,19 +628,18 @@ function buildImsManifest2004(course, project) {
 </manifest>`;
 }
 
-const SCORM2004_EXPORT_ADAPTER = {
-  jsFiles: PUBLISH_SCORM_JS_FILES,
-  formatLabel: 'SCORM 2004 (4th Edition)',
-  successIcon: '📦',
-  zipFileName: (safeName) => `${safeName}-scorm2004.zip`,
-  successMessage: ({ assetEntries }) =>
-    `SCORM 2004 package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
-  buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest2004(course, project) }),
-  // Bootstrap: identical navigation/media wiring to the SCORM 1.2 adapter
-  // (and the HTML adapter) — the only divergence is the tracking block,
-  // which talks to ScormRuntime2004 and derives completion_status +
-  // success_status + score.scaled instead of one lesson_status value.
-  buildBootstrapScript: () => `(function(){
+// Bootstrap: identical navigation/media wiring to the SCORM 1.2 adapter
+// (and the HTML adapter) — the only divergence is the tracking block,
+// which talks to ScormRuntime2004 and derives completion_status +
+// success_status + score.scaled instead of one lesson_status value.
+// Edition-agnostic: ScormRuntime2004's RTE calls (Initialize/GetValue/
+// SetValue/Commit/Terminate, completion_status/success_status/
+// score.scaled/suspend_data/entry/learner_id/learner_name) are the same
+// data model across 2nd/3rd/4th Edition — there is no edition-specific
+// runtime behaviour to branch on, so every 2004 adapter shares this one
+// function rather than each carrying its own near-identical copy.
+function build2004BootstrapScript() {
+  return `(function(){
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -750,11 +759,70 @@ const SCORM2004_EXPORT_ADAPTER = {
     renderLearnerPreview(cid,m?m[1]:null);
   };
   window.addEventListener('hashchange',window.render);
-})();`,
+})();`;
+}
+
+/* ============================================================
+   SCORM 2004 (4TH EDITION) EXPORT ADAPTER
+   ============================================================ */
+const SCORM2004_EXPORT_ADAPTER = {
+  jsFiles: PUBLISH_SCORM_JS_FILES,
+  formatLabel: 'SCORM 2004 (4th Edition)',
+  successIcon: '📦',
+  zipFileName: (safeName) => `${safeName}-scorm2004.zip`,
+  successMessage: ({ assetEntries }) =>
+    `SCORM 2004 package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
+  buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest2004(course, project, '2004 4th Edition') }),
+  buildBootstrapScript: build2004BootstrapScript,
 };
 
 async function publishScorm2004Package(course, triggerBtn) {
   return buildExportPackage(course, triggerBtn, SCORM2004_EXPORT_ADAPTER);
+}
+
+/* ============================================================
+   SCORM 2004 (2ND EDITION) EXPORT ADAPTER
+   Sprint 3D — reuses every shared component the 4th Edition adapter
+   does (ScormRuntime2004, build2004BootstrapScript, PUBLISH_SCORM_JS_FILES,
+   buildImsManifest2004). The only difference is the manifest's declared
+   <schemaversion> string, per the Sprint 3D audit finding above.
+   ============================================================ */
+const SCORM2004_2ND_EXPORT_ADAPTER = {
+  jsFiles: PUBLISH_SCORM_JS_FILES,
+  formatLabel: 'SCORM 2004 (2nd Edition)',
+  successIcon: '📦',
+  zipFileName: (safeName) => `${safeName}-scorm2004-2nd.zip`,
+  successMessage: ({ assetEntries }) =>
+    `SCORM 2004 (2nd Edition) package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
+  buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest2004(course, project, '2004 2nd Edition') }),
+  buildBootstrapScript: build2004BootstrapScript,
+};
+
+async function publishScorm2004_2ndPackage(course, triggerBtn) {
+  return buildExportPackage(course, triggerBtn, SCORM2004_2ND_EXPORT_ADAPTER);
+}
+
+/* ============================================================
+   SCORM 2004 (3RD EDITION) EXPORT ADAPTER
+   Sprint 3E — completes the SCORM 2004 family. Reuses every shared
+   component the 2nd/4th Edition adapters do (ScormRuntime2004,
+   build2004BootstrapScript, PUBLISH_SCORM_JS_FILES, buildImsManifest2004).
+   The only difference is, again, the manifest's declared <schemaversion>
+   string — confirmed by the same audit finding established in Sprint 3D.
+   ============================================================ */
+const SCORM2004_3RD_EXPORT_ADAPTER = {
+  jsFiles: PUBLISH_SCORM_JS_FILES,
+  formatLabel: 'SCORM 2004 (3rd Edition)',
+  successIcon: '📦',
+  zipFileName: (safeName) => `${safeName}-scorm2004-3rd.zip`,
+  successMessage: ({ assetEntries }) =>
+    `SCORM 2004 (3rd Edition) package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
+  buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest2004(course, project, '2004 3rd Edition') }),
+  buildBootstrapScript: build2004BootstrapScript,
+};
+
+async function publishScorm2004_3rdPackage(course, triggerBtn) {
+  return buildExportPackage(course, triggerBtn, SCORM2004_3RD_EXPORT_ADAPTER);
 }
 
 function buildZip(files) {

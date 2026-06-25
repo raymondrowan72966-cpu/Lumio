@@ -682,8 +682,15 @@ function renderCheckboxMarker(ds, checked, i, key) {
   } else {
     const radius = style === 'circle' ? '50%' : '4px';
     const filled = style === 'filled';
-    boxStyle = `border:2px solid ${borderColor}; border-radius:${radius}; background:${(checked && filled) ? tickColor : 'transparent'};`;
-    inner = checked ? `<span style="color:${filled ? '#fff' : tickColor}; font-size:${Math.round(size * 0.7)}px; line-height:1;">✓</span>` : '';
+    // The rendered tick must always be Tick Colour, every style, no
+    // exceptions — previously Filled mode hardcoded the glyph to '#fff'
+    // and used Tick Colour only as the box fill, so changing Tick Colour
+    // visibly did nothing to the actual checkmark. Filled mode now tints
+    // the fill toward Tick Colour instead of using it at full strength,
+    // so the full-strength Tick Colour glyph stays visible against it —
+    // Border Colour's own value and meaning are untouched.
+    boxStyle = `border:2px solid ${borderColor}; border-radius:${radius}; background:${(checked && filled) ? `color-mix(in srgb, ${tickColor} 22%, white)` : 'transparent'};`;
+    inner = checked ? `<span style="color:${tickColor}; font-size:${Math.round(size * 0.7)}px; line-height:1;">✓</span>` : '';
   }
   return `<span class="list-checkbox-marker" data-itemindex="${i}" data-key="${key || ''}" role="checkbox" aria-checked="${checked}" tabindex="0"
     style="flex-shrink:0; width:${size}px; height:${size}px; ${boxStyle} display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:2px;">${inner}</span>`;
@@ -777,19 +784,66 @@ function quoteBlockExtraStyle(block) {
 }
 
 /* Typography style for an individual editable text element within a Text block. */
-function textTypographyStyle(ds, defaultSize) {
+// `prefix` (optional) reads ds[prefix+'FontSize']/ds[prefix+'FontColor']/
+// ds[prefix+'FontFamily'] instead of the flat ds.fontSize/fontColor/
+// fontFamily fields — lets one block apply independent typography to more
+// than one text role (e.g. Labelled Graphic's hotspot Title vs Body)
+// while every existing caller (which never passes a third argument)
+// keeps reading the original flat fields, unchanged.
+function textTypographyStyle(ds, defaultSize, prefix) {
   ds = ds || {};
-  let style = `font-size:${ds.fontSize || defaultSize}px;`;
-  if (ds.fontColor) {
-    style += `color:${TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor};`;
-  } else if (ds.bgType === 'dark') {
+  const key = (name) => prefix ? `${prefix}${name}` : name.charAt(0).toLowerCase() + name.slice(1);
+  const fontSize = ds[key('FontSize')];
+  const fontColor = ds[key('FontColor')];
+  const fontFamily = ds[key('FontFamily')];
+  let style = `font-size:${fontSize || defaultSize}px;`;
+  if (fontColor) {
+    style += `color:${TEXT_COLOR_MAP[fontColor] || fontColor};`;
+  } else if (!prefix && ds.bgType === 'dark') {
     style += `color:#ffffff;`;
   }
-  if (ds.bold) style += `font-weight:700;`;
-  if (ds.italic) style += `font-style:italic;`;
-  if (ds.underline) style += `text-decoration:underline;`;
-  if (ds.fontFamily && ds.fontFamily !== 'theme') style += `font-family:${ds.fontFamily};`;
+  if (!prefix) {
+    if (ds.bold) style += `font-weight:700;`;
+    if (ds.italic) style += `font-style:italic;`;
+    if (ds.underline) style += `text-decoration:underline;`;
+  }
+  if (fontFamily && fontFamily !== 'theme') style += `font-family:${fontFamily};`;
   return style;
+}
+
+/* Font Size / Font Colour / Theme Font controls for one named text role
+   (e.g. prefix 'title' -> ds.titleFontSize/titleFontColor/titleFontFamily).
+   Reuses the exact same swatch/range/checkbox markup and TEXT_COLOR_MAP as
+   every other block's Typography section — only the field-name prefix and
+   the absence of Bold/Italic/Underline/Alignment differ, since those
+   weren't requested for this control. */
+function prefixedTypographyFields(ds, prefix, label, defaultSize) {
+  const sizeProp = `${prefix}FontSize`;
+  const colorProp = `${prefix}FontColor`;
+  const familyProp = `${prefix}FontFamily`;
+  const activeColor = (!ds[colorProp] || ds[colorProp] === 'theme') ? 'theme' : (TEXT_COLOR_MAP[ds[colorProp]] ? ds[colorProp] : 'custom');
+  const colorOptions = [{ id: 'theme', label: 'Theme' }, { id: 'black', label: 'Black' }, { id: 'white', label: 'White' }, { id: 'grey', label: 'Grey' }];
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">${label} Typography</div>
+      <p class="text-sm text-muted mb-8">Font Size</p>
+      <div class="flex items-center gap-8">
+        <input type="range" class="design-range hotspot-typo-size" data-prefix="${prefix}" min="10" max="48" value="${ds[sizeProp] || defaultSize}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds[sizeProp] || defaultSize}px</span>
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Font Colour</p>
+      <div class="flex gap-8 items-center">
+        ${colorOptions.map(o => `<div class="text-color-swatch hotspot-typo-swatch ${activeColor === o.id ? 'selected' : ''}" data-prefix="${prefix}" data-color="${o.id}" title="${o.label}"
+          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+          border:${activeColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
+        <input type="color" class="text-color-custom hotspot-typo-custom" data-prefix="${prefix}" title="Custom colour" value="${activeColor === 'custom' ? ds[colorProp] : '#000000'}"
+          style="width:26px; height:26px; padding:0; border:${activeColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
+      </div>
+      <p class="text-sm text-muted mb-8 mt-12">Theme Font</p>
+      <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
+        <input type="checkbox" class="hotspot-typo-theme-font" data-prefix="${prefix}" ${(!ds[familyProp] || ds[familyProp] === 'theme') ? 'checked' : ''}/> Use theme font by default
+      </label>
+    </div>`;
 }
 
 /* Re-apply Typography/Spacing/Background styles directly to the DOM for live preview
@@ -829,8 +883,13 @@ function applyStatementStylesToDom(block, index) {
   });
   const iconEl = wrapper.querySelector('.stmt-icon-display');
   if (iconEl) {
-    iconEl.style.fontSize = `${ds.iconSize ?? 20}px`;
-    iconEl.style.color = ds.iconColor || (STATEMENT_DEFAULTS[block.type] || {}).iconColor || 'inherit';
+    if (iconEl.tagName === 'IMG') {
+      iconEl.style.width = `${ds.iconSize ?? 20}px`;
+      iconEl.style.height = `${ds.iconSize ?? 20}px`;
+    } else {
+      iconEl.style.fontSize = `${ds.iconSize ?? 20}px`;
+      iconEl.style.color = ds.iconColor || (STATEMENT_DEFAULTS[block.type] || {}).iconColor || 'inherit';
+    }
   }
 }
 
@@ -884,8 +943,8 @@ function applyListStylesToDom(block, index) {
         if (tickSpan) tickSpan.style.color = checked ? tickColor : borderColor;
       } else {
         m.style.borderColor = borderColor;
-        m.style.background = (checked && filled) ? tickColor : 'transparent';
-        if (tickSpan) tickSpan.style.color = filled ? '#fff' : tickColor;
+        m.style.background = (checked && filled) ? `color-mix(in srgb, ${tickColor} 22%, white)` : 'transparent';
+        if (tickSpan) tickSpan.style.color = tickColor;
       }
     });
   }
@@ -1523,8 +1582,15 @@ function renderBlockContent(block, editable) {
       const icon = ds.iconRemoved ? '' : (ds.icon !== undefined ? ds.icon : def.icon);
       const iconSize = ds.iconSize ?? 20;
       const iconColor = ds.iconColor || def.iconColor || 'inherit';
+      // Custom icon image takes priority over the emoji icon (reuses the
+      // existing media-picker upload architecture — see mediaPickerImageField
+      // in the Design panel). Icon Colour has no effect on an uploaded
+      // image, since it's a raster/vector asset, not a colourable glyph.
+      const iconImageHtml = (!ds.iconRemoved && ds.iconImage)
+        ? `<img class="stmt-icon-display" src="${AssetStore.resolveMediaSrc(ds.iconImage)}" style="width:${iconSize}px; height:${iconSize}px; object-fit:contain; flex-shrink:0;" alt="" />`
+        : '';
       return `<div class="flex gap-12" style="align-items:flex-start;">
-        ${icon ? `<span class="stmt-icon-display" style="font-size:${iconSize}px; line-height:1.4; color:${iconColor}; flex-shrink:0;">${escapeHtml(icon)}</span>` : ''}
+        ${iconImageHtml || (icon ? `<span class="stmt-icon-display" style="font-size:${iconSize}px; line-height:1.4; color:${iconColor}; flex-shrink:0;">${escapeHtml(icon)}</span>` : '')}
         <div style="flex:1; min-width:0;">
           <div class="editable-text" data-role="title" data-field="title" data-richtext="true" ${ce} data-placeholder="${def.label || 'Statement'}" style="font-weight:700; margin-bottom:4px; ${textTypographyStyle(ds, 15)}${d.titleAlign ? `text-align:${d.titleAlign};` : ''}">${richTextOut(d.title != null ? d.title : (def.label || 'Statement'))}</div>
           <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Add your message here..." style="line-height:1.6; ${textTypographyStyle(ds, 15)}${d.textAlign ? `text-align:${d.textAlign};` : ''}">${richTextOut(d.text || 'Add your message here.')}</div>
@@ -1994,9 +2060,9 @@ function renderBlockContent(block, editable) {
               onclick="event.stopPropagation(); lumioHotspotToggle(this, ${i})" aria-label="${escapeHtml(h.title || 'Hotspot ' + (i + 1))}">${markerGlyph(i)}</button>`).join('')}
           ${hotspots.map((h, i) => `<div class="lumio-hotspot-panel" data-hindex="${i}" style="display:none;" onclick="event.stopPropagation();">
               <button class="lumio-hotspot-close" onclick="event.stopPropagation(); lumioHotspotToggle(this.parentElement.parentElement.querySelector('.lumio-hotspot[data-hindex=\\'${i}\\']'), ${i})">×</button>
-              <h4 style="margin:0 0 6px;">${escapeHtml(h.title || '')}</h4>
+              <h4 style="margin:0 0 6px; ${textTypographyStyle(ds, 16, 'title')}">${escapeHtml(h.title || '')}</h4>
               ${itemImageHtml(h, 140)}
-              <div class="text-sm">${richTextOut(h.body)}</div>
+              <div class="text-sm" style="${textTypographyStyle(ds, 14, 'body')}">${richTextOut(h.body)}</div>
               ${itemMediaExtrasHtml(h)}
               ${hotspots.length > 1 ? `<div class="lumio-hotspot-nav">
                 <button class="btn btn-secondary btn-sm lumio-hotspot-prev" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, -1)">← Prev</button>
@@ -3027,17 +3093,24 @@ function renderStatementBlockPanel(block, index) {
         <input type="checkbox" class="stmt-icon-remove-toggle" ${iconRemoved ? 'checked' : ''}/> Remove icon
       </label>
       ${!iconRemoved ? `
+      ${mediaPickerImageField(ds, 'iconImage', 'Custom Icon', 'Custom Icon', true, 'design')}
+      ${!ds.iconImage ? `
       <div class="flex items-center gap-8 mb-8">
         <input class="input stmt-icon-input" value="${escapeHtml(currentIcon)}" style="width:60px; text-align:center; font-size:18px;" maxlength="4" />
         <button class="btn btn-secondary btn-sm stmt-icon-restore-btn">Restore default</button>
       </div>
+      ` : `
+      <div class="mb-8">
+        <button class="btn btn-secondary btn-sm stmt-icon-restore-btn">Restore default</button>
+      </div>
+      `}
       <p class="text-sm text-muted mb-8">Icon Size</p>
       <div class="flex items-center gap-8">
         <input type="range" class="design-range" data-prop="iconSize" min="12" max="48" value="${ds.iconSize ?? 20}" style="flex:1;" />
         <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.iconSize ?? 20}px</span>
       </div>
-      <p class="text-sm text-muted mb-8 mt-12">Icon Colour</p>
-      <input type="color" class="input stmt-icon-color" value="${ds.iconColor || def.iconColor || '#6366F1'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+      <p class="text-sm text-muted mb-8 mt-12">Icon Colour${ds.iconImage ? ' <span class="text-muted">(disabled — custom image in use)</span>' : ''}</p>
+      <input type="color" class="input stmt-icon-color" ${ds.iconImage ? 'disabled' : ''} value="${ds.iconColor || def.iconColor || '#6366F1'}" style="width:48px; height:32px; padding:2px; cursor:pointer; ${ds.iconImage ? 'opacity:0.5; cursor:not-allowed;' : ''}" />
       ` : ''}
     </div>
     <div class="prop-section">
@@ -4994,7 +5067,7 @@ function itemListContentPanel(block, d, listKey, itemLabel, factory, opts) {
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
-        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">${item.title ? escapeHtml(item.title) : `${itemLabel} ${i + 1}`}</div>
+        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">${itemLabel} ${i + 1}</div>
         ${itemManageToolbar(listKey, i, items.length)}
       </div>
       ${opts.canvasEditable
@@ -5042,7 +5115,7 @@ function galleryCarouselContentPanel(block, d) {
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
-        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">${item.title ? escapeHtml(item.title) : `Slide ${i + 1}`}</div>
+        <div class="prop-section-title" style="margin:0;" title="${escapeHtml(item.title || '')}">Slide ${i + 1}</div>
         ${itemManageToolbar('items', i, items.length)}
       </div>
       <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
@@ -5060,7 +5133,7 @@ function galleryCarouselContentPanel(block, d) {
    ============================================================ */
 
 function accordionContentPanel(block, d) {
-  return itemListContentPanel(block, d, 'items', 'Item', () => [
+  return itemListContentPanel(block, d, 'items', 'Accordion', () => [
     { title: 'Section 1', body: 'Details about section 1...' },
     { title: 'Section 2', body: 'Details about section 2...' },
   ], { bodyLabel: 'Body', titleLabel: 'Title', canvasEditable: true });
@@ -5211,6 +5284,8 @@ function labelledGraphicDesignFields(block, ds) {
       <div class="prop-section-title">Visited State Style</div>
       ${segControl('design-visitedstyle', 'visitedStyle', [{id:'filled',label:'Filled'},{id:'checkmark',label:'Checkmark'},{id:'theme',label:'Theme Fill'}], ds.visitedStyle || 'filled')}
     </div>
+    ${prefixedTypographyFields(ds, 'title', 'Popup Title', 16)}
+    ${prefixedTypographyFields(ds, 'body', 'Popup Body', 14)}
     ${interactiveBorderPaddingFields(ds)}`;
 }
 
@@ -5432,6 +5507,37 @@ function lumioHotspotMarkVisited(marker) {
   if (wrap && wrap.dataset.visitedstyle === 'checkmark') marker.textContent = '✓';
 }
 
+// Anchors the popup adjacent to the hotspot that opened it, with edge
+// detection — same clamp/flip technique as positionRichTextToolbar()
+// (prefer one side, flip to the opposite if there's no room, then clamp
+// within bounds), reused here for the labelled-graphic container instead
+// of the viewport since the panel is position:absolute inside `wrap`.
+function positionHotspotPanel(wrap, marker, panel) {
+  const wrapRect = wrap.getBoundingClientRect();
+  const markerRect = marker.getBoundingClientRect();
+  const gap = 14;
+  const panelW = panel.offsetWidth;
+  const panelH = panel.offsetHeight;
+  const markerCenterX = markerRect.left - wrapRect.left + markerRect.width / 2;
+  const markerCenterY = markerRect.top - wrapRect.top + markerRect.height / 2;
+
+  // Prefer to the right of the marker; flip to the left if there's no room.
+  let left = markerCenterX + markerRect.width / 2 + gap;
+  if (left + panelW > wrapRect.width - 8) {
+    left = markerCenterX - markerRect.width / 2 - gap - panelW;
+  }
+  // Neither side fits (very narrow container) — clamp centered under/over the marker.
+  if (left < 8) left = Math.max(8, Math.min(wrapRect.width - panelW - 8, markerCenterX - panelW / 2));
+
+  // Vertically align with the marker's centre, clamped to stay fully visible.
+  let top = markerCenterY - panelH / 2;
+  top = Math.max(8, Math.min(top, wrapRect.height - panelH - 8));
+
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  panel.style.transform = 'none';
+}
+
 function lumioHotspotOpen(wrap, i) {
   const panel = wrap.querySelector(`.lumio-hotspot-panel[data-hindex="${i}"]`);
   const marker = wrap.querySelector(`.lumio-hotspot[data-hindex="${i}"]`);
@@ -5442,6 +5548,7 @@ function lumioHotspotOpen(wrap, i) {
     wrap.querySelectorAll('.lumio-hotspot').forEach(b => { if (b !== marker) b.classList.remove('active'); });
   }
   panel.style.display = 'block';
+  positionHotspotPanel(wrap, marker, panel);
   marker.classList.add('active');
   lumioHotspotMarkVisited(marker);
 }
@@ -6338,6 +6445,55 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelector('.text-color-custom')?.addEventListener('change', () => {
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
+  });
+
+  // Labelled Graphic — prefixed Title/Body typography (Popup Design,
+  // Issue 5). Same pattern as the .text-color-swatch/.theme-font-toggle
+  // handlers above, generalized to a data-prefix so one block can carry
+  // two independent typography roles instead of the usual one.
+  app.querySelectorAll('.hotspot-typo-size').forEach(input => {
+    const prefix = input.dataset.prefix;
+    input.addEventListener('input', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design[`${prefix}FontSize`] = parseInt(e.target.value, 10);
+      e.target.nextElementSibling.textContent = `${e.target.value}px`;
+    });
+    input.addEventListener('change', () => { renderLessonBuilder(lesson.id); flashSaveStatus(); });
+  });
+  app.querySelectorAll('.hotspot-typo-swatch').forEach(sw => sw.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    const prefix = sw.dataset.prefix;
+    if (sw.dataset.color === 'theme') delete block.design[`${prefix}FontColor`];
+    else block.design[`${prefix}FontColor`] = sw.dataset.color;
+    renderLessonBuilder(lesson.id);
+    flashSaveStatus();
+  }));
+  app.querySelectorAll('.hotspot-typo-custom').forEach(input => {
+    const prefix = input.dataset.prefix;
+    input.addEventListener('input', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design[`${prefix}FontColor`] = e.target.value;
+      applyLivePreview(block, BuilderUI.selected);
+    });
+    input.addEventListener('change', () => { renderLessonBuilder(lesson.id); flashSaveStatus(); });
+  });
+  app.querySelectorAll('.hotspot-typo-theme-font').forEach(input => {
+    const prefix = input.dataset.prefix;
+    input.addEventListener('change', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      if (e.target.checked) delete block.design[`${prefix}FontFamily`];
+      else block.design[`${prefix}FontFamily`] = 'Georgia, serif';
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    });
   });
 
   // Text blocks — Theme font toggle / custom font family override
@@ -7267,6 +7423,10 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     block.design = block.design || {};
     delete block.design.icon;
+    delete block.design.iconImage;
+    delete block.design.iconImageFileName;
+    delete block.design.iconImageMimeType;
+    delete block.design.iconImageFileSize;
     block.design.iconRemoved = false;
     renderLessonBuilder(lesson.id);
     flashSaveStatus();

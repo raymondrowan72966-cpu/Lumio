@@ -978,8 +978,19 @@ const LUMIO_STATE_VERSION = 19;
    This is a wrapper-level margin-bottom applied automatically to every
    block, entirely separate from each block's own Top/Bottom Padding design
    controls — it's what was producing a large visible gap even when a block's
-   own padding was set to 0 (Export/Layout Investigation Sprint, Issue 5). */
-const FLOW_SPACING = '6px';
+   own padding was set to 0 (Export/Layout Investigation Sprint, Issue 5).
+   Platform Polish Sprint 3: the per-block wrapper also always carries a
+   fixed `padding:3px 22px` (top/bottom 3px) that sits between the visible
+   content and this margin for cardless (border/background-less) blocks —
+   measured live: a cardless pair's true rendered gap is 3px + FLOW_SPACING
+   + 3px, not FLOW_SPACING alone. 16px here yields ~22px for that case
+   (16 + 3 + 3 = 22). Card-treatment blocks (bordered/background-filled)
+   absorb that same 3px padding inside their own visible edge, so their
+   rendered gap is FLOW_SPACING alone (~16px) — an existing, inherent
+   difference between the two treatments, not something this value can
+   resolve on its own without touching per-block padding, which is out of
+   scope here. */
+const FLOW_SPACING = '16px';
 const FLOW_SPACING_TIGHT = '2px';
 
 // Keys of LumioState that should be persisted/restored across sessions.

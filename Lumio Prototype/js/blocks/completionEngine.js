@@ -128,6 +128,20 @@ const CompletionEngine = (function () {
     getBlockProgress(ctx, index).completed = true;
   }
 
+  // Checklist (list_checkbox) per-item learner state. Stored in the same
+  // blockProgress record as every other "interacted" strategy — never in
+  // block.data, which is authored content and must stay author-only.
+  function setChecklistItem(ctx, index, itemIndex, checked) {
+    const bp = getBlockProgress(ctx, index);
+    if (!bp.checkedItems) bp.checkedItems = [];
+    const has = bp.checkedItems.includes(itemIndex);
+    if (checked && !has) bp.checkedItems.push(itemIndex);
+    else if (!checked && has) bp.checkedItems = bp.checkedItems.filter(i => i !== itemIndex);
+  }
+  function getChecklistChecked(ctx, index) {
+    return getBlockProgress(ctx, index).checkedItems || [];
+  }
+
   function markViewed(ctx, index) {
     getBlockProgress(ctx, index).viewed = true;
   }
@@ -342,6 +356,8 @@ const CompletionEngine = (function () {
     markOpened,
     markFlipped,
     markCompleted,
+    setChecklistItem,
+    getChecklistChecked,
     markViewed,
     markWatched,
     markPlayed,

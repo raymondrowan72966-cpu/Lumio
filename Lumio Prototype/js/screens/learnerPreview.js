@@ -1125,7 +1125,13 @@ function learnerListCheckboxBlock(block, index, ctx) {
   const items = normalizeListItems(d, def.items);
   const key = ctx.lessonId + ':' + index;
   if (!LearnerUI.listChecked[key]) {
-    LearnerUI.listChecked[key] = new Set(items.map((it, i) => i).filter(i => items[i].checked));
+    // Seeded ONLY from persisted learner runtime state (blockProgress),
+    // never from item.checked — that field is authored content (e.g. set
+    // by clicking a checkbox in the Builder canvas) and must never
+    // determine a learner's starting state. A fresh Preview/Export/SCORM
+    // launch always begins unchecked; a returning learner's own prior
+    // ticks are restored from CompletionEngine's persisted record.
+    LearnerUI.listChecked[key] = new Set(CompletionEngine.getChecklistChecked(ctx, index));
   }
   const checkedSet = LearnerUI.listChecked[key];
   const indent = ds.indent ?? 20;
@@ -1747,6 +1753,22 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     });
   });
 
+  // Continue-only learning-flow enhancement: after the next section
+  // unlocks, bring it into view — but only if it isn't already fully
+  // visible, and positioned ~100px below the viewport top rather than
+  // hard against the edge. Reuses the same native `behavior:'smooth'`
+  // scroll already used by the Button block's anchor-jump feature
+  // (lessonBuilder.js); the only new logic is the visibility check and
+  // fixed offset, which that feature didn't need.
+  function scrollContinueTargetIntoView(lessonId, nextIndex) {
+    const target = document.querySelector(`[data-lp-lesson="${lessonId}"][data-lp-index="${nextIndex}"]`);
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (fullyVisible) return;
+    window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
+  }
+
   // Continue
   app.querySelectorAll('.lp-continue').forEach(btn => btn.addEventListener('click', () => {
     if (btn.disabled) return;
@@ -1755,6 +1777,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     if (!LearnerUI.revealedContinues[lessonId]) LearnerUI.revealedContinues[lessonId] = new Set();
     LearnerUI.revealedContinues[lessonId].add(idx);
     rerender();
+    scrollContinueTargetIntoView(lessonId, idx + 1);
   }));
 
   // Keydown helper: runs `fn` only for Enter/Space, preventing the page
@@ -1907,12 +1930,19 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     rerender();
   }));
 
-  // Checkbox list — learner ticks/unticks items (session-only state)
+  // Checkbox list — learner ticks/unticks items. Persisted via
+  // CompletionEngine.setChecklistItem into the same blockProgress record
+  // every other interactive block uses (learnerProgress.blockProgress),
+  // so a returning learner's ticks survive a reload — never written to
+  // block.data, which stays authored-content-only.
   const toggleListChecked = (key, i) => {
+    const blockIndex = parseInt(key.split(':')[1], 10);
     const set = LearnerUI.listChecked[key] || new Set();
-    if (set.has(i)) set.delete(i); else set.add(i);
+    const nowChecked = !set.has(i);
+    if (nowChecked) set.add(i); else set.delete(i);
     LearnerUI.listChecked[key] = set;
-    CompletionEngine.markCompleted(ctx, parseInt(key.split(':')[1], 10));
+    CompletionEngine.setChecklistItem(ctx, blockIndex, i, nowChecked);
+    CompletionEngine.markCompleted(ctx, blockIndex);
     rerender();
   };
   app.querySelectorAll('.list-checkbox-marker[data-key]').forEach(marker => {
