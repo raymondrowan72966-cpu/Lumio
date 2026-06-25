@@ -266,8 +266,19 @@ async function renderCoursePdf(course, lessonData, assetEntries, assetMap) {
   }
 
   // ---- Cover page ----
+  // _collectProjectAssetRefs (app.js) already collects course.heroImage.src
+  // for every export format — the asset pipeline always fetches it. This
+  // renderer simply never called image() for it, which is the confirmed
+  // defect root cause (the pipeline was never the problem).
   newPage();
-  cursorY = pdf.pageH / 2 + 60;
+  const heroSrc = (course.heroImage || {}).src;
+  if (heroSrc) {
+    cursorY = pdf.pageH - margin;
+    await image(heroSrc, contentWidth, 280);
+    cursorY -= 20;
+  } else {
+    cursorY = pdf.pageH / 2 + 60;
+  }
   heading(course.title || 'Course', { size: 28 });
   paragraph(course.description || '', { size: 13 });
   cursorY -= 20;
@@ -339,9 +350,38 @@ async function renderCoursePdf(course, lessonData, assetEntries, assetMap) {
       case 'flashcard_grid': case 'flashcard_stack': {
         const items = typeof normalizeFlashcardItems === 'function' ? normalizeFlashcardItems(d) : (d.items || []);
         for (let i = 0; i < items.length; i++) {
+          const front = items[i].front || {}, back = items[i].back || {};
           heading(`Card ${i + 1}`, { size: 12 });
-          paragraph('Front: ' + (items[i].front && items[i].front.text || ''), { indent: 8 });
-          paragraph('Back: ' + (items[i].back && items[i].back.text || ''), { indent: 8 });
+          paragraph('Front: ' + (front.text || ''), { indent: 8 });
+          if (front.image) await image(front.image, contentWidth - 8, 180);
+          paragraph('Back: ' + (back.text || ''), { indent: 8 });
+          if (back.image) await image(back.image, contentWidth - 8, 180);
+        }
+        return;
+      }
+      case 'carousel': {
+        const items = typeof normalizeCarouselItems === 'function' ? normalizeCarouselItems(d) : (d.items || []);
+        for (const item of items) {
+          if (item.title) heading(item.title.replace(/<[^>]+>/g, ''), { size: 12 });
+          if (item.src) await image(item.src, contentWidth, 240);
+          if (item.description) paragraph(item.description, { indent: 8 });
+        }
+        return;
+      }
+      case 'quote_carousel': {
+        const quotes = typeof normalizeQuoteItems === 'function' ? normalizeQuoteItems(d) : (d.quotes || []);
+        for (const q of quotes) {
+          if (q.avatar) await image(q.avatar, 80, 80);
+          paragraph(`"${q.text || ''}" — ${q.author || ''}`, { indent: 8 });
+        }
+        return;
+      }
+      case 'column_grid': {
+        const items = typeof normalizeColumnGridItems === 'function' ? normalizeColumnGridItems(d) : (d.items || []);
+        for (const item of items) {
+          if (item.title) heading(item.title.replace(/<[^>]+>/g, ''), { size: 12 });
+          if (item.imageUrl) await image(item.imageUrl, contentWidth, 200);
+          if (item.description) paragraph(item.description, { indent: 8 });
         }
         return;
       }
