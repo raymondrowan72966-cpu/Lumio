@@ -520,9 +520,15 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   // tracks the card's real edge instead of a narrow inner column.
   const textRegionStyle = `font-weight:600; font-size:14px; max-height:100%; overflow-y:auto; width:100%;`;
   if (hasImage && fit === 'full') {
+    // Per author feedback, the legibility backing box (a translucent black
+    // panel behind the text) is removed entirely — it read as a flat grey
+    // block over light/white images instead of a subtle tint. Legibility
+    // over arbitrary images is now handled by a text-shadow on the text
+    // itself, the standard "text floating on a photo" technique, instead of
+    // a background box.
     return `
       <img src="${AssetStore.resolveMediaSrc(face.image)}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
-      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; ${hasVisibleText || editable ? 'background:rgba(0,0,0,0.35);' : ''} color:#fff; padding:8px 12px; border-radius:var(--r-sm); ${textRegionStyle} max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
+      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 1px 8px rgba(0,0,0,0.6); padding:8px 12px; ${textRegionStyle} max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
       ${flipIcon}
     `;
   }

@@ -328,6 +328,20 @@ button { font-family: var(--font-body); cursor: pointer; }
   border: 1px solid var(--border);
 }
 .flip-card-back { transform: rotateY(180deg); }
+/* Root cause of the front/back text-bleed defect: backface-visibility:hidden
+   only suppresses paint — it does not remove the hidden face from layout or
+   hit-testing. Both faces are position:absolute;inset:0 on top of each
+   other, so their contenteditable text regions occupy overlapping screen
+   coordinates regardless of flip state; with no z-index/pointer-events
+   difference, clicks/typing aimed at the visible face can land on the
+   hidden one underneath (confirmed live: both faces' editable-text rects
+   overlap even when unflipped). Disabling pointer events on whichever face
+   isn't currently showing is the minimal, correct fix — it doesn't touch
+   the flip animation, the renderer, or the data model at all. */
+.flip-card-front { pointer-events: auto; }
+.flip-card-back { pointer-events: none; }
+.flip-card.flipped .flip-card-front { pointer-events: none; }
+.flip-card.flipped .flip-card-back { pointer-events: auto; }
 .flip-card-flipicon {
   position: absolute;
   top: 8px;

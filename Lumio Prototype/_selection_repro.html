@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 40px; }
+  ::selection { background: rgba(79, 70, 229, 0.35); }
+  #plain {
+    font-family: sans-serif; font-size: 22px; line-height: 1.7;
+    width: 320px;
+  }
+  #editable {
+    font-family: sans-serif; font-size: 22px; line-height: 1.7;
+    width: 320px; outline: 1px solid #ccc; padding: 8px; margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+<h3>Plain (non-editable) paragraph — select with mouse drag</h3>
+<div id="plain">We're so glad you're here. This lesson will introduce you to our mission, our values, and how our teams work together — the foundation for everything else in your onboarding.</div>
+
+<h3>contenteditable div — select with mouse drag</h3>
+<div id="editable" contenteditable="true">We're so glad you're here. This lesson will introduce you to our mission, our values, and how our teams work together — the foundation for everything else in your onboarding.</div>
+
+<p>Zero Lumio CSS/JS loaded on this page. Just the browser default plus one <code>::selection</code> rule.</p>
+<p><strong>Test instructions:</strong> select the paragraph text with a real mouse drag, then zoom the page in (Ctrl + scroll, or Ctrl/Cmd + Plus) to 200-300% and look closely at the boundary between wrapped lines while the selection is still held/visible.</p>
+</body>
+</html>
