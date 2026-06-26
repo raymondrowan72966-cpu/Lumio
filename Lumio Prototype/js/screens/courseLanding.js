@@ -38,13 +38,13 @@ function renderCourseLanding(courseId) {
 
   const content = `
     <header class="app-topbar">
-      <div class="flex items-center gap-12">
-        <button class="btn btn-ghost btn-sm" id="back-projects">← Projects</button>
-        <h2 style="font-size:18px;">${course.title}</h2>
+      <div class="flex items-center gap-12" style="min-width:0; flex:1; overflow:hidden;">
+        <button class="btn btn-ghost btn-sm" id="back-projects" style="flex-shrink:0;">← Projects</button>
+        <h2 style="font-size:18px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1;" title="${escapeHtml(course.title)}">${course.title}</h2>
         ${statusBadge}
         ${viewOnly ? `<span class="pill pill-grey" title="You have view-only access to this project">👁️ View Only</span>` : ''}
       </div>
-      <div class="flex items-center gap-12">
+      <div class="flex items-center gap-12" style="flex-shrink:0;">
         ${!viewOnly ? `
         <div class="tabs" style="border-bottom:none;">
           <div class="tab ${course.mode==='edit'?'active':''}" data-mode="edit">✏️ Editing</div>

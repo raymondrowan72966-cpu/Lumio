@@ -142,13 +142,13 @@ function renderLessonBuilder(lessonId) {
 function renderBuilderTopbar(course, lesson) {
   return `
     <div class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0;">
-      <div class="flex items-center gap-12" style="min-width:0;">
+      <div class="flex items-center gap-12" style="min-width:0; flex:1; overflow:hidden;">
         <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="builder-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
-        <button class="btn btn-ghost btn-sm" id="back-to-course">← ${course ? course.title : 'Course'}</button>
-        <span class="text-muted">/</span>
-        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:15px; color:var(--ink-900); width:260px; padding:6px 8px;" />
+        <button class="btn btn-ghost btn-sm" id="back-to-course" title="${course ? course.title : 'Course'}" style="min-width:0; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1;">← ${course ? course.title : 'Course'}</button>
+        <span class="text-muted" style="flex-shrink:0;">/</span>
+        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:15px; color:var(--ink-900); width:260px; min-width:120px; flex-shrink:1; padding:6px 8px;" />
       </div>
-      <div class="flex items-center gap-12">
+      <div class="flex items-center gap-12" style="flex-shrink:0;">
         <span class="text-sm text-muted" id="save-status">Saved ✓</span>
         <button class="btn btn-secondary btn-sm" id="preview-lesson">👁️ Preview</button>
         <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(6,182,212,0.08)); border-color:rgba(124,58,237,0.25);' : ''}">✨ AI Assistant</button>
