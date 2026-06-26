@@ -1227,7 +1227,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const reveal = shouldRevealCorrect(ans, settings);
   const canSubmit = ans && ans.selected !== undefined;
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Multiple Choice</div>
     <fieldset style="border:none; margin:0; padding:0;">
       <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following is correct?'}</legend>
       <div class="flex-col gap-8 mt-12">
@@ -1264,7 +1264,7 @@ function learnerKcMultipleResponse(block, index, ctx) {
   const hasCorrect = Array.isArray(d.correct);
   const reveal = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Select all that apply</div>
     <fieldset style="border:none; margin:0; padding:0;">
       <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Select all that apply.'}</legend>
       <div class="flex-col gap-8 mt-12">
@@ -1302,7 +1302,7 @@ function learnerKcMatching(block, index, ctx) {
   const locked    = !!(ans.locked);
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Matching</div>
     <p class="text-sm text-muted mb-8">Tap an item on the left, then its match on the right.</p>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
       <div class="flex-col gap-8">
@@ -1348,7 +1348,7 @@ function learnerKcOrdering(block, index, ctx) {
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Put in order</div>
     <p class="text-sm text-muted mb-8">Use the arrows to arrange these in the correct order.</p>
     <div class="flex-col gap-8 mt-8">
       ${order.map((itemIdx, pos) => {
@@ -1383,7 +1383,7 @@ function learnerKcFillGap(block, index, ctx) {
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Fill the Gap</div>
     <p style="font-size:15px; line-height:2;">${text}</p>
     <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..."
       value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />

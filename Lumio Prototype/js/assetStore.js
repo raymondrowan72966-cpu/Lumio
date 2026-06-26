@@ -280,7 +280,20 @@ const AssetStore = (() => {
     if (_urlCache.has(assetId)) return _urlCache.get(assetId);
 
     const asset = await get(assetId);
-    if (!asset) return null;
+    if (!asset) {
+      // Root cause of the Lesson Builder freeze on imports with a missing
+      // asset (e.g. a referenced icon that was never bundled into the
+      // .lumio file): leaving this id uncached meant every single
+      // preloadBlocks() call — including the one renderLessonBuilder
+      // re-triggers when it sees a newly-resolved count > 0 — would retry
+      // this exact lookup forever, since !_urlCache.has(id) was permanently
+      // true. Caching the negative result (resolveMediaSrc's `|| ''`
+      // already treats a cached null identically to "not yet resolved",
+      // so rendering is unaffected) lets preloadBlocks correctly count
+      // this as resolved-to-nothing after one attempt, breaking the loop.
+      _urlCache.set(assetId, null);
+      return null;
+    }
 
     const url = URL.createObjectURL(asset.blob);
     _urlCache.set(assetId, url);

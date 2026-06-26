@@ -1384,13 +1384,31 @@ function ensureRichTextToolbar() {
     }
     applyAndSync((active) => {
       document.execCommand('foreColor', false, e.target.value);
-      const sel = window.getSelection();
-      const node = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
-      const wrapper = node ? (node.nodeType === 3 ? node.parentElement : node) : null;
-      liveColorEl = wrapper ? wrapper.closest('font,[style*="color"]') : null;
+      // execCommand may produce a <font> element — normalize it to a <span>
+      // immediately (rather than waiting for applyAndSync's own call further
+      // down) so the reference captured below points at the element that
+      // will actually still be in the tree on the next tick, instead of one
+      // that's about to be replaced out from under it.
+      normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
+      // Scoped strictly to this field (not the whole page/ancestor chain)
+      // to avoid matching an unrelated element that happens to have
+      // "color" somewhere in its own inline style — e.g. background-color.
+      const matches = active.elx.querySelectorAll('font,[style*="color"]');
+      liveColorEl = matches[matches.length - 1] || null;
     });
   });
   el.querySelector('.rt-color').addEventListener('change', () => {
+    // The fast-path 'input' ticks (above) mutate the DOM directly and skip
+    // syncRichTextField for performance — meaning block.data still holds
+    // whatever colour was current at the FIRST tick, not the one the user
+    // actually released on. This is the one persistence step that must run
+    // on release to carry the final dragged-to colour into saved state.
+    const active = RichTextToolbar.activeField;
+    if (active) {
+      syncRichTextField(active.block, active.elx);
+      flashSaveStatus();
+      saveLumioState();
+    }
     liveColorEl = null;
   });
 
