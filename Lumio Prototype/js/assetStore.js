@@ -476,6 +476,7 @@ const AssetStore = (() => {
       collect(d.background);
       collect(d.avatar);
       collect(ds.bgImage);
+      collect(ds.iconImage);
 
       // Generic items (carousel, column_grid, accordion, tabs, process, flashcard)
       for (const it of (d.items || [])) {

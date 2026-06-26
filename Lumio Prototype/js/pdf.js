@@ -317,8 +317,10 @@ async function renderCoursePdf(course, lessonData, assetEntries, assetMap) {
         return;
       case 'stmt_info': case 'stmt_tip': case 'stmt_success': case 'stmt_warning': case 'stmt_error': case 'stmt_note': {
         const def = (typeof STATEMENT_DEFAULTS !== 'undefined' && STATEMENT_DEFAULTS[block.type]) || {};
+        const ds = block.design || {};
         ensureSpace(40);
         const boxTop = cursorY;
+        if (!ds.iconRemoved && ds.iconImage) await image(ds.iconImage, 40, 40);
         paragraph(`${def.label || 'Note'}: ${(d.title || '').replace(/<[^>]+>/g, '')}`, { size: 11, indent: 12 });
         paragraph(d.text || '', { size: 10, indent: 12 });
         return;

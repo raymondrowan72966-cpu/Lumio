@@ -321,7 +321,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   align-items: center;
   justify-content: center;
   border-radius: var(--r-lg);
-  padding: 14px;
+  padding: 22px;
   text-align: center;
   overflow: hidden;
   box-shadow: none;

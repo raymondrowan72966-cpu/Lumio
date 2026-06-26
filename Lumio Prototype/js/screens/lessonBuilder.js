@@ -481,24 +481,85 @@ function normalizeFlashcardItems(d) {
    optional image (per imageFit), text, and a Flip Icon (top right). No editing
    chrome is ever rendered on the card surface — card management lives in the
    Content panel. */
+// Issue 1 root cause: `!!face.text` treats any non-empty string as "has
+// text", but a contenteditable field the author typed into and then fully
+// deleted commonly leaves stray markup behind (e.g. "<br>", "<div></div>",
+// "&nbsp;") rather than a true empty string — so the text region (and, on
+// the Full Card face, its dark background shadow) kept rendering with
+// nothing visible inside it. Stripping tags/entities/whitespace before
+// checking is the minimal fix; it doesn't touch the rich-text editing
+// architecture itself, only the "is there anything to show" decision.
+// Issue 3 root cause: the front face was hardcoded to var(--gradient-primary)
+// — a fixed app-wide indigo/cyan gradient, not the course's own theme.
+// Reuses the exact theme variables themeVarStyle() (wizard.js) already
+// applies platform-wide for the selected Course Theme — no new colour
+// picker, no Flashcard-specific theme state.
+function flashcardFrontThemeStyle() {
+  return 'background:linear-gradient(135deg, var(--theme-primary, var(--indigo)), var(--theme-secondary, var(--theme-primary, var(--indigo))));';
+}
+
+function _hasVisibleFlashcardText(html) {
+  return String(html || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+}
+
 function flashcardFaceContent(face, i, faceName, ce, editable) {
   const fit = face.imageFit || 'cover';
   const hasImage = !!face.image;
+  const hasVisibleText = _hasVisibleFlashcardText(face.text);
   const flipIcon = `<div class="flip-card-flipicon">↻</div>`;
-  const showText = !!face.text || editable;
+  // Builder always keeps the field present (so an empty face stays
+  // click-to-edit); learner-facing contexts only render it when there's
+  // genuinely something to show — this is what removes the reserved
+  // shadow/space once text is truly empty.
+  const showText = hasVisibleText || editable;
   const placeholder = faceName === 'back' ? 'Back text' : 'Front text';
+  // Issue 4 / layout refinement: the text region's cap is relative to its
+  // flex parent (which is itself pinned to the card's full height below),
+  // not a fixed pixel value — short text centers naturally inside the full
+  // box via the wrapper's justify-content:center, while long text grows to
+  // fill that same box up to its edges before scrolling, so the scrollbar
+  // tracks the card's real edge instead of a narrow inner column.
+  const textRegionStyle = `font-weight:600; font-size:14px; max-height:100%; overflow-y:auto; width:100%;`;
   if (hasImage && fit === 'full') {
     return `
       <img src="${AssetStore.resolveMediaSrc(face.image)}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;" />
-      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; background:rgba(0,0,0,0.35); color:#fff; padding:8px 12px; border-radius:var(--r-sm); font-weight:600; font-size:14px; max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
+      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="position:relative; z-index:1; ${hasVisibleText || editable ? 'background:rgba(0,0,0,0.35);' : ''} color:#fff; padding:8px 12px; border-radius:var(--r-sm); ${textRegionStyle} max-width:90%;">${richTextOut(face.text || '')}</div>` : ''}
       ${flipIcon}
     `;
   }
-  const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
-  const objectFit = fitMap[fit] || 'cover';
+  // Issue 2 root cause: cover/contain/stretch/center were all squeezed into
+  // the same small `max-height:70px` strip with no defined width, so
+  // object-fit had almost no room to behave differently between modes.
+  // Each mode now gets an explicit, fully-bounded image region (flexed to
+  // fill whatever space remains above the text), which is what makes
+  // cover/contain/stretch/center genuinely distinct: cover and stretch
+  // both fill the region (cropping vs distorting), contain letterboxes
+  // inside it, and center shows the image at its natural size (capped)
+  // without filling or cropping.
+  let imageHtml = '';
+  if (hasImage) {
+    const regionStyle = `width:100%; ${hasVisibleText || editable ? 'flex:1; min-height:60px;' : 'flex:1; height:100%;'} min-height:0; overflow:hidden; border-radius:var(--r-sm); position:relative; display:flex; align-items:center; justify-content:center;`;
+    const src = AssetStore.resolveMediaSrc(face.image);
+    let imgStyle;
+    if (fit === 'contain') imgStyle = 'max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;';
+    else if (fit === 'stretch') imgStyle = 'width:100%; height:100%; object-fit:fill;';
+    else if (fit === 'center') imgStyle = 'max-width:100%; max-height:100%; width:auto; height:auto; object-fit:none; object-position:center;';
+    else imgStyle = 'width:100%; height:100%; object-fit:cover;'; // cover (default)
+    imageHtml = `<div style="${regionStyle}"><img src="${src}" alt="" style="${imgStyle}" /></div>`;
+  }
+  // Layout refinement root cause: the outer .flip-card-face centers its
+  // single child via justify-content:center, but that only has spare space
+  // to distribute if the child doesn't already claim the full height itself.
+  // Giving this wrapper height:100% + its own justify-content:center moves
+  // the centering decision in here: short text centers within the full box,
+  // long text grows to fill it before scrolling — either way the box itself
+  // always uses the full available card area (width and height), matching
+  // the required architecture without touching the image scaling modes.
   return `
-    ${hasImage ? `<img src="${AssetStore.resolveMediaSrc(face.image)}" alt="" style="max-width:100%; ${face.text ? 'max-height:70px; margin-bottom:8px;' : 'flex:1; height:100%;'} ${objectFit === 'none' ? 'object-fit:none; object-position:center;' : `object-fit:${objectFit};`} border-radius:var(--r-sm);" />` : ''}
-    ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="font-weight:600; font-size:14px;">${richTextOut(face.text || '')}</div>` : ''}
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; gap:8px;">
+      ${imageHtml}
+      ${showText ? `<div class="editable-text" data-role="body" data-field="flashcardText" data-col="${i}" data-face="${faceName}" data-richtext="true" ${ce} data-placeholder="${placeholder}" style="${textRegionStyle}">${richTextOut(face.text || '')}</div>` : ''}
+    </div>
     ${flipIcon}
   `;
 }
@@ -1301,8 +1362,36 @@ function ensureRichTextToolbar() {
     applyAndSync(() => document.execCommand('fontSize', false, '7'));
   });
 
+  // Root cause of the colour picker's "closes/loses focus while dragging"
+  // behaviour: a naive 'input' handler re-focuses the contenteditable field
+  // and re-runs execCommand on EVERY tick of the native picker drag. Native
+  // <input type=color> pickers (the same element the Theme Settings picker
+  // already uses — there's no separate "theme picker" implementation,
+  // colour pickers across this app are normal HTML colour inputs) hand
+  // continuous 'input' events during a drag, but repeatedly stealing window
+  // focus back to the page mid-drag is what causes the picker to behave
+  // erratically/close early. Fix: focus + execCommand runs exactly ONCE,
+  // on the first tick, to create the coloured element; every subsequent
+  // tick of the same drag just mutates that element's own style directly —
+  // no further focus changes, no further execCommand calls — so the native
+  // picker keeps the OS-level drag session uninterrupted while the text
+  // colour still updates live.
+  let liveColorEl = null;
   el.querySelector('.rt-color').addEventListener('input', (e) => {
-    applyAndSync(() => document.execCommand('foreColor', false, e.target.value));
+    if (liveColorEl && liveColorEl.isConnected) {
+      liveColorEl.style.color = e.target.value;
+      return;
+    }
+    applyAndSync((active) => {
+      document.execCommand('foreColor', false, e.target.value);
+      const sel = window.getSelection();
+      const node = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+      const wrapper = node ? (node.nodeType === 3 ? node.parentElement : node) : null;
+      liveColorEl = wrapper ? wrapper.closest('font,[style*="color"]') : null;
+    });
+  });
+  el.querySelector('.rt-color').addEventListener('change', () => {
+    liveColorEl = null;
   });
 
   // Keep the contenteditable selection alive when interacting with the toolbar.
@@ -1966,7 +2055,12 @@ function renderBlockContent(block, editable) {
       // (the old Light/Gray/Theme/Dark/Black bgStyle system) onto Architecture
       // A (quoteCardBgStyle/archATextColor) — same Theme/Light/Grey/Dark/
       // Custom/Image options Statements and Quotes already use.
-      const textColor = archATextColor(ds);
+      // Issue 2 fix: numbering and chevron already inherit via CSS
+      // currentColor (.lumio-accordion-marker, .lumio-accordion-chevron) —
+      // the only missing piece was a single, explicit Text Colour control;
+      // wiring ds.textColor into this one value is the entire fix, since
+      // every dependent element already reads off of it.
+      const textColor = (ds.textColor && ds.textColor.startsWith('#')) ? ds.textColor : archATextColor(ds);
       const markerStyle = ds.markerStyle || 'none';
       const rowStyle = variant === 'minimal'
         ? `background:transparent; border-bottom:1px solid var(--border); border-radius:0;`
@@ -2207,7 +2301,7 @@ function renderBlockContent(block, editable) {
             <div>
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
-                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius}; border:${borderStyle};">
+                  <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
                   <div class="flip-card-face flip-card-back" style="background:${backBg}; border-radius:${radius}; border:${borderStyle};">
@@ -2234,7 +2328,7 @@ function renderBlockContent(block, editable) {
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
               <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:220px; cursor:pointer;">
                 <div class="flip-card-inner">
-                  <div class="flip-card-face flip-card-front" style="background:var(--gradient-primary); color:#fff; border-radius:${radius}; border:${borderStyle};">
+                  <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
                   </div>
                   <div class="flip-card-face flip-card-back" style="background:${backBg}; border-radius:${radius}; border:${borderStyle};">
@@ -2332,15 +2426,15 @@ function renderBlockContent(block, editable) {
     }
 
     case 'kc_multiple_choice':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMC(d, editable)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMC(d, editable, ds)}</div>`;
     case 'kc_multiple_response':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMR(d, editable)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMR(d, editable, ds)}</div>`;
     case 'kc_matching':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatching(d, editable)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatching(d, editable, ds)}</div>`;
     case 'kc_fill_gap':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable, ds)}</div>`;
     case 'kc_ordering':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable, ds)}</div>`;
 
     default:
       return `<div class="text-center" style="padding:24px; color:var(--ink-400);">
@@ -2647,11 +2741,21 @@ function renderPieChart(block, editable) {
   </div>`;
 }
 
-function knowledgeCheckMC(d, editable) {
+// Issue 3: a single shared badge-style helper for all 5 Knowledge Check
+// types — one source of truth, consumed by every KC renderer, using the
+// same custom colour-input architecture as every other block (no second
+// picker implementation). Only overrides colour when an author has set
+// one; otherwise the existing .pill-teal CSS default applies unchanged.
+function kcBadgeStyle(ds) {
+  if (!ds || !ds.kcBadgeColor || !ds.kcBadgeColor.startsWith('#')) return '';
+  return ` style="color:${ds.kcBadgeColor}; background:color-mix(in srgb, ${ds.kcBadgeColor} 12%, transparent);"`;
+}
+
+function knowledgeCheckMC(d, editable, ds) {
   const options = normalizeKcOptions(d);
   const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Multiple Choice</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Multiple Choice</div>
     <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
       data-placeholder="Enter your question…"
       style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
@@ -2670,11 +2774,11 @@ function knowledgeCheckMC(d, editable) {
   `;
 }
 
-function knowledgeCheckMR(d, editable) {
+function knowledgeCheckMR(d, editable, ds) {
   const options = normalizeKcOptions(d);
   const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Select all that apply</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Select all that apply</div>
     <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
       data-placeholder="Enter your question…"
       style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
@@ -2693,13 +2797,13 @@ function knowledgeCheckMR(d, editable) {
   `;
 }
 
-function knowledgeCheckMatching(d, editable) {
+function knowledgeCheckMatching(d, editable, ds) {
   const left = normalizeKcLeft(d);
   const right = normalizeKcRight(d);
   const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   const rowBase = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md); font-size:13px; outline:none;';
   return `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Matching</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Matching</div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
       <div class="flex-col gap-6">
         ${left.map((l, i) => `
@@ -2720,11 +2824,11 @@ function knowledgeCheckMatching(d, editable) {
   `;
 }
 
-function knowledgeCheckFillGap(d, editable) {
+function knowledgeCheckFillGap(d, editable, ds) {
   const answers = normalizeKcAnswers(d);
   const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Fill the Gap</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Fill the Gap</div>
     <div class="editable-text" data-field="kcGapText" data-richtext="true" ${ce}
       data-placeholder="Enter the sentence with ____ marking the gap…"
       style="font-size:15px; line-height:2; min-height:1.4em; outline:none;"
@@ -2733,11 +2837,11 @@ function knowledgeCheckFillGap(d, editable) {
   `;
 }
 
-function knowledgeCheckOrdering(d, editable) {
+function knowledgeCheckOrdering(d, editable, ds) {
   const items = normalizeKcItems(d);
   const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
-    <div class="pill pill-teal mb-8">✅ Knowledge Check · Put in order</div>
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Put in order</div>
     <div class="flex-col gap-6 mt-8">
       ${items.map((item, i) => `
         <div class="flex items-center gap-10 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
@@ -4652,7 +4756,13 @@ function blockTypeDesignFields(block, ds) {
   const cat = blockCategory(block.type);
   switch (cat) {
     case 'Knowledge Checks':
-      return interactiveBorderPaddingFields(ds);
+      return `
+        <div class="prop-section">
+          <div class="prop-section-title">Badge Colour</div>
+          <p class="text-sm text-muted mb-8">Colours only the small "Knowledge Check" header badge.</p>
+          <input type="color" class="input design-color-input" data-prop="kcBadgeColor" data-preview-target=".kc-badge" data-preview-prop="color" value="${(ds.kcBadgeColor && ds.kcBadgeColor.startsWith('#')) ? ds.kcBadgeColor : '#14B8A6'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+        </div>
+        ${interactiveBorderPaddingFields(ds)}`;
     case 'Text':
       return `
         <div class="prop-section" style="border-bottom:none;">
@@ -5150,6 +5260,11 @@ function accordionDesignFields(block, ds) {
       ${segControl('design-variant', 'variant', [{id:'default',label:'Default'},{id:'boxed',label:'Boxed'},{id:'minimal',label:'Minimal'}], ds.variant || 'default')}
     </div>
     ${quoteCardBgFields(ds)}
+    <div class="prop-section">
+      <div class="prop-section-title">Text Colour</div>
+      <p class="text-sm text-muted mb-8">Title, numbering, and chevron always share this one colour.</p>
+      <input type="color" class="input design-color-input" data-prop="textColor" data-preview-target=".lumio-accordion-header" data-preview-prop="color" value="${(ds.textColor && ds.textColor.startsWith('#')) ? ds.textColor : (ds.bgType === 'dark' ? '#ffffff' : '#1F1B3A')}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+    </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker Style</div>
       ${segControl('design-markerstyle', 'markerStyle', [{id:'none',label:'None'},{id:'number',label:'Numbered'}], ds.markerStyle || 'none')}
@@ -6234,15 +6349,38 @@ function bindBuilderEvents(course, lesson, blocks) {
     }));
   });
 
-  // Design tab — custom colour pickers (e.g. Button custom background/text colour)
-  app.querySelectorAll('.design-color-input[data-prop]').forEach(inp => inp.addEventListener('change', () => {
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    block.design = block.design || {};
-    block.design[inp.dataset.prop] = inp.value;
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
+  // Design tab — custom colour pickers (e.g. Button custom background/text
+  // colour). Shared, platform-wide architecture: every custom colour input
+  // commits to block.design on 'change' (matching the existing behaviour),
+  // and ALSO gets live preview on 'input' — the same continuous-drag event
+  // the Theme Settings picker has always used — without rebuilding the
+  // panel mid-drag (which would destroy the open native picker and is the
+  // root cause of pickers elsewhere in the app appearing to "close" while
+  // dragging). A colour input opts into live preview by adding
+  // data-preview-target (a CSS selector, scoped to the current block's
+  // rendered DOM) and data-preview-prop (the CSS property to mutate
+  // directly on those elements). No new picker implementation — this is
+  // the one native <input type="color"> every picker in the app already
+  // uses, just with one shared, opt-in live-preview behaviour added.
+  app.querySelectorAll('.design-color-input[data-prop]').forEach(inp => {
+    if (inp.dataset.previewTarget) {
+      inp.addEventListener('input', () => {
+        const scope = document.querySelector(`.canvas-block[data-index="${BuilderUI.selected}"]`);
+        if (!scope) return;
+        scope.querySelectorAll(inp.dataset.previewTarget).forEach(targetEl => {
+          targetEl.style[inp.dataset.previewProp || 'color'] = inp.value;
+        });
+      });
+    }
+    inp.addEventListener('change', () => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design[inp.dataset.prop] = inp.value;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    });
+  });
 
   // Table block — header/border/body-fill colour resets and the body-fill toggle.
   app.querySelectorAll('.table-style-reset').forEach(btn => btn.addEventListener('click', () => {

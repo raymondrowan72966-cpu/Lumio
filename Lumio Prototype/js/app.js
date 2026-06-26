@@ -1589,7 +1589,7 @@ function _collectProjectAssetRefs(course, lessons) {
     (Array.isArray(blocks) ? blocks : []).forEach(block => {
       const d = block.data || {}, ds = block.design || {};
       collect(d.src); collect(d.imageUrl); collect(d.image);
-      collect(d.background); collect(d.avatar); collect(ds.bgImage);
+      collect(d.background); collect(d.avatar); collect(ds.bgImage); collect(ds.iconImage);
       for (const it of (d.items || [])) {
         collect(it.src); collect(it.imageUrl); collect(it.image);
         collect(it.audio); collect(it.video); collect(it.file);
