@@ -142,11 +142,10 @@ function renderLessonBuilder(lessonId) {
 function renderBuilderTopbar(course, lesson) {
   return `
     <div class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0;">
-      <div class="flex items-center gap-12" style="min-width:0; flex:1; overflow:hidden;">
+      <div class="flex items-center gap-16" style="min-width:0; flex:1; overflow:hidden;">
         <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="builder-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
-        <button class="btn btn-ghost btn-sm" id="back-to-course" title="${course ? course.title : 'Course'}" style="min-width:0; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1;">← ${course ? course.title : 'Course'}</button>
-        <span class="text-muted" style="flex-shrink:0;">/</span>
-        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:15px; color:var(--ink-900); width:260px; min-width:120px; flex-shrink:1; padding:6px 8px;" />
+        <button class="btn btn-ghost btn-sm" id="back-to-course" title="Back to ${course ? course.title : 'Course'}" style="flex-shrink:0; white-space:nowrap;">← Back to Course</button>
+        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" title="${escapeHtml(lesson ? lesson.title : 'Untitled Lesson')}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:17px; color:var(--ink-900); min-width:0; flex:1; padding:6px 8px; text-overflow:ellipsis; margin-right:12px;" />
       </div>
       <div class="flex items-center gap-12" style="flex-shrink:0;">
         <span class="text-sm text-muted" id="save-status">Saved ✓</span>
