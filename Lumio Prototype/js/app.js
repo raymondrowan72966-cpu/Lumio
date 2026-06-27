@@ -321,7 +321,12 @@ const LumioAuth = (function () {
     // from "a brand new browser session", which is exactly what "Remember
     // me" needs to decide whether to honor a persisted-but-not-remembered session.
     try { sessionStorage.setItem(SESSION_TAB_MARKER, '1'); } catch (e) {}
-    scheduleLumioSave();
+    // Session/auth transitions flush immediately rather than going through
+    // the normal 400ms scheduleLumioSave() debounce — confirmed live that a
+    // second tab reading localStorage inside that debounce window would
+    // otherwise see a stale session (e.g. still-logged-out right after
+    // login, or still-logged-in right after logout).
+    saveLumioState();
   }
 
   // Mock SSO login — simulates a successful provider round-trip and
@@ -368,7 +373,7 @@ const LumioAuth = (function () {
     // stale data in the window before the next login.
     LumioState.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
     try { sessionStorage.removeItem(SESSION_TAB_MARKER); } catch (e) {}
-    scheduleLumioSave();
+    saveLumioState(); // immediate flush — see _establishSession for why logout can't wait on the debounce
   }
 
   // Called once at boot, after loadLumioState()/ensureSaasFoundation(). If
@@ -1028,10 +1033,75 @@ function ensureLearnerProfile() {
   return LumioState.learnerProfile;
 }
 
+// Auth Functional Validation Sprint — root cause of the observed
+// "register, then later the account is gone / duplicate / unusable" reports:
+// every tab holds its own independent in-memory LumioState and saves by
+// blindly overwriting the ENTIRE localStorage record with its own snapshot.
+// With no backend and no cross-tab state sync, a stale tab (e.g. one left
+// open on the login screen before a NEW account was registered in another
+// tab) silently erases that brand-new user the next time it saves for any
+// unrelated reason — confirmed live by registering a user, then writing an
+// older snapshot back over it exactly as a second stale tab would.
+// Fix: before writing, union-merge these specific auth-critical arrays
+// (by id) with whatever is currently persisted, so no tab can ever cause a
+// user/workspace/membership/reset-token created by another tab to vanish.
+// Every other key still saves as a plain overwrite from this tab's own
+// state, same as before — this only protects the records whose silent loss
+// makes an account unusable.
+const AUTH_CRITICAL_MERGE_KEYS = ['users', 'workspaces', 'workspaceMemberships', 'passwordResets'];
+// workspaceMemberships records (app.js _bindNewUserToWorkspace, workspaceSettings.js
+// acceptInvitation) have no `id` field at all — only workspaceId+userId, which
+// together ARE the unique identity. Keying the merge by `.id` for this array
+// collapsed every membership to a single `undefined` key, silently destroying
+// membership data on every save that went through the merge — caught live
+// when a real login lost its workspace membership after a single
+// register/refresh/login cycle. Every other key in this list does have a
+// real `id`, so a per-key identity function is used instead of assuming `.id`.
+const AUTH_CRITICAL_MERGE_IDENTITY = {
+  workspaceMemberships: (item) => `${item.workspaceId}::${item.userId}`,
+};
+function _authMergeIdentityOf(key, item) {
+  const fn = AUTH_CRITICAL_MERGE_IDENTITY[key] || ((it) => it.id);
+  return item ? fn(item) : undefined;
+}
+function _authMergeIdSet(key, arr) {
+  return new Set((arr || []).map(item => _authMergeIdentityOf(key, item)).filter(Boolean));
+}
+function _mergeAuthCriticalArrays(snapshot) {
+  let existingRaw;
+  try { existingRaw = localStorage.getItem(LUMIO_STORAGE_KEY); } catch (e) { return; }
+  if (!existingRaw) return;
+  let existing;
+  try { existing = JSON.parse(existingRaw); } catch (e) { return; }
+  if (!existing || !existing.state) return;
+
+  const knownAtBoot = LumioState.__knownIdsAtBoot || {};
+  AUTH_CRITICAL_MERGE_KEYS.forEach(key => {
+    const existingArr = Array.isArray(existing.state[key]) ? existing.state[key] : [];
+    const ownArr = Array.isArray(snapshot[key]) ? snapshot[key] : [];
+    if (existingArr.length === 0) return;
+    const identityOf = AUTH_CRITICAL_MERGE_IDENTITY[key] || ((item) => item.id);
+    const knownIds = knownAtBoot[key] || new Set();
+    const byId = new Map();
+    ownArr.forEach(item => { if (item) byId.set(identityOf(item), item); });
+    // Only rescue records this tab never knew about (created by another tab
+    // since this tab last loaded) — a record this tab DID know about at boot
+    // but no longer has in its own array was a deliberate deletion and must
+    // not be resurrected just because another tab's snapshot still has it.
+    existingArr.forEach(item => {
+      if (!item) return;
+      const id = identityOf(item);
+      if (!byId.has(id) && !knownIds.has(id)) byId.set(id, item);
+    });
+    snapshot[key] = Array.from(byId.values());
+  });
+}
+
 function saveLumioState() {
   try {
     const snapshot = {};
     LUMIO_PERSISTED_KEYS.forEach(key => { snapshot[key] = LumioState[key]; });
+    _mergeAuthCriticalArrays(snapshot);
     const record = {
       version: LUMIO_STATE_VERSION,
       savedAt: Date.now(),
@@ -1039,6 +1109,14 @@ function saveLumioState() {
       state: snapshot,
     };
     localStorage.setItem(LUMIO_STORAGE_KEY, JSON.stringify(record));
+    // Refresh the "known ids" baseline to what THIS tab just wrote — otherwise
+    // a record created and then deleted again within the same tab session
+    // (without an intervening reload) would still look "unknown at boot" on
+    // the next save and get wrongly rescued back from localStorage.
+    LumioState.__knownIdsAtBoot = LumioState.__knownIdsAtBoot || {};
+    AUTH_CRITICAL_MERGE_KEYS.forEach(key => {
+      LumioState.__knownIdsAtBoot[key] = _authMergeIdSet(key, snapshot[key]);
+    });
   } catch (e) {
     console.warn('Lumio: could not save state', e);
   }
@@ -1505,6 +1583,16 @@ function loadLumioState() {
       if (Object.prototype.hasOwnProperty.call(state, key)) {
         LumioState[key] = state[key];
       }
+    });
+
+    // Snapshot of ids this tab knew about at boot, for _mergeAuthCriticalArrays:
+    // a record missing from this tab's in-memory array that WAS already known
+    // at boot is a deliberate deletion by this tab and must stay deleted; a
+    // record this tab never knew about (created by another tab afterwards) is
+    // the one case that needs rescuing from being overwritten away.
+    LumioState.__knownIdsAtBoot = {};
+    AUTH_CRITICAL_MERGE_KEYS.forEach(key => {
+      LumioState.__knownIdsAtBoot[key] = _authMergeIdSet(key, state[key]);
     });
 
     if (typeof record.hash === 'string' && record.hash.startsWith('#/')) {
