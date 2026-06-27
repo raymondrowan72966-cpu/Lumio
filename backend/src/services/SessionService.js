@@ -34,27 +34,46 @@ export class SessionService {
     this.securityConfig = securityConfig;
   }
 
-  /** Creates a new session row for one device/login. Returns the raw
-   *  refresh token (give this to the caller to store client-side) — the
-   *  database only ever holds its hash. */
-  async createSession({ userId, rememberMe = false, deviceId = null, now = Date.now() } = {}) {
+  /** Generates a new session's token and builds (but does not execute)
+   *  its INSERT statement — used both standalone (via `createSession`,
+   *  below) and composed into a larger atomic batch (e.g. Sprint 2C's
+   *  registration transaction, which creates the user/workspace/membership
+   *  rows in the same `db.batch()` call). Token generation is async (it's
+   *  real crypto), so this must be called and awaited *before* the batch
+   *  is assembled — D1 batch statements themselves are bound synchronously. */
+  async buildCreateStatement({ userId, rememberMe = false, deviceId = null, now = Date.now() } = {}) {
     if (!userId) throw new ValidationError('userId is required to create a session.');
 
     const tokenType = rememberMe ? 'rememberMe' : 'session';
     const { token, tokenHash, expiresAt } = await this.tokenService.generateToken(tokenType, { now });
     const id = crypto.randomUUID();
 
+    return {
+      sessionId: id,
+      refreshToken: token,
+      expiresAt,
+      deviceId,
+      statement: {
+        sql: `INSERT INTO sessions (id, user_id, device_id, refresh_token_hash, expires_at, created_at, last_activity_at, revoked_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+        params: [id, userId, deviceId, tokenHash, expiresAt, now, now],
+      },
+    };
+  }
+
+  /** Creates a new session row for one device/login, standalone (executes
+   *  immediately). Returns the raw refresh token (give this to the caller
+   *  to store client-side) — the database only ever holds its hash. */
+  async createSession(fields) {
+    const { sessionId, refreshToken, expiresAt, deviceId, statement } = await this.buildCreateStatement(fields);
+
     try {
-      await this.db.run(
-        `INSERT INTO sessions (id, user_id, device_id, refresh_token_hash, expires_at, created_at, last_activity_at, revoked_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-        [id, userId, deviceId, tokenHash, expiresAt, now, now],
-      );
+      await this.db.run(statement.sql, statement.params);
     } catch (err) {
       throw new DatabaseError('Failed to create session.', { cause: String(err) });
     }
 
-    return { sessionId: id, refreshToken: token, expiresAt, deviceId };
+    return { sessionId, refreshToken, expiresAt, deviceId };
   }
 
   /** Loads a session by its row id — for inspection/admin purposes (e.g. a

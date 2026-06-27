@@ -4,6 +4,22 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-014: D1's `db.batch()` is the transaction boundary; pre-batch steps (validation, password hashing, the duplicate-email read) are necessarily outside it
+
+**Decision:** registration's "single database transaction" is implemented as exactly one `db.batch([userStatement, workspaceStatement, membershipStatement, sessionStatement])` call. Input validation, email normalization, the duplicate-email pre-check (a `SELECT`), and password hashing all happen *before* the batch is assembled, not inside it.
+**Why:** this is a hard constraint of the actual D1 API, not a design preference — every statement in a `db.batch()` call must already be fully built and bound (synchronous) before the call executes; there is no way to `await` something (like `crypto.subtle` password hashing, which is genuinely async) *between* two statements in the same batch. The only physically correct design is: do every async/conditional step first, build the four INSERT statements from the now-known values, then commit them together atomically. The atomicity guarantee that actually matters — "if user/workspace/membership/session creation can't all succeed together, none of them happen" — is fully satisfied by this design; it's the read-then-decide steps beforehand that were never going to be transactional in the relational-database sense, since they're not writes.
+**Alternatives considered:** moving the duplicate-email check to rely solely on the UNIQUE constraint inside the batch (skip the pre-check entirely). Rejected — the pre-check gives a clean `ValidationError` with a specific message for the overwhelmingly common case; the in-batch UNIQUE constraint is kept anyway as the actual race-safe enforcement (see ADR-013) and only matters for the rare concurrent-registration-with-the-same-email case, which is correctly handled by mapping that specific constraint failure to the same `ValidationError`.
+**Known limitations:** none — this is the correct, complete transactional guarantee D1 can offer for this operation.
+
+## ADR-013: Detecting a UNIQUE-constraint race via string-matching the D1 error message
+
+**Decision:** when `db.batch()` throws (wrapped as a `DatabaseError` by `createDbClient`), `AuthService.registerOwner` inspects `err.details.cause` for the substrings `"UNIQUE"` and `"users.email"` to distinguish "someone registered with this exact email a few milliseconds ago" (map to `ValidationError`, same message as the pre-check) from any other database failure (re-thrown as `DatabaseError`).
+**Why:** D1/SQLite's constraint-violation errors are plain strings, not a structured, typed exception with a machine-readable constraint name — string-matching the message is the only mechanism available without adding a SQL-error-parsing library for a single call site.
+**Alternatives considered:** a SELECT-then-INSERT-only design with no UNIQUE-constraint fallback (accept the rare race as "the second request gets a confusing 500 instead of a clean 400"). Rejected — the fallback is cheap, already-tested code, and the alternative is a worse user experience for a real (if rare) case.
+**Known limitations:** if D1's error message format for constraint violations ever changes upstream, this detection silently stops matching and such a race would surface as a generic `DatabaseError` (500) instead of the intended `ValidationError` (400) — a behavior degradation, not a crash, and worth revisiting if D1's error format is ever documented/stabilized differently.
+
+
+
 ## ADR-012: Concrete defaults chosen for every TTL the specs left as a range or didn't number
 
 **Decision:** `src/config/security.js` picks one concrete number for each token type's default TTL: 15 min access tokens, 30-day sliding refresh for Remember Me, 24h refresh for non-Remember-Me sessions, 1h password reset, 48h email verification, 7-day invitations.

@@ -2,6 +2,25 @@
 
 All notable backend changes are recorded here, newest first. Frontend (`Lumio Prototype/`) changes are not tracked in this file.
 
+## Sprint 2C — Workspace Owner Registration (Email & Password)
+
+### Added
+- `POST /auth/register` — the first real, working API endpoint in this backend. Validates input, normalizes email, hashes the password (PasswordService), creates User + Workspace + Owner membership + initial session as one atomic `db.batch()` transaction, and returns `{ user, workspace, session }` with a 201 status. Every other `/auth/*` route remains 501, untouched.
+- `src/database/client.js` — new `batch(statements)` method: D1's all-or-nothing multi-statement transaction primitive, the only mechanism this sprint's atomicity requirement could be built on.
+- `src/repositories/UserRepository.js`, `src/repositories/WorkspaceRepository.js` — real implementations (`findById`, `findByEmail`, `findMembership`, plus `buildCreateStatement`/`buildAddMemberStatement` pairs that build-but-don't-execute, for composing into the registration transaction), replacing the Sprint 1 placeholders.
+- `src/services/SessionService.js` — added `buildCreateStatement` (generates the token, builds the INSERT, doesn't execute it); `createSession` now calls it internally, behavior unchanged and re-confirmed via regression test.
+- `src/services/AuthService.js` — `registerOwner` is now a real implementation; `login`/`logout`/`acceptInvitation` remain Sprint 1 placeholders.
+
+### Not included (by design — out of Sprint 2C scope)
+- No login, logout, Remember Me, password reset, invitations, Administrator registration, OAuth (Google/Microsoft/Apple), projects, assets, or workspace switching.
+- No schema changes — used the Sprint 2A `sessions` table exactly as-is (see `DECISIONS.md` ADR-011 from Sprint 2B for the one related design question already resolved without a schema change).
+
+### Validation
+- 28/28 assertions passed in a throwaway end-to-end test (not committed) — the **actual Worker `fetch()` handler**, called with real HTTP-shaped `Request` objects, against a **real D1 database via Miniflare** (not a mock): successful registration (201, correct response shape, no password hash ever in the response), duplicate email (400, zero orphaned rows in any of the 4 tables), weak password (both length and complexity cases), invalid email format, missing required fields, malformed JSON body, repeated independent registrations, and confirmation that every other `/auth/*` route still returns 501.
+- Re-ran a focused 4-assertion regression check against `SessionService` directly to confirm the `buildCreateStatement` refactor changed nothing about its already-validated Sprint 2B behavior (create/validate/refresh/revoke) — all passed.
+- Confirmed via direct log inspection at `LOG_LEVEL=DEBUG` (the most verbose setting) that no password value ever appears in any log line, at any level — only the normalized email and, on failure, the validation error's own message (e.g. "Password must be at least 8 characters"), never the password itself.
+- `wrangler deploy --dry-run` succeeded for all three environments; the live frontend preview reloaded with a clean console.
+
 ## Sprint 2B — Security Services
 
 ### Added

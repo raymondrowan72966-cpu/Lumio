@@ -56,5 +56,27 @@ export function createDbClient(d1Database, logger) {
     }
   }
 
-  return { run, first, all, ping };
+  /** Executes multiple statements as a single atomic transaction — D1's
+   *  `.batch()` guarantees all-or-nothing execution: if any statement
+   *  fails, every statement in the batch is rolled back, including ones
+   *  that ran successfully earlier in the same call. This is the only
+   *  mechanism this client exposes for multi-table writes that must
+   *  succeed or fail together (e.g. Sprint 2C's registration: user +
+   *  workspace + membership + session in one transaction) — there is no
+   *  separate BEGIN/COMMIT/ROLLBACK in the Workers D1 binding API.
+   *  `statements` is an array of `{ sql, params }`; callers build these
+   *  from already-known values (no async work may happen between
+   *  building a statement and calling batch — D1 statements are prepared
+   *  and bound synchronously). */
+  async function batch(statements) {
+    try {
+      const prepared = statements.map(({ sql, params = [] }) => d1Database.prepare(sql).bind(...params));
+      return await d1Database.batch(prepared);
+    } catch (err) {
+      logger?.error('D1 batch() failed', { statementCount: statements.length, error: String(err) });
+      throw new DatabaseError('Database transaction failed.', { cause: String(err) });
+    }
+  }
+
+  return { run, first, all, ping, batch };
 }
