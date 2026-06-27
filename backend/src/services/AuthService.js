@@ -1,4 +1,4 @@
-import { ValidationError, DatabaseError } from '../errors/index.js';
+import { ValidationError, DatabaseError, DuplicateEmailError } from '../errors/index.js';
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,20 +23,37 @@ export class AuthService {
   /**
    * Workspace Owner self-registration via Email & Password.
    *
-   * Steps 1-3 (validate input, normalize, hash password, pre-check
-   * duplicate email) necessarily happen before the atomic transaction —
-   * D1's `db.batch()` executes already-built, already-bound statements
-   * with no async work permitted in between, so anything requiring await
+   * Database Concurrency Rule: uniqueness is enforced authoritatively by
+   * the `users.email` UNIQUE constraint (migration 0001), not by the
+   * pre-check below. The pre-check exists ONLY to give the common,
+   * non-racing case a fast, clean `DuplicateEmailError` without paying
+   * for a password hash and a doomed transaction attempt first — it is a
+   * UX optimization, never the source of correctness. Proof that
+   * correctness doesn't depend on it: the `catch` block around
+   * `db.batch()` below independently detects and maps the exact same
+   * UNIQUE constraint violation to the exact same `DuplicateEmailError`,
+   * which is the path that actually runs if two requests for the same
+   * email race each other and both pass the pre-check before either has
+   * inserted anything. Removing the pre-check entirely would only make
+   * the common case slightly slower on rejection — it would not make any
+   * currently-passing case incorrect.
+   *
+   * Steps 1-3 (validate input, normalize, hash password, the pre-check
+   * itself) necessarily happen before the atomic transaction — D1's
+   * `db.batch()` executes already-built, already-bound statements with no
+   * async work permitted in between, so anything requiring await
    * (password hashing, token generation, the duplicate-email read) must
    * complete first. Steps 4-7 (create user, workspace, membership,
    * session) then execute as ONE atomic `db.batch()` call: if any one of
-   * those four inserts fails — including a UNIQUE constraint violation on
-   * `users.email` from a concurrent registration that the earlier
-   * pre-check couldn't have seen — every insert in the batch is rolled
-   * back together, per D1's documented all-or-nothing guarantee. This is
-   * the most complete transactional guarantee the actual D1 API makes
-   * available; there is no separate BEGIN/COMMIT a Worker could issue
-   * instead.
+   * those four inserts fails — including the UNIQUE constraint violation
+   * from a concurrent registration the pre-check couldn't have seen —
+   * every insert in the batch is rolled back together, per D1's
+   * documented all-or-nothing guarantee. This is the most complete
+   * transactional guarantee the actual D1 API makes available; there is
+   * no separate BEGIN/COMMIT a Worker could issue instead. See
+   * DECISIONS.md ADR-014/ADR-013 for the full reasoning, and the entry
+   * documenting this rule's confirmation for the exact "is correctness
+   * pre-check-dependent?" analysis.
    */
   async registerOwner({ email, password, firstName, lastName = '' } = {}) {
     // --- 1. Validate input -------------------------------------------------
@@ -53,14 +70,13 @@ export class AuthService {
     const normalizedFirstName = firstName.trim();
     const normalizedLastName = typeof lastName === 'string' ? lastName.trim() : '';
 
-    // --- 2. Verify email is unique (pre-check; the UNIQUE constraint
-    //        inside the transaction below is the actual, race-safe
-    //        enforcement — this is just a fast, clean-error-message path
-    //        for the overwhelmingly common non-race case). -------------
+    // --- 2. Fast UX pre-check — NOT the authoritative uniqueness check.
+    //        See the class-level comment above and DECISIONS.md for why
+    //        application correctness never depends on this query. -------
     const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {
-      this.logger?.warning('registration rejected: duplicate email', { email: normalizedEmail });
-      throw new ValidationError('An account with this email already exists.');
+      this.logger?.warning('registration rejected: duplicate email (pre-check)', { email: normalizedEmail });
+      throw new DuplicateEmailError();
     }
 
     // --- 3. Hash password (also validates complexity — throws
@@ -105,14 +121,17 @@ export class AuthService {
       now,
     });
 
-    // --- 4-7. Execute all four inserts as one atomic transaction ---------
+    // --- 4-7. Execute all four inserts as one atomic transaction. This
+    //          catch block — not the pre-check above — is the
+    //          authoritative enforcement of email uniqueness, per the
+    //          Database Concurrency Rule (DECISIONS.md). -----------------
     try {
       await this.db.batch([userStatement, workspaceStatement, membershipStatement, sessionBuild.statement]);
     } catch (err) {
       const message = err?.details?.cause || String(err);
       if (message.includes('UNIQUE') && message.includes('users.email')) {
-        this.logger?.warning('registration rejected: duplicate email (race detected in transaction)', { email: normalizedEmail });
-        throw new ValidationError('An account with this email already exists.');
+        this.logger?.warning('registration rejected: duplicate email (UNIQUE constraint — authoritative)', { email: normalizedEmail });
+        throw new DuplicateEmailError();
       }
       this.logger?.error('registration transaction failed', { email: normalizedEmail, error: message });
       throw new DatabaseError('Registration failed. No changes were saved.', { cause: message });

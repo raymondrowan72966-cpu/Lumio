@@ -2,6 +2,19 @@
 
 All notable backend changes are recorded here, newest first. Frontend (`Lumio Prototype/`) changes are not tracked in this file.
 
+## Database Concurrency Rule review (addendum to Sprint 2C)
+
+### Added
+- `src/errors/DuplicateEmailError.js` — a distinct, identifiable `ValidationError` subclass (`code: 'DUPLICATE_EMAIL'`) for the specific "email already registered" case, replacing the generic `ValidationError` previously thrown for it from both the pre-check and the in-batch UNIQUE-constraint catch.
+
+### Changed
+- `src/services/AuthService.js` — comments and error types updated to make explicit (and proven, not just implicit) that the `users.email` UNIQUE constraint is the sole authoritative enforcement of uniqueness; the pre-check is UX-only. No functional change to the registration flow's actual behavior — it was already structured this way.
+
+### Validation
+- New throwaway test monkey-patched the pre-check to always report "no duplicate found" (simulating a real check-then-insert race) and confirmed the database constraint alone still rejects the duplicate, with zero extra rows created, and that a genuinely new email still registers successfully under the same conditions. 5/5 assertions passed.
+- Re-confirmed the API-level duplicate-email response still returns `400` (now with `code: "DUPLICATE_EMAIL"` instead of the previous generic `VALIDATION_ERROR`).
+- Re-ran `wrangler deploy --dry-run` for all three environments and reloaded the live frontend preview — both clean.
+
 ## Sprint 2C — Workspace Owner Registration (Email & Password)
 
 ### Added

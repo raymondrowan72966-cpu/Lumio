@@ -4,6 +4,16 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-015: Database Concurrency Rule — uniqueness constraints are the authoritative source of truth, never the pre-check
+
+**Decision:** for every uniqueness requirement (starting with `users.email`, and binding for every future case — invitation tokens, etc.), the database's UNIQUE constraint is the sole authoritative enforcement. A "does this already exist?" read before an INSERT may exist *only* to improve the common-case error message/latency; it must never be the thing application correctness relies on. Added `DuplicateEmailError` (a distinct `ValidationError` subclass, `code: 'DUPLICATE_EMAIL'`) so this specific case is identifiable by type, not by string-matching a message.
+**Why:** a pre-check-then-insert pattern has an inherent TOCTOU (time-of-check-to-time-of-use) race: two concurrent requests for the same email can both pass the pre-check (neither sees the other's row yet) and both proceed to insert, with only the database's own constraint actually able to stop the second one. Sprint 2C's `registerOwner` already had this right by construction — the `db.batch()` catch block was already independently detecting the UNIQUE violation and mapping it to a duplicate-email error, completely independent of whether the pre-check ran first — but this review made it explicit, named, and *proven*, rather than leaving it as an implicit property of the code.
+**Verification performed:** wrote a throwaway test that monkey-patches `UserRepository.findByEmail` to unconditionally return `null` (simulating the pre-check missing every duplicate, exactly as a real race would) and confirmed registering the same email twice still correctly throws `DuplicateEmailError` with zero extra rows created, the database constraint catching it alone. Also confirmed a genuinely new email still registers successfully with the pre-check disabled, and that the normal (pre-check-enabled) path throws the identical error type — both code paths now visibly converge on one outcome.
+**Alternatives considered:** removing the pre-check entirely, relying only on the in-batch constraint. Rejected — the rule explicitly permits keeping it for UX (faster, cleaner rejection without computing a password hash and attempting a doomed transaction first), as long as correctness doesn't depend on it, which is now proven, not assumed.
+**Known limitations:** this ADR sets the rule for all *future* uniqueness checks (invitation tokens, etc.) as well — any new pre-check pattern introduced later must follow the same shape (pre-check for UX only, constraint catch as the real enforcement) or be flagged as a deviation.
+
+---
+
 ## ADR-014: D1's `db.batch()` is the transaction boundary; pre-batch steps (validation, password hashing, the duplicate-email read) are necessarily outside it
 
 **Decision:** registration's "single database transaction" is implemented as exactly one `db.batch([userStatement, workspaceStatement, membershipStatement, sessionStatement])` call. Input validation, email normalization, the duplicate-email pre-check (a `SELECT`), and password hashing all happen *before* the batch is assembled, not inside it.
