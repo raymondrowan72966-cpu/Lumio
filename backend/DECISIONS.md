@@ -4,6 +4,16 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-016: Duplicate-email registration returns 409 Conflict, not 400 Bad Request
+
+**Decision:** `DuplicateEmailError` extends `AppError` directly with `status: 409`, not `ValidationError` (hardcoded to 400). The error `code` (`DUPLICATE_EMAIL`) and the response envelope shape (`{ error: { code, message } }`) are unchanged from before this fix — only the HTTP status moved.
+**Why:** per REST semantics (and the explicit API Standards rule this implements), a duplicate resource is a *conflict* between the request and the current state of the server, not a structurally malformed request — 400 is reserved for input the server genuinely cannot parse or validate (bad email format, weak password), which is a different failure category than "this specific value collides with something that already exists." `ValidationError`'s hardcoded 400 made it the wrong base class for this error the moment a non-400 status was needed — this is also why `DuplicateEmailError` was always its own class (ADR-015) rather than just a message string, since changing its status only required touching one file.
+**Alternatives considered:** keeping `DuplicateEmailError extends ValidationError` and overriding `this.status = 409` after calling `super()`. Rejected as needlessly indirect — extending `AppError` directly states the real relationship (a conflict, not a validation subtype) rather than fighting the parent class's hardcoded assumption.
+**Response envelope, explicitly preserved:** the instruction to "preserve the existing... response structure" is interpreted as keeping the same nested `{error:{code,message}}` shape used by every other error type in this API (established since Sprint 1's centralized error handler) — not flattening it to a bare `{code,message}` for this one error type, which would make this single endpoint inconsistent with every other error response in the same API. If a genuinely flat top-level envelope is wanted platform-wide, that is a larger, deliberate API-contract change affecting every endpoint, not something to special-case for one error.
+**Known limitations:** none — `401`/`403`/`500` mappings were verified directly against the shared error handler (no auth endpoint currently throws them, since login/permissions aren't implemented yet), confirming the same typed-error-to-status mapping this fix lives in already produces the correct status for every error type once those endpoints exist.
+
+---
+
 ## ADR-015: Database Concurrency Rule — uniqueness constraints are the authoritative source of truth, never the pre-check
 
 **Decision:** for every uniqueness requirement (starting with `users.email`, and binding for every future case — invitation tokens, etc.), the database's UNIQUE constraint is the sole authoritative enforcement. A "does this already exist?" read before an INSERT may exist *only* to improve the common-case error message/latency; it must never be the thing application correctness relies on. Added `DuplicateEmailError` (a distinct `ValidationError` subclass, `code: 'DUPLICATE_EMAIL'`) so this specific case is identifiable by type, not by string-matching a message.

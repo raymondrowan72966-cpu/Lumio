@@ -2,6 +2,15 @@
 
 All notable backend changes are recorded here, newest first. Frontend (`Lumio Prototype/`) changes are not tracked in this file.
 
+## API Standards review: duplicate-email status code (addendum to Sprint 2C)
+
+### Changed
+- `src/errors/DuplicateEmailError.js` — now extends `AppError` directly with `status: 409` instead of `ValidationError` (which is hardcoded to 400). A duplicate resource is a conflict, not a malformed request, per the API Standards rule. `code: 'DUPLICATE_EMAIL'` and the response envelope shape (`{ error: { code, message } }`, consistent with every other error type) are unchanged. Default message updated to match the spec exactly: "An account with this email address already exists."
+
+### Validation
+- 14/14 assertions passed: live `/auth/register` now returns `201` (success), `409` (duplicate email, with the exact spec'd code and message), `400` (invalid email format, weak password), and `404` (unknown route) — each via the real Worker fetch handler against a real D1 database. Directly exercised the centralized error handler to confirm `AuthenticationError` → 401, `PermissionError` → 403, `DatabaseError` → 500, and an unhandled/unexpected exception → 500 without leaking its message — none of these are reachable through `/auth/register` yet, but the typed-error-to-status mapping they all share is the same one this fix lives in, so proving it once covers every future endpoint that throws these types. Also confirmed every error response (duplicate, invalid-input, etc.) still shares the identical `{error:{code,message}}` envelope — the status code changed, the response shape didn't.
+- Re-ran `wrangler deploy --dry-run` for all three environments and reloaded the live frontend preview — both clean, no regressions.
+
 ## Database Concurrency Rule review (addendum to Sprint 2C)
 
 ### Added
