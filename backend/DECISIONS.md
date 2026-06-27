@@ -4,6 +4,20 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-007: Local rollback/test scripts live in `backend/scripts/`, never `backend/migrations/`
+
+**Decision:** any `.sql` file used only for local validation (e.g. a manual rollback script) is stored outside the `migrations/` directory entirely.
+**Why:** discovered live during Sprint 2A's required rollback test — Wrangler's D1 migration scanner treats *every* `.sql` file in `migrations/` as a real, trackable migration regardless of filename. A rollback script placed there was applied as if it were migration 0001 itself, and out of order (alphabetically before the real migration, since `...down.sql` sorts before the bare filename). This is now documented prominently in `migrations/README.md` so it isn't rediscovered the hard way again.
+**Alternatives considered:** naming the file so it sorts after 0001 and hoping Wrangler ignores non-numbered files. Rejected — Wrangler's scanner has no such filtering; the only reliable fix is keeping the directory's contents to exactly what's meant to be migrated.
+**Known limitations:** none — this is a tooling fact, not a tradeoff.
+
+## ADR-006: `users.avatar_url` is a plain URL column, not a foreign key to an assets table
+
+**Decision:** `users.avatar_url TEXT` (nullable), with no foreign key constraint, instead of the `avatar_asset_id` FK to an `assets` table sketched in `SAAS_MIGRATION_BLUEPRINT.md` Phase 7.
+**Why:** the `assets` table does not exist yet (out of scope for both the Cloud Foundation and Database Foundation sprints — assets are a later sprint), and OAuth providers (Google/Microsoft/Apple) supply avatar photos as external URLs at the identity-payload level, not as Lumio-managed uploads — a plain URL column is the correct *eventual* shape for at least the OAuth case regardless of when the assets table arrives. Self-uploaded avatars (Email & Password accounts choosing their own photo) may want to point at a real Lumio asset later; that can be added as a new, separate nullable column in a future migration without touching this one.
+**Alternatives considered:** blocking this column until the assets table exists. Rejected — `avatar_url` is explicitly listed in this sprint's required `users` fields ("Profile … Avatar"), and OAuth-sourced avatars genuinely are just URLs, so deferring the column entirely would under-deliver the sprint's actual requirement, not just delay an implementation detail.
+**Known limitations:** no validation of URL format or reachability at the database layer — that's an application-level concern for whichever future sprint implements avatar handling.
+
 ## ADR-005: Wrangler v4, not v3
 
 **Decision:** `package.json` pins `wrangler: ^4.0.0`.
