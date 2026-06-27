@@ -1,4 +1,5 @@
 import { ConfigurationError } from '../errors/index.js';
+import { loadSecurityConfig } from './security.js';
 
 /**
  * Configuration is read exclusively from the Worker's `env` (bindings +
@@ -34,6 +35,7 @@ export function loadConfig(env) {
     isProduction: environment === 'production',
     logLevel: env.LOG_LEVEL || (environment === 'production' ? 'INFO' : 'DEBUG'),
     db: env.DB,
+    security: loadSecurityConfig(env),
     // Placeholders for bindings later sprints will require — intentionally
     // not validated as REQUIRED yet, since Sprint 1 does not use them:
     assetsBucket: env.ASSETS_BUCKET, // R2 — Phase: Assets sprint

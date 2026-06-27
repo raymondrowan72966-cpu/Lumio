@@ -2,6 +2,25 @@
 
 All notable backend changes are recorded here, newest first. Frontend (`Lumio Prototype/`) changes are not tracked in this file.
 
+## Sprint 2B — Security Services
+
+### Added
+- `src/utils/crypto.js` — shared low-level primitives: secure random bytes/tokens, base64url encode/decode, SHA-256 hex digest, constant-time comparison, expiry helpers. Web Crypto API only, no external dependency.
+- `src/config/security.js` — security policy configuration (password policy, every token type's TTL), env-overridable, wired into `src/config/index.js` as `config.security`.
+- `src/services/PasswordService.js` — production PBKDF2-SHA256 (600,000 iterations) password hashing and verification, replacing the Phase 1 placeholder. Self-describing stored hash format (`pbkdf2$iterations$salt$hash`). Complexity validation (min length, mixed case, digit) per the authentication specification.
+- `src/services/TokenService.js` — stateless token generation/verification engine for 5 token types (session, rememberMe, passwordReset, emailVerification, invitation), replacing the Phase 1 placeholder. Tokens are random 256-bit values; only their SHA-256 hash is ever meant to be persisted.
+- `src/services/SessionService.js` — full implementation against the Sprint 2A `sessions` table, replacing the Phase 1 placeholder: create, load, validate, refresh (with token rotation), revoke one, revoke all, and a cleanup-candidate finder. Not wired to login/registration — every method is called directly with an already-known `userId`.
+
+### Not included (by design — out of Sprint 2B scope)
+- No registration, login, logout, Remember Me UI/cookie handling, invitations, OAuth, workspace creation, or any API endpoint business logic.
+- `AuthService`, `UserRepository`, `WorkspaceRepository` remain unmodified placeholders from Sprint 1.
+- No schema changes — the Sprint 2A `sessions` table is used as-is (see `DECISIONS.md` ADR-011 for the one place this required a deliberate, documented design choice instead of a schema change).
+
+### Validation
+- 39/39 assertions passed in a throwaway validation script (not committed): PasswordService (hashing, verification, all 6 invalid-input cases, salt uniqueness), security utilities (constant-time comparison, hash determinism), TokenService (generation, verification, expiry, revocation, tampering, unknown type), SessionService against a **real D1 database via Miniflare** (not a mock) — multiple concurrent sessions per user, cross-device isolation, token rotation, single-session revocation not affecting other devices, revoke-all, real expiry via direct row mutation, cleanup-candidate detection.
+- Found and fixed two real, non-obvious facts about the D1 API while building that validation harness (not production code issues) — documented in `DECISIONS.md` ADR-010.
+- Confirmed `wrangler deploy --dry-run` still succeeds for all three environments with the new services bundled in, and the live frontend preview reloads with a clean console.
+
 ## Sprint 2A — Database Foundation
 
 ### Added

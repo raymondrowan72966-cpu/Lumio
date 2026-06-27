@@ -4,6 +4,43 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-012: Concrete defaults chosen for every TTL the specs left as a range or didn't number
+
+**Decision:** `src/config/security.js` picks one concrete number for each token type's default TTL: 15 min access tokens, 30-day sliding refresh for Remember Me, 24h refresh for non-Remember-Me sessions, 1h password reset, 48h email verification, 7-day invitations.
+**Why:** `SAAS_AUTHENTICATION_SPECIFICATION.md` Section 7 specifies access/refresh/invitation numbers exactly; `SAAS_PRODUCT_SPECIFICATION.md` Section 2 gives email verification as a range ("24-48 hours") rather than one number — 48 (the upper end) was chosen for friction tolerance, since people don't always check email immediately. The non-Remember-Me session TTL (24h) is not specified anywhere in either document — the specs only say the *cookie* should be session-scoped, which a server-side TTL can't literally replicate (the server can't know when a browser closes); 24h is a defense-in-depth bound documented as a judgment call, not as fulfilling an explicit numeric requirement. The 1-hour password reset TTL is *not new* — it carries forward the original prototype's `PASSWORD_RESET_TTL_MS`, since neither spec document restates a different number, so the existing, already-validated value was kept rather than invented fresh.
+**Alternatives considered:** leaving these as TODOs requiring product sign-off before any code used them. Rejected — every value is overridable via an environment variable (`EMAIL_VERIFICATION_TTL_HOURS`, etc.) with zero code change required, so shipping a documented, sensible default now does not foreclose adjusting it later.
+**Known limitations:** none of these defaults have been validated against real user behavior (e.g. actual email-open-rate data) — they are reasoned defaults, not data-driven ones.
+
+## ADR-011: `refreshSession` takes `rememberMe` as an explicit parameter, not a stored column
+
+**Decision:** the `sessions` table (Sprint 2A) has no column recording whether a session was created with "Remember Me" enabled. `SessionService.refreshSession` requires the caller to supply `rememberMe` on every call, exactly as `createSession` does, rather than reading a stored flag.
+**Why:** Remember Me is fundamentally about how the refresh token is *delivered and stored client-side* (a persistent cookie vs. a session-only cookie) — the server only ever needs to enforce `expires_at`, which is already a column. A future login/refresh endpoint already knows this from the request context (which cookie type it's issuing/honoring), so storing a redundant flag server-side would just be a second source of truth for something the HTTP layer already encodes. This was treated as a real open question during this sprint (could the schema need a column?) and deliberately resolved without a schema change, per charter Rule 1 — not a silent gap.
+**Alternatives considered:** adding a `remember_me INTEGER` column to `sessions` via a new migration. Rejected for this sprint — schema changes are out of Sprint 2B's scope (Database Foundation was Sprint 2A), and the parameter-based design is sufficient and arguably more correct anyway.
+**Known limitations:** if a future requirement needs to *query* "show me all of this user's Remember-Me sessions" without the caller already knowing which is which, a column would become necessary. Not a current requirement.
+
+## ADR-010: D1's `.exec()` is line-based, not statement-based — migrations apply via `.prepare().run()` per statement in tooling
+
+**Decision:** when this sprint needed to apply the Sprint 2A migration programmatically (for Miniflare-backed validation, not production), it did so by splitting the SQL into individual statements and running each via `db.prepare(stmt).run()`, not via `db.exec(wholeFile)`.
+**Why:** discovered live — `d1.exec()` splits its input on newlines and attempts to run *each line* as an independent statement, which breaks immediately on a multi-line `CREATE TABLE` or a comment-only line. This is not how `wrangler d1 migrations apply`/`wrangler d1 execute --file=` behave (they handle a full multi-statement file correctly) — it is specific to calling the D1 binding's `.exec()` method directly. Production migrations still go through Wrangler's CLI exactly as documented in `migrations/README.md`; this ADR only concerns code that talks to a D1 binding directly (this sprint's validation harness, and potentially a future in-Worker admin/debug tool).
+**Alternatives considered:** none — once the actual behavior was understood, the fix was immediate and the only sane option.
+**Known limitations:** any future code that applies raw SQL via a D1 binding's `.exec()` method (rather than the CLI) must be aware of this line-splitting behavior.
+
+## ADR-009: Token hashing uses fast SHA-256, password hashing uses slow PBKDF2 — deliberately different algorithms for different threat models
+
+**Decision:** `TokenService` hashes high-entropy random tokens with a single fast SHA-256 pass (`utils/crypto.js#sha256Hex`). `PasswordService` hashes human-chosen passwords with PBKDF2-SHA256 at 600,000 iterations, a deliberately slow, salted KDF.
+**Why:** these are different threat models, not "the same problem solved two ways for no reason." A token is already 256 bits of cryptographically random data — there is nothing to brute-force; the only goal of hashing it before storage is "don't leave the literal usable secret sitting in the database if it leaks," which a fast hash satisfies completely. A password is low-entropy, human-chosen input that absolutely can be brute-forced or dictionary-attacked once an attacker has the hash, which is exactly what a slow KDF with a per-record salt defends against. Using PBKDF2 for tokens too would just be wasted CPU on every single request (every session validation hashes the presented token); using a fast hash for passwords would be a real, serious security regression. Both choices come directly from `docs/SAAS_MIGRATION_BLUEPRINT.md` Phase 9's distinction between these two cases.
+**Alternatives considered:** HMAC with a server-side secret key instead of a plain hash, for tokens. Rejected for this sprint — would require a new secret to manage (`SESSION_SECRET` already exists as a placeholder in `wrangler.toml`'s commented-out secrets section but isn't used anywhere yet) and adds complexity with no concrete threat it defends against beyond what a fast hash of a 256-bit random value already provides; worth revisiting if a real reason emerges (e.g. needing to invalidate all outstanding tokens of a type at once by rotating a key).
+**Known limitations:** none identified for the stated threat models.
+
+## ADR-008: 600,000 PBKDF2 iterations, self-describing stored hash format
+
+**Decision:** `PasswordService` uses PBKDF2-SHA256 with 600,000 iterations (OWASP's 2023+ recommended floor), and stores hashes as `pbkdf2$<iterations>$<salt>$<hash>` rather than just the raw derived bytes.
+**Why:** the iteration count is read from config (`security.password.pbkdf2Iterations`), so it can be raised over time as hardware gets faster, without a code change — but the iteration count used for a *given* password must also be remembered per-row, since raising the default later must not invalidate every existing password. Embedding it directly in the stored string (rather than a separate column) means `verify()` always knows exactly how that specific hash was produced, even if today's default has since changed. The `pbkdf2$` prefix also future-proofs a possible algorithm change (e.g. if Argon2 becomes available in the Workers runtime) — `verify()` can recognize and reject/migrate an old-format hash explicitly rather than guessing.
+**Alternatives considered:** a fixed, hardcoded iteration count with no versioning. Rejected — would make raising the iteration count later either impossible (without invalidating every password) or require a separate migration/versioning scheme bolted on afterward; building the self-describing format in from the start is barely more code.
+**Known limitations:** this sprint explicitly does not implement an actual re-hash-on-login upgrade path (rehashing an old, lower-iteration hash transparently the next time a user logs in with the correct password) — that's a natural, small addition for whichever future sprint implements login itself, flagged here so it isn't forgotten.
+
+---
+
 ## ADR-007: Local rollback/test scripts live in `backend/scripts/`, never `backend/migrations/`
 
 **Decision:** any `.sql` file used only for local validation (e.g. a manual rollback script) is stored outside the `migrations/` directory entirely.
