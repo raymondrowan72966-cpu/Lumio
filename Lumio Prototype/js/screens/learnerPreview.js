@@ -1760,13 +1760,43 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   // scroll already used by the Button block's anchor-jump feature
   // (lessonBuilder.js); the only new logic is the visibility check and
   // fixed offset, which that feature didn't need.
+  // Root cause of inconsistent Continue auto-scroll: this measured
+  // target.getBoundingClientRect() synchronously, right after rerender().
+  // For text-only next-blocks that's already laid out correctly — but an
+  // <img> (or anything else that resolves its size asynchronously) hadn't
+  // necessarily finished decoding yet at that exact instant, so the
+  // measured rect.top reflected a smaller, pre-expansion layout. The scroll
+  // target locked in from that stale measurement, and once the image
+  // finished loading a moment later and the page grew taller, the already-
+  // completed scroll no longer pointed at the right place — confirmed live
+  // by measuring the same target after settling and finding it almost
+  // entirely below the viewport. Waiting for any not-yet-loaded images
+  // inside the target (with a timeout safety net so a broken image can
+  // never hang the scroll indefinitely) before measuring fixes this at the
+  // source, without changing the scrolling mechanism itself.
   function scrollContinueTargetIntoView(lessonId, nextIndex) {
     const target = document.querySelector(`[data-lp-lesson="${lessonId}"][data-lp-index="${nextIndex}"]`);
     if (!target) return;
-    const rect = target.getBoundingClientRect();
-    const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-    if (fullyVisible) return;
-    window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
+    let settled = false;
+    const doScroll = () => {
+      if (settled) return;
+      settled = true;
+      requestAnimationFrame(() => {
+        const rect = target.getBoundingClientRect();
+        const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+        if (fullyVisible) return;
+        window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
+      });
+    };
+    const pendingImages = Array.from(target.querySelectorAll('img')).filter(img => !img.complete);
+    if (pendingImages.length === 0) { doScroll(); return; }
+    let remaining = pendingImages.length;
+    const onImageSettle = () => { remaining--; if (remaining <= 0) doScroll(); };
+    pendingImages.forEach(img => {
+      img.addEventListener('load', onImageSettle, { once: true });
+      img.addEventListener('error', onImageSettle, { once: true });
+    });
+    setTimeout(doScroll, 1500); // never block the scroll on a slow/broken image
   }
 
   // Continue

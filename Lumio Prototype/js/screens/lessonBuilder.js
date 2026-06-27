@@ -799,12 +799,26 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
 }
 
 /* Wrapper-level style additions for Text blocks: custom padding + background. */
+// Platform Spacing Audit root cause: Table shares this same Text-category
+// wrapper with Heading/Paragraph/Columns, whose base padding:3px 22px on
+// .block-content-area is correct for them (tight, line-height-driven flow —
+// adding the platform's 22px default there would break the intentional
+// heading-hugs-paragraph grouping). But unlike those, Table has no padding
+// control at all (renderTextBlockPanel never offered one), so it was stuck
+// at that same 3px meant for flowing text, despite having visible bordered
+// cells that need real breathing room. Table is still the only block type
+// in this category lacking a manual padding feature — give it the
+// platform-wide "no manual control" default of 22px without touching the
+// other Text-category blocks' intentional tight defaults.
 function textBlockExtraStyle(block) {
   if (blockCategory(block.type) !== 'Text') return '';
   const ds = block.design || {};
+  const defaultPad = block.type === 'table' ? 22 : undefined;
   let style = '';
-  if (ds.paddingTop !== undefined) style += `padding-top:${ds.paddingTop}px;`;
-  if (ds.paddingBottom !== undefined) style += `padding-bottom:${ds.paddingBottom}px;`;
+  const padTop = ds.paddingTop !== undefined ? ds.paddingTop : defaultPad;
+  const padBottom = ds.paddingBottom !== undefined ? ds.paddingBottom : defaultPad;
+  if (padTop !== undefined) style += `padding-top:${padTop}px;`;
+  if (padBottom !== undefined) style += `padding-bottom:${padBottom}px;`;
   if (ds.bgType === 'light') style += `background:${TEXT_BG_MAP.light};`;
   else if (ds.bgType === 'grey') style += `background:${TEXT_BG_MAP.grey};`;
   else if (ds.bgType === 'dark') style += `background:${TEXT_BG_MAP.dark};`;
