@@ -1,0 +1,19 @@
+{
+  "name": "lumio-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lumio backend Worker — Cloud Foundation sprint (no business logic yet).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "check": "node --check src/index.js",
+    "db:migrate:local": "wrangler d1 migrations apply lumio-db-dev --local",
+    "db:migrate:staging": "wrangler d1 migrations apply lumio-db-staging --env staging",
+    "db:migrate:production": "wrangler d1 migrations apply lumio-db-production --env production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

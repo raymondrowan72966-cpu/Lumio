@@ -1,0 +1,6 @@
+# Copy this file to `.dev.vars` (already gitignored) for local `wrangler dev`
+# secrets. Never commit the real `.dev.vars` file. No secrets are needed yet
+# for Sprint 1 (Cloud Foundation) — this file exists so the convention is in
+# place before the Authentication sprint actually needs one.
+
+# SESSION_SECRET=replace-with-a-long-random-value
