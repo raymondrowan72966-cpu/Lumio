@@ -1,0 +1,40 @@
+# Architecture Decision Records
+
+One entry per significant decision. Newest first.
+
+---
+
+## ADR-005: Wrangler v4, not v3
+
+**Decision:** `package.json` pins `wrangler: ^4.0.0`.
+**Why:** Sprint 1 initially used v3.78; Wrangler itself flagged that version as out-of-date during validation. Re-verified `wrangler deploy --dry-run` against all three environments under v4 before committing — clean builds, no behavior change needed in any source file.
+**Alternatives considered:** staying on v3 for stability. Rejected — no concrete reason to pin an outdated tool this early, before any real deploy has happened.
+**Known limitations:** none identified.
+
+## ADR-004: No custom D1 migration runner
+
+**Decision:** Use Wrangler's built-in `d1 migrations` feature (`migrations/` folder + `wrangler d1 migrations apply`) instead of writing a custom migration-runner module inside the Worker.
+**Why:** A correct, maintained migration runner already exists as part of the tooling; building another one would be unnecessary abstraction (charter Rule 11) and a second, divergent way to do the same job. `src/database/schemaVersion.js` only *reads* the `d1_migrations` table Wrangler maintains — it never writes to it.
+**Alternatives considered:** an in-Worker migration runner triggered via an admin endpoint. Rejected — Workers have no filesystem access to read `.sql` files at runtime anyway, making this approach a dead end architecturally, not just a style preference.
+**Known limitations:** migrations must be applied via the Wrangler CLI (locally or in CI), not via any application API. This is the standard, expected D1 workflow.
+
+## ADR-003: Hand-rolled router, no routing framework dependency
+
+**Decision:** `src/routes/router.js` is a ~40-line dependency-free router supporting static and `:param` segments only.
+**Why:** matches the existing frontend's deliberate no-framework, no-build-step philosophy, translated to the Worker context. The route surface needed for Sprint 1 (and the full API blueprint in `SAAS_MIGRATION_BLUEPRINT.md` Phase 6) does not need wildcard routes, regex segments, or middleware chaining beyond what's already built — a routing library would add a dependency and an upgrade-tracking burden for capability this project doesn't use.
+**Alternatives considered:** `itty-router`, `hono`. Rejected for now — both are reasonable, lightweight choices, but neither is *needed* yet; revisit only if a real requirement (e.g. wildcard asset-streaming routes) appears that the hand-rolled router can't express cleanly.
+**Known limitations:** no support for wildcard/catch-all segments or regex constraints. Acceptable today; would need either an extension to this router or a switch to a library if a future sprint needs that.
+
+## ADR-002: `backend/` as a sibling directory, not nested inside `Lumio Prototype/`
+
+**Decision:** the new backend lives at the repo root (`backend/`), not inside the existing frontend's folder.
+**Why:** the existing frontend has no build step and is (per the Sprint 1 repository audit) most likely served by Cloudflare Pages directly from its own directory with no build command. Nesting the backend inside it would risk Pages' static file server inadvertently exposing backend source files, or a future Pages build-command change accidentally trying to process `backend/`. A sibling directory makes the separation structurally obvious, not just a documented convention.
+**Alternatives considered:** a monorepo tool (Turborepo/Nx) to formally manage the two projects. Rejected as premature — two independently-deployed projects with no shared build step or shared dependencies do not yet need a monorepo tool; revisit only if real cross-project tooling pain appears.
+**Known limitations:** none identified.
+
+## ADR-001: `workspace_members` composite key, no surrogate id
+
+**Decision:** `WorkspaceRepository`'s skeleton methods key membership by `(workspaceId, userId)`, matching the D1 schema design in `SAAS_MIGRATION_BLUEPRINT.md` Phase 7 — never a separate auto-generated `id` for membership rows.
+**Why:** documented project history (the Authentication Functional Validation sprint, prior to this backend work) found a real, shipped bug where a client-side merge utility assumed every record had an `.id` field; `workspaceMemberships` records didn't, and the assumption silently destroyed membership data. Keying by the natural composite identity from the start, in the repository's method signatures, makes that specific class of mistake structurally harder to repeat in the new backend.
+**Alternatives considered:** a surrogate `id` column for convenience (e.g. easier ORM tooling later). Rejected — the composite key is already the correct, sufficient identity; adding a redundant surrogate key would just reintroduce two ways to identify the same row, which is exactly the kind of inconsistency that caused the original bug.
+**Known limitations:** none identified — this is a skeleton-stage decision, to be confirmed unchanged when the real migration is written in a future sprint.
