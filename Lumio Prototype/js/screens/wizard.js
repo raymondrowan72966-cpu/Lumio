@@ -213,7 +213,7 @@ function wizardStepContent(stepKey, w) {
             ${w.heroImage && w.heroImage.src ? `<button class="btn btn-ghost" id="wiz-hero-remove">🗑️ Remove Image</button>` : ''}
           </div>
           <div class="text-sm text-muted mt-16 text-center">Supported formats: PNG, JPG, JPEG, WEBP · Max size ${_formatUploadLimit(UPLOAD_LIMITS.image)}.</div>
-          <div id="wiz-hero-error" class="text-sm mt-8 text-center" style="color:#E5484D; display:none;"></div>
+          <div id="wiz-hero-error" class="text-sm mt-8 text-center text-destructive" style="display:none;"></div>
         </div>
       `;
     case 'theme':

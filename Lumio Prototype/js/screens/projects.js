@@ -323,7 +323,7 @@ function trashCard(p) {
         <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
         <div class="flex gap-12 mt-16">
           <button class="btn btn-secondary btn-sm restore-btn" data-restore="${p.id}" style="flex:1;">↩️ Restore</button>
-          <button class="btn btn-secondary btn-sm delete-forever-btn" data-delete-forever="${p.id}" style="flex:1; color:#E5484D;">🗑️ Delete Forever</button>
+          <button class="btn btn-secondary btn-sm delete-forever-btn text-destructive" data-delete-forever="${p.id}" style="flex:1;">🗑️ Delete Forever</button>
         </div>
       </div>
     </div>
@@ -528,7 +528,7 @@ function popoverAt(btn, itemsHtml, opts) {
 }
 
 function menuItem(label, icon, danger) {
-  return `<div class="menu-item${danger ? ' danger' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; color:${danger ? '#E5484D' : 'var(--ink-700)'};">
+  return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ink-700);'}">
     <span>${icon}</span><span>${label}</span></div>`;
 }
 
@@ -952,7 +952,7 @@ function openImportModal() {
             ['HTML packages', '.zip'],
           ].map(([label, ext]) => `
             <div class="flex items-center gap-10" style="margin-bottom:6px;">
-              <span style="color:#E5484D; font-weight:700; font-size:15px;">✗</span>
+              <span class="text-destructive" style="font-weight:700; font-size:15px;">✗</span>
               <span style="font-size:13px;">${label}</span>
               <span class="text-sm text-muted">${ext}</span>
             </div>`).join('')}
@@ -1036,7 +1036,7 @@ function openShareModal(id) {
         </div>
 
         <div class="flex gap-12" style="justify-content:space-between; align-items:center;">
-          <button class="btn btn-ghost btn-sm" id="share-remove" style="color:#E5484D; ${currentScope ? '' : 'visibility:hidden;'}">Remove sharing</button>
+          <button class="btn btn-ghost btn-sm text-destructive" id="share-remove" style="${currentScope ? '' : 'visibility:hidden;'}">Remove sharing</button>
           <div class="flex gap-12">
             <button class="btn btn-ghost" id="share-cancel">Cancel</button>
             <button class="btn btn-primary" id="share-save">Save</button>

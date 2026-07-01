@@ -124,7 +124,7 @@ function governanceRow(p, dateField, showComment) {
         </div>
         <span class="pill ${STATUS_BADGE[p.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[p.status] || p.status}</span>
       </div>
-      ${showComment && p.reviewComments ? `<div class="text-sm mt-8" style="padding:8px 10px; background:#FEECEC; border-radius:var(--r-sm);">"${escapeHtml(p.reviewComments)}"</div>` : ''}
+      ${showComment && p.reviewComments ? `<div class="text-sm mt-8" style="padding:8px 10px; background:var(--color-destructive-tint); border-radius:var(--r-sm);">"${escapeHtml(p.reviewComments)}"</div>` : ''}
     </div>`;
 }
 
@@ -238,7 +238,7 @@ function userRow(user) {
       <span class="pill ${user.status === 'active' ? 'pill-teal' : 'pill-grey'}">${user.status === 'active' ? 'Active' : 'Disabled'}</span>
       <div class="flex gap-8">
         <button class="btn btn-ghost btn-sm" data-user-toggle="${user.id}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
-        <button class="btn btn-ghost btn-sm" data-user-remove="${user.id}" style="color:#E5484D;">Remove</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">Remove</button>
       </div>
     </div>
   `;
@@ -256,7 +256,7 @@ function invitationRow(inv) {
       <span class="pill pill-grey">Pending</span>
       <div class="flex gap-8">
         <button class="btn btn-ghost btn-sm" data-invite-copy="${inv.id}">Copy Link</button>
-        <button class="btn btn-ghost btn-sm" data-invite-revoke="${inv.id}" style="color:#E5484D;">Revoke</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-invite-revoke="${inv.id}">Revoke</button>
       </div>
     </div>
   `;
@@ -464,7 +464,7 @@ function bindWorkspaceUsersTab() {
     const showFeedback = (msg, ok) => {
       feedback.textContent = msg;
       feedback.style.display = 'block';
-      feedback.style.color = ok ? '#22A06B' : '#E5484D';
+      feedback.style.color = ok ? 'var(--color-success)' : 'var(--color-destructive)';
     };
 
     if (!firstName) { showFeedback('Please enter a first name.', false); return; }
@@ -598,7 +598,7 @@ function renderAcceptInvite(token) {
     const pw = app.querySelector('#accept-password').value;
     const pw2 = app.querySelector('#accept-password-confirm').value;
     const fb = app.querySelector('#accept-password-feedback');
-    const show = (msg, ok) => { fb.textContent = msg; fb.style.display = 'block'; fb.style.color = ok ? '#22A06B' : '#E5484D'; };
+    const show = (msg, ok) => { fb.textContent = msg; fb.style.display = 'block'; fb.style.color = ok ? 'var(--color-success)' : 'var(--color-destructive)'; };
     if (!pw) { show('Please create a password.', false); return; }
     if (pw.length < 6) { show('Password must be at least 6 characters.', false); return; }
     if (pw !== pw2) { show('Passwords do not match.', false); return; }

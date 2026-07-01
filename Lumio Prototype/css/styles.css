@@ -82,6 +82,19 @@
   --glass-border: rgba(255,255,255,0.45);
   --glass-blur: 18px;
 
+  /* Semantic */
+  --color-destructive: #E5484D;
+  --color-destructive-tint: #FEECEC;
+  --color-success: #22A06B;
+  --color-success-tint: #ECFDF5;
+  --ink-300: #C4C4CC;
+
+  /* Radius scale (complete) */
+  --r-xs: 4px;
+
+  /* Focus */
+  --focus-ring: 0 0 0 3px rgba(124, 58, 237, 0.22);
+
   /* Theme Designer defaults (overridable per-course at runtime) */
   --theme-primary: var(--violet);
   --theme-secondary: var(--indigo);
@@ -100,19 +113,33 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: var(--theme-font-body, var(--font-body));
-  font-size: var(--theme-font-size, 16px);
+  font-family: var(--font-body);
+  font-size: 16px;
   color: var(--ink-700);
-  background: var(--theme-bg-style, var(--surface-50));
+  background: var(--surface-50);
   -webkit-font-smoothing: antialiased;
 }
 
-#app { min-height: 100vh; background: var(--theme-bg-style, var(--surface-50)); }
+#app { min-height: 100vh; background: var(--surface-50); }
 
 h1, h2, h3, h4 {
-  font-family: var(--theme-font-display, var(--font-display));
+  font-family: var(--font-display);
   color: var(--ink-900);
   margin: 0;
+}
+
+/* Theme fonts and settings are scoped to lesson/learner content areas only.
+   The builder chrome (nav, panels, toolbar) always uses Lumio brand fonts. */
+#lesson-canvas,
+.lumio-learner-root,
+.course-landing-root {
+  font-family: var(--theme-font-body, var(--font-body));
+  font-size: var(--theme-font-size, 16px);
+}
+#lesson-canvas h1, #lesson-canvas h2, #lesson-canvas h3, #lesson-canvas h4,
+.lumio-learner-root h1, .lumio-learner-root h2, .lumio-learner-root h3, .lumio-learner-root h4,
+.course-landing-root h1, .course-landing-root h2, .course-landing-root h3, .course-landing-root h4 {
+  font-family: var(--theme-font-display, var(--font-display));
 }
 
 p { margin: 0; line-height: 1.7; }
@@ -196,11 +223,19 @@ button { font-family: var(--font-body); cursor: pointer; }
 .btn-icon:focus-visible,
 .seg-control button:focus-visible,
 .tab:focus-visible,
-.content-menu-btn:focus-visible {
+.content-menu-btn:focus-visible,
+.nav-item:focus-visible,
+.kc-option:focus-visible,
+.lumio-tab-btn:focus-visible,
+.lumio-accordion-header:focus-visible,
+.lumio-hotspot:focus-visible,
+.list-checkbox-marker:focus-visible,
+.drop-zone-add:focus-visible,
+.canvas-block:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22);
+  box-shadow: var(--focus-ring);
 }
-.btn-primary:focus-visible { box-shadow: var(--elevation-1), 0 0 0 3px rgba(124, 58, 237, 0.22); }
+.btn-primary:focus-visible { box-shadow: var(--elevation-1), var(--focus-ring); }
 
 .btn-primary {
   background: linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%);
@@ -229,10 +264,10 @@ button { font-family: var(--font-body); cursor: pointer; }
 .btn-ghost:hover { background: var(--pastel-lavender); }
 
 .btn-danger {
-  background: #E5484D;
+  background: var(--color-destructive);
   color: #fff;
   border: none;
-  box-shadow: 0 8px 24px rgba(229, 72, 77, 0.10); /* same elevation pattern as .btn-primary, red-tinted */
+  box-shadow: 0 8px 24px rgba(229, 72, 77, 0.10);
 }
 .btn-danger:hover { background: #C93237; box-shadow: 0 16px 40px rgba(229, 72, 77, 0.22); }
 .btn-danger:focus-visible { box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.3); }
@@ -258,7 +293,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .btn-icon:hover { color: var(--theme-primary, var(--indigo)); box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)); background: var(--pastel-lavender); }
 .btn-icon:active { transform: scale(0.94); }
-.btn-icon.danger:hover { color: #E5484D; box-shadow: inset 0 0 0 1px #E5484D; background: #FEECEC; }
+.btn-icon.danger:hover { color: var(--color-destructive); box-shadow: inset 0 0 0 1px var(--color-destructive); background: var(--color-destructive-tint); }
 /* Toggle/active state — shared by any icon button representing an on/off
    formatting state (bold/italic/underline, etc.), so call sites no longer
    need inline conditional background/color styling per instance. */
@@ -277,14 +312,14 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* Compact icon-button size — small reorder/move controls that don't need
    the standard 36px footprint. Shares the same radius scale as the rest of
    the icon-button system rather than an arbitrary one-off value. */
-.btn-icon-xs { width: 22px; height: 22px; border-radius: 4px; }
+.btn-icon-xs { width: 22px; height: 22px; border-radius: var(--r-xs); }
 /* Dark icon-button variant — used where an icon button sits on a light
    card but needs a filled, high-contrast affordance (e.g. list reordering). */
 .btn-icon-dark { background: var(--ink-900); color: #fff; border: none; box-shadow: none; }
 .btn-icon-dark:hover { background: var(--ink-900); filter: brightness(1.2); color: #fff; box-shadow: none; }
 
 .menu-item:hover { background: var(--pastel-lavender); }
-.menu-item.danger:hover { background: #FEECEC; }
+.menu-item.danger:hover { background: var(--color-destructive-tint); color: var(--color-destructive); }
 
 /* Social sign-in buttons — official brand SVG marks, fixed size so they
    align consistently regardless of screen density or theme. */
@@ -366,9 +401,15 @@ button { font-family: var(--font-body); cursor: pointer; }
   justify-content: center;
   font-size: 13px;
   line-height: 1;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 2;
+  border: none;
+  padding: 0;
+  transition: background 0.15s;
 }
+.flip-card-flipicon:hover { background: rgba(0,0,0,0.38); }
+.flip-card-flipicon:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 /* ============================================================
    FORM ELEMENTS
@@ -430,7 +471,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .kc-option.selected { border-color: var(--theme-primary, var(--indigo)); }
 .kc-option.correct  { border-color: var(--teal); }
-.kc-option.wrong    { border-color: #E5484D; }
+.kc-option.wrong    { border-color: var(--color-destructive); }
 
 /* ============================================================
    PILLS / BADGES
@@ -479,7 +520,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   padding: 8px 10px 20px 10px;
   cursor: pointer;
 }
-.sidebar-logo img { width: 34px; height: 34px; border-radius: 8px; }
+.sidebar-logo img { width: 34px; height: 34px; border-radius: var(--r-sm); }
 .sidebar-logo span {
   font-family: var(--font-display);
   font-weight: 700;
@@ -696,7 +737,10 @@ button { font-family: var(--font-body); cursor: pointer; }
 .mb-24 { margin-bottom: 24px; }
 .mb-32 { margin-bottom: 32px; }
 .text-muted { color: var(--ink-400); }
+.text-xs { font-size: 11px; }
 .text-sm { font-size: 13px; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
 .text-center { text-align: center; }
 .w-full { width: 100%; }
 .fade-in { animation: fadeInUp 0.35s ease-out; }
@@ -871,7 +915,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   background: transparent; color: #fff;
-  border: none; border-radius: 6px;
+  border: none; border-radius: var(--r-xs);
   font-size: 13px; cursor: pointer;
 }
 .rt-toolbar .rt-btn:hover {
@@ -884,7 +928,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .rt-toolbar .rt-size {
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: none;
   background: rgba(255,255,255,0.1);
   color: #fff;
@@ -905,7 +949,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .rt-toolbar .rt-color {
   width: 28px; height: 28px;
-  border: none; border-radius: 6px;
+  border: none; border-radius: var(--r-xs);
   background: transparent;
   cursor: pointer;
   padding: 2px;
@@ -922,7 +966,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .layout-thumb:hover { transform: translateY(-2px); }
 .layout-thumb.selected { border-color: var(--indigo); }
 .layout-thumb .lt-frame { padding: 10px; height: 70px; display: flex; gap: 4px; }
-.lt-block { background: var(--pastel-lavender); border-radius: 4px; }
+.lt-block { background: var(--pastel-lavender); border-radius: var(--r-xs); }
 
 /* ============================================================
    ACCORDION / EXPANDABLE BLOCKS (no layout jump)
@@ -951,6 +995,37 @@ button { font-family: var(--font-body); cursor: pointer; }
   color: var(--ink-400); margin-bottom: 10px;
 }
 .prop-row { display: flex; gap: 8px; }
+
+/* Numbered list — marker visual styles */
+.list-num-marker {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-weight: 700; line-height: 1; cursor: text;
+  transition: box-shadow .1s;
+}
+.list-num-marker[contenteditable]:focus {
+  outline: none; box-shadow: var(--focus-ring); border-radius: 3px;
+}
+.list-num-marker-plain  { min-width: 24px; }
+.list-num-marker-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid; font-size: 12px; }
+.list-num-marker-filled { width: 28px; height: 28px; border-radius: 50%; font-size: 12px; }
+.list-num-marker-square { width: 28px; height: 28px; border: 2px solid; font-size: 12px; }
+.list-num-marker-rounded { width: 28px; height: 28px; border: 2px solid; border-radius: 6px; font-size: 12px; }
+.list-num-marker-none   { display: none; }
+
+/* Design system utilities */
+.text-destructive { color: var(--color-destructive); }
+.text-success { color: var(--color-success); }
+.prop-section input[type="checkbox"],
+.prop-panel input[type="checkbox"] {
+  accent-color: var(--violet); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
+}
+/* Prop panel baseline typography — overrides scattered inline font-size:13px */
+.prop-section .input,
+.prop-section .textarea,
+.prop-section label:not(.prop-section-title),
+.prop-section select {
+  font-size: 13px;
+}
 .seg-control {
   display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; flex: 1;
 }

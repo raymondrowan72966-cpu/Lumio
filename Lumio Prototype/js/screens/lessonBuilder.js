@@ -103,7 +103,7 @@ function renderLessonBuilder(lessonId) {
 
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; font-family:var(--theme-font-body, var(--font-body));">
+    <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden;">
       ${renderBuilderTopbar(course, lesson)}
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
@@ -150,7 +150,7 @@ function renderBuilderTopbar(course, lesson) {
       <div class="flex items-center gap-12" style="flex-shrink:0;">
         <span class="text-sm text-muted" id="save-status">Saved ✓</span>
         <button class="btn btn-secondary btn-sm" id="preview-lesson">👁️ Preview</button>
-        <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(6,182,212,0.08)); border-color:rgba(124,58,237,0.25);' : ''}">✨ AI Assistant</button>
+        <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, var(--violet-tint-md), rgba(6,182,212,0.08)); border-color:var(--violet-border);' : ''}">✨ AI Assistant</button>
       </div>
     </div>
   `;
@@ -505,20 +505,21 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   const fit = face.imageFit || 'cover';
   const hasImage = !!face.image;
   const hasVisibleText = _hasVisibleFlashcardText(face.text);
-  const flipIcon = `<div class="flip-card-flipicon">↻</div>`;
+  // The flip icon is the ONLY control permitted to flip the card. It is a
+  // focusable button so keyboard users can Tab to it and press Space/Enter.
+  // Placing handlers here (not on .flip-card) means: clicking text, images,
+  // whitespace or selections never flips the card, and typing Space/Enter
+  // inside a contenteditable cannot bubble to a card-level keydown handler.
+  const flipIcon = `<button class="flip-card-flipicon" type="button" aria-label="Flip card" aria-pressed="false" onclick="event.stopPropagation(); var fc=this.closest('.flip-card'); var f=fc.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(fc,'flipped',${i});" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();var fc=this.closest('.flip-card');var f=fc.classList.toggle('flipped');this.setAttribute('aria-pressed',f);lumioRecordProgress(fc,'flipped',${i});}">↻</button>`;
   // Builder always keeps the field present (so an empty face stays
   // click-to-edit); learner-facing contexts only render it when there's
   // genuinely something to show — this is what removes the reserved
   // shadow/space once text is truly empty.
   const showText = hasVisibleText || editable;
   const placeholder = faceName === 'back' ? 'Back text' : 'Front text';
-  // Issue 4 / layout refinement: the text region's cap is relative to its
-  // flex parent (which is itself pinned to the card's full height below),
-  // not a fixed pixel value — short text centers naturally inside the full
-  // box via the wrapper's justify-content:center, while long text grows to
-  // fill that same box up to its edges before scrolling, so the scrollbar
-  // tracks the card's real edge instead of a narrow inner column.
-  const textRegionStyle = `font-weight:600; font-size:14px; max-height:100%; overflow-y:auto; width:100%;`;
+  // overflow-x:hidden + word-break/overflow-wrap eliminate horizontal
+  // scrolling; text always wraps within the card width.
+  const textRegionStyle = `font-weight:600; font-size:14px; max-height:100%; overflow-y:auto; overflow-x:hidden; word-break:break-word; overflow-wrap:anywhere; white-space:normal; width:100%;`;
   if (hasImage && fit === 'full') {
     // Per author feedback, the legibility backing box (a translucent black
     // panel behind the text) is removed entirely — it read as a flat grey
@@ -765,6 +766,21 @@ function renderCheckboxMarker(ds, checked, i, key) {
 /* Renders the item rows for a List block (numbered/checkbox/bullet), shared by the
    Builder canvas and the Learner Preview. `opts.checkedSet` (Learner Preview only)
    overrides each item's checked state with the learner's session-local toggles. */
+/* Renders the visual marker for a single numbered-list item.
+   Supports direct editing (contenteditable) in Builder; plain display in Preview/exports. */
+function renderNumberMarker(display, ds, editable, i, autoNum) {
+  const ms = ds.numberMarkerStyle || 'plain';
+  const color = ds.numberColor || 'var(--ink-900)';
+  const baseClass = `list-num-marker list-num-marker-${ms}`;
+  const ceAttr = editable ? `contenteditable="plaintext-only" spellcheck="false" data-autonum="${escapeHtml(autoNum)}"` : '';
+  const title = editable ? 'title="Click to set a custom number. Leave blank for auto."' : '';
+  let style = '';
+  if (ms === 'plain')   style = `color:${color}; min-width:24px;`;
+  else if (ms === 'filled') style = `background:${color}; color:#fff;`;
+  else                  style = `color:${color}; border-color:${color};`;
+  return `<span class="${baseClass}" data-itemindex="${i}" style="${style}" ${ceAttr} ${title}>${escapeHtml(display)}</span>`;
+}
+
 function renderListItemsHtml(block, ds, items, editable, opts) {
   opts = opts || {};
   const isNumbered = block.type === 'list_numbered';
@@ -774,9 +790,9 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
     let marker = '';
     if (isNumbered) {
       const override = (item.override || '').trim();
-      const display = override || listNumberMarker(ds.numberStyle || 'decimal', i + 1);
-      marker = `<span class="list-marker" style="min-width:24px; font-weight:600; flex-shrink:0; line-height:1.7;">${escapeHtml(display)}</span>
-        ${editable ? `<input class="list-number-override" data-itemindex="${i}" placeholder="Auto" title="Custom number/label for this item" value="${escapeHtml(item.override || '')}" style="width:64px; font-size:11px; padding:2px 4px; margin-right:6px; border:1px solid var(--border); border-radius:4px; flex-shrink:0;" />` : ''}`;
+      const autoNum = listNumberMarker(ds.numberStyle || 'decimal', i + 1);
+      const display = override || autoNum;
+      marker = renderNumberMarker(display, ds, editable, i, autoNum);
     } else if (isBullet) {
       const glyph = BULLET_GLYPHS[ds.bulletStyle || 'disc'];
       const size = BULLET_SIZE_MAP[ds.bulletSize || 'md'];
@@ -1956,7 +1972,7 @@ function renderBlockContent(block, editable) {
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
             ${editable ? `<div class="flex items-center justify-center gap-8 mt-8">
               <button class="btn btn-secondary btn-sm grid-item-image-trigger" data-gindex="${i}">${item.imageUrl ? '🔄 Replace' : '📤 Upload'}</button>
-              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove" data-gindex="${i}" style="color:#E5484D;">🗑️</button>` : ''}
+              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove text-destructive" data-gindex="${i}">🗑️</button>` : ''}
             </div>` : ''}
           </div>
         `).join('')}
@@ -2358,7 +2374,7 @@ function renderBlockContent(block, editable) {
         <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; width:fit-content; max-width:100%;">
           ${items.map((item, i) => `
             <div>
-              <div class="flip-card" role="button" tabindex="0" aria-label="Card ${i+1}" aria-pressed="false" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" onkeydown="if(event.key===' '||event.key==='Enter'){ event.preventDefault(); event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card" style="height:${cardH}px;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -2368,7 +2384,7 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click flip icon to flip</div>` : ''}
             </div>
           `).join('')}
         </div>
@@ -2384,10 +2400,10 @@ function renderBlockContent(block, editable) {
       const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
       const borderStyle = ds.cardBorder === true ? `1px solid ${ds.cardBorderColor || 'var(--border)'}` : 'none';
       return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
-        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);" ontouchstart="this._touchX=event.touches[0].clientX" ontouchend="(function(el,e){const dx=e.changedTouches[0].clientX-el._touchX;if(Math.abs(dx)>40){lumioFcsNav(el.querySelector(dx<0?'.fcs-next':'.fcs-prev'),dx<0?1:-1);}})(this,event)">
+        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.target===this){ if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1); }" ontouchstart="this._touchX=event.touches[0].clientX" ontouchend="(function(el,e){var dx=e.changedTouches[0].clientX-el._touchX;if(Math.abs(dx)>40){lumioFcsNav(el.querySelector(dx<0?'.fcs-next':'.fcs-prev'),dx<0?1:-1);}})(this,event)">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
-              <div class="flip-card" role="button" tabindex="0" aria-label="Card ${i+1}" aria-pressed="false" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" onkeydown="if(event.key===' '||event.key==='Enter'){ event.preventDefault(); event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card" style="height:${cardH}px;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -2397,7 +2413,7 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click to flip</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click flip icon to flip</div>` : ''}
             </div>
           `).join('')}
           <div class="flex items-center justify-between mt-12">
@@ -2824,7 +2840,7 @@ function knowledgeCheckMC(d, editable, ds) {
     <div class="flex-col gap-6 mt-12">
       ${options.map((o, i) => `
         <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
-          <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid var(--ink-300); flex-shrink:0; display:inline-block;"></span>
+          <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid var(--border); flex-shrink:0; display:inline-block;"></span>
           <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
             data-placeholder="Option…" style="flex:1; outline:none;"
           >${richTextOut(o || '')}</span>
@@ -2847,7 +2863,7 @@ function knowledgeCheckMR(d, editable, ds) {
     <div class="flex-col gap-6 mt-12">
       ${options.map((o, i) => `
         <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
-          <span style="width:14px; height:14px; border-radius:3px; border:1.5px solid var(--ink-300); flex-shrink:0; display:inline-block;"></span>
+          <span style="width:14px; height:14px; border-radius:3px; border:1.5px solid var(--border); flex-shrink:0; display:inline-block;"></span>
           <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
             data-placeholder="Option…" style="flex:1; outline:none;"
           >${richTextOut(o || '')}</span>
@@ -2932,9 +2948,9 @@ function renderRightPanel(blocks, course, lesson) {
 
   if (!block) {
     return `
-      <div style="width:300px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
+      <div style="width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
         <div class="flex items-center justify-between">
-          <h3 style="font-size:14px;">Lesson Insights</h3>
+          <h3 class="text-sm" style="font-weight:700;">Lesson Insights</h3>
           <button class="btn-icon" id="collapse-right" title="Collapse panel">»</button>
         </div>
         <label class="flex items-center gap-8 text-sm mt-12" style="cursor:pointer;">
@@ -3385,11 +3401,27 @@ function renderListBlockPanel(block, index) {
   // DESIGN TAB — Spacing / Indent / per-type style options
   let typeFields = '';
   if (block.type === 'list_numbered') {
+    const markerColor = (ds.numberColor && ds.numberColor.startsWith('#')) ? ds.numberColor : '#1f1b3a';
     typeFields = `
-      <div class="prop-section" style="border-bottom:none;">
-        <div class="prop-section-title">Number Style</div>
+      <div class="prop-section">
+        <div class="prop-section-title">Number Format</div>
         ${segControl('design-numberstyle', 'numberStyle', [{id:'decimal',label:'1, 2, 3'},{id:'alpha',label:'A, B, C'},{id:'roman',label:'I, II, III'}], ds.numberStyle || 'decimal')}
-        <p class="text-sm text-muted mt-12">Click into the small field beside any item to give it a custom number or label (e.g. "10" or "Step 1"). Leave it blank to use automatic numbering.</p>
+      </div>
+      <div class="prop-section">
+        <div class="prop-section-title">Marker Style</div>
+        ${segControl('design-numbermarkerstyle', 'numberMarkerStyle', [
+          {id:'plain',label:'Plain'},
+          {id:'circle',label:'Circle'},
+          {id:'filled',label:'Filled'},
+          {id:'square',label:'Square'},
+          {id:'rounded',label:'Rounded'},
+          {id:'none',label:'None'},
+        ], ds.numberMarkerStyle || 'plain')}
+      </div>
+      <div class="prop-section" style="border-bottom:none;">
+        <div class="prop-section-title">Number Colour</div>
+        <input type="color" class="input list-number-color" value="${markerColor}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+        <p class="text-sm text-muted mt-12">Click any number on the canvas to set a custom value. Leave it blank to restore automatic numbering.</p>
       </div>`;
   } else if (block.type === 'list_bullet') {
     typeFields = `
@@ -3602,13 +3634,15 @@ function completionRequirementPanel(block) {
   if (cap && cap.strategy === 'assessed') {
     const required = (block.settings || {}).completionRequired === true;
     return `
-      <div class="prop-section-title mt-16">Completion</div>
-      <div class="field">
-        <label class="flex items-center gap-8">
-          <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
-          Required for Lesson Completion
-        </label>
-        <p class="text-xs text-muted mt-4">Pass/submit behaviour is configured in Assessment Rules above.</p>
+      <div class="prop-section" style="margin-top:16px;">
+        <div class="prop-section-title">Completion</div>
+        <div class="field">
+          <label class="flex items-center gap-8">
+            <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
+            Required for Lesson Completion
+          </label>
+          <p class="text-xs text-muted mt-4">Pass/submit behaviour is configured in Assessment Rules above.</p>
+        </div>
       </div>
     `;
   }
@@ -3631,12 +3665,14 @@ function completionRequirementPanel(block) {
   // The Rule dropdown's visibility recomputes correctly on the next render
   // since it's driven by `required`, read fresh from block.settings each time.
   return `
-    <div class="prop-section-title mt-16">Completion</div>
-    <div class="field">
-      <label class="flex items-center gap-8">
-        <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
-        Required for Lesson Completion
-      </label>
+    <div class="prop-section" style="margin-top:16px;">
+      <div class="prop-section-title">Completion</div>
+      <div class="field">
+        <label class="flex items-center gap-8">
+          <input type="checkbox" class="settings-field" data-field="completionRequired" ${required ? 'checked' : ''} />
+          Required for Lesson Completion
+        </label>
+      </div>
     </div>
     ${options.length > 1 ? `
     <div class="field" style="${required ? '' : 'display:none;'}">
@@ -3943,7 +3979,7 @@ function chartDesignPanel(block, d, ds, isPie, isLine) {
         <div class="flex items-center gap-12 mb-8">
           <input type="color" class="chart-segment-color" data-iindex="${i}" value="${(it.color || chartPieColor(ds, it, i)).startsWith('#') ? (it.color || '#7C3AED') : '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
           <span class="text-sm">${escapeHtml(it.label || `Segment ${i + 1}`)}</span>
-          ${it.color ? `<button class="btn btn-ghost btn-sm chart-segment-color-reset" data-iindex="${i}" style="color:#E5484D;">Reset</button>` : ''}
+          ${it.color ? `<button class="btn btn-ghost btn-sm chart-segment-color-reset text-destructive" data-iindex="${i}">Reset</button>` : ''}
         </div>`).join('')}
     </div>` : ''}
     <div class="prop-section">
@@ -3956,7 +3992,7 @@ function chartDesignPanel(block, d, ds, isPie, isLine) {
             ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
           </div>
           <button class="btn btn-secondary btn-sm chart-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm chart-bg-image-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm chart-bg-image-remove text-destructive">🗑️ Remove</button>` : ''}
         </div>` : ''}
     </div>
     <div class="prop-section" style="border-bottom:none;">
@@ -4015,8 +4051,9 @@ function kcMcContentPanel(block, d) {
       <label>Question</label>
       <textarea class="textarea content-field" data-field="question" rows="3">${escapeHtml(d.question || '')}</textarea>
     </div>
-    <div class="prop-section-title" style="margin-top:12px;">Answer Choices</div>
-    <p class="text-xs text-muted mb-8">Select the radio button to mark the correct answer.</p>
+    <div class="prop-section" style="margin-top:12px; border-bottom:none;">
+      <div class="prop-section-title">Answer Choices</div>
+      <p class="text-xs text-muted mb-8">Select the radio button to mark the correct answer.</p>
     <div class="flex-col gap-6" id="kc-mc-answers">
       ${opts.map((o, i) => `
         <div class="flex items-center gap-8" data-i="${i}">
@@ -4027,6 +4064,7 @@ function kcMcContentPanel(block, d) {
       `).join('')}
     </div>
     <button class="btn btn-secondary btn-sm w-full mt-8 kc-answer-add">+ Add Answer</button>
+    </div>
   `;
 }
 
@@ -4038,18 +4076,20 @@ function kcMrContentPanel(block, d) {
       <label>Question</label>
       <textarea class="textarea content-field" data-field="question" rows="3">${escapeHtml(d.question || '')}</textarea>
     </div>
-    <div class="prop-section-title" style="margin-top:12px;">Answer Choices</div>
-    <p class="text-xs text-muted mb-8">Check all answers that are correct.</p>
-    <div class="flex-col gap-6" id="kc-mr-answers">
-      ${opts.map((o, i) => `
-        <div class="flex items-center gap-8" data-i="${i}">
-          <input type="checkbox" class="kc-correct-check" data-i="${i}" ${correct.includes(i) ? 'checked' : ''} title="Mark as correct" />
-          <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
-          <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
-        </div>
-      `).join('')}
+    <div class="prop-section" style="margin-top:12px; border-bottom:none;">
+      <div class="prop-section-title">Answer Choices</div>
+      <p class="text-xs text-muted mb-8">Check all answers that are correct.</p>
+      <div class="flex-col gap-6" id="kc-mr-answers">
+        ${opts.map((o, i) => `
+          <div class="flex items-center gap-8" data-i="${i}">
+            <input type="checkbox" class="kc-correct-check" data-i="${i}" ${correct.includes(i) ? 'checked' : ''} title="Mark as correct" />
+            <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
+            <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm w-full mt-8 kc-answer-add">+ Add Answer</button>
     </div>
-    <button class="btn btn-secondary btn-sm w-full mt-8 kc-answer-add">+ Add Answer</button>
   `;
 }
 
@@ -4085,21 +4125,23 @@ function kcFillGapContentPanel(block, d) {
       <label>Sentence with blank (use ____ for the gap)</label>
       <textarea class="textarea content-field" data-field="text" rows="3">${escapeHtml(d.text || '')}</textarea>
     </div>
-    <div class="prop-section-title" style="margin-top:12px;">Acceptable Answers</div>
-    <div class="flex-col gap-6" id="kc-accepted">
-      ${answers.map((a, i) => `
-        <div class="flex items-center gap-8" data-i="${i}">
-          <input class="input kc-accepted-text" data-i="${i}" value="${escapeHtml(a)}" placeholder="Acceptable answer…" style="flex:1; font-size:13px;" />
-          <button class="btn-icon kc-accepted-delete" data-i="${i}" title="Remove" ${answers.length <= 1 ? 'disabled' : ''}>✕</button>
-        </div>
-      `).join('')}
-    </div>
-    <button class="btn btn-secondary btn-sm w-full mt-8 kc-accepted-add">+ Add Acceptable Answer</button>
-    <div class="field mt-8">
-      <label class="flex items-center gap-8" style="cursor:pointer; font-size:13px;">
-        <input type="checkbox" class="kc-case-sensitive" ${d.caseSensitive ? 'checked' : ''} />
-        Case-sensitive matching
-      </label>
+    <div class="prop-section" style="margin-top:12px; border-bottom:none;">
+      <div class="prop-section-title">Acceptable Answers</div>
+      <div class="flex-col gap-6" id="kc-accepted">
+        ${answers.map((a, i) => `
+          <div class="flex items-center gap-8" data-i="${i}">
+            <input class="input kc-accepted-text" data-i="${i}" value="${escapeHtml(a)}" placeholder="Acceptable answer…" style="flex:1; font-size:13px;" />
+            <button class="btn-icon kc-accepted-delete" data-i="${i}" title="Remove" ${answers.length <= 1 ? 'disabled' : ''}>✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm w-full mt-8 kc-accepted-add">+ Add Acceptable Answer</button>
+      <div class="field mt-8">
+        <label class="flex items-center gap-8" style="cursor:pointer; font-size:13px;">
+          <input type="checkbox" class="kc-case-sensitive" ${d.caseSensitive ? 'checked' : ''} />
+          Case-sensitive matching
+        </label>
+      </div>
     </div>
   `;
 }
@@ -4107,20 +4149,22 @@ function kcFillGapContentPanel(block, d) {
 function kcOrderingContentPanel(block, d) {
   const items = normalizeKcItems(d);
   return `
-    <div class="prop-section-title">Items in Correct Order</div>
-    <div class="flex-col gap-6" id="kc-items">
-      ${items.map((item, i) => `
-        <div class="flex items-center gap-6" data-i="${i}">
-          <span class="pill pill-grey" style="flex-shrink:0; min-width:22px; text-align:center; font-size:11px;">${i + 1}</span>
-          <input class="input kc-item-text" data-i="${i}" value="${escapeHtml(item)}" placeholder="Item…" style="flex:1; font-size:13px;" />
-          <button class="btn-icon kc-item-up"   data-i="${i}" title="Move up"   ${i === 0 ? 'disabled' : ''}>↑</button>
-          <button class="btn-icon kc-item-down" data-i="${i}" title="Move down" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
-          <button class="btn-icon kc-item-delete" data-i="${i}" title="Remove" ${items.length <= 2 ? 'disabled' : ''}>✕</button>
-        </div>
-      `).join('')}
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Items in Correct Order</div>
+      <div class="flex-col gap-6" id="kc-items">
+        ${items.map((item, i) => `
+          <div class="flex items-center gap-6" data-i="${i}">
+            <span class="pill pill-grey" style="flex-shrink:0; min-width:22px; text-align:center; font-size:11px;">${i + 1}</span>
+            <input class="input kc-item-text" data-i="${i}" value="${escapeHtml(item)}" placeholder="Item…" style="flex:1; font-size:13px;" />
+            <button class="btn-icon kc-item-up"   data-i="${i}" title="Move up"   ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button class="btn-icon kc-item-down" data-i="${i}" title="Move down" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="btn-icon kc-item-delete" data-i="${i}" title="Remove" ${items.length <= 2 ? 'disabled' : ''}>✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm w-full mt-8 kc-item-add">+ Add Item</button>
+      <p class="text-xs text-muted mt-8">Learners see these items in a shuffled order and must rearrange them into the correct sequence.</p>
     </div>
-    <button class="btn btn-secondary btn-sm w-full mt-8 kc-item-add">+ Add Item</button>
-    <p class="text-xs text-muted mt-8">Learners see these items in a shuffled order and must rearrange them into the correct sequence.</p>
   `;
 }
 
@@ -4137,7 +4181,8 @@ function kcSettingsPanel(block) {
   const compRule = s.completionRule    || 'submitted';
   const passMode = s.passingMode       || 'all_correct';
   return `
-    <div class="prop-section-title">Assessment Rules</div>
+    <div class="prop-section">
+      <div class="prop-section-title">Assessment Rules</div>
 
     <div class="field">
       <label>Attempts Allowed</label>
@@ -4213,19 +4258,22 @@ function kcSettingsPanel(block) {
       </div>
     </div>
 
-    <div class="prop-section-title" style="margin-top:16px;">Feedback</div>
+    </div>
+    <div class="prop-section" style="margin-top:16px; border-bottom:none;">
+      <div class="prop-section-title">Feedback</div>
 
-    <div class="field">
-      <label>Correct Feedback</label>
-      <input class="input settings-text" data-field="correctFeedback"
-        value="${escapeHtml(s.correctFeedback ?? 'Correct! Well done.')}" />
+      <div class="field">
+        <label>Correct Feedback</label>
+        <input class="input settings-text" data-field="correctFeedback"
+          value="${escapeHtml(s.correctFeedback ?? 'Correct! Well done.')}" />
+      </div>
+      <div class="field">
+        <label>Incorrect Feedback</label>
+        <input class="input settings-text" data-field="incorrectFeedback"
+          value="${escapeHtml(s.incorrectFeedback ?? 'Not quite. Please try again.')}" />
+      </div>
+      <p class="text-sm text-muted mt-8">This is an in-lesson Knowledge Check. Configure passing thresholds and feedback above.</p>
     </div>
-    <div class="field">
-      <label>Incorrect Feedback</label>
-      <input class="input settings-text" data-field="incorrectFeedback"
-        value="${escapeHtml(s.incorrectFeedback ?? 'Not quite. Please try again.')}" />
-    </div>
-    <p class="text-sm text-muted mt-8">This is an in-lesson Knowledge Check. Configure passing thresholds and feedback above.</p>
   `;
 }
 
@@ -4441,7 +4489,7 @@ function continueDesignFields(ds) {
             ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
           </div>
           <button class="btn btn-secondary btn-sm continue-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm continue-bg-image-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm continue-bg-image-remove text-destructive">🗑️ Remove</button>` : ''}
         </div>` : ''}
     </div>
     <div class="prop-section">
@@ -4496,7 +4544,7 @@ function quoteImageUploadFields(block) {
           ${d.background ? `<img src="${AssetStore.resolveMediaSrc(d.background)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="background" data-title="Background Image">${d.background ? '🔄 Replace Background' : '📤 Upload Background'}</button>
-        ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="background" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="background">🗑️ Remove</button>` : ''}
       </div>
     </div>`;
 }
@@ -4511,7 +4559,7 @@ function mediaPickerAvatarField(d, target, title, label, noBorder) {
           ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
-        ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
       </div>
     </div>`;
 }
@@ -4536,7 +4584,7 @@ function mediaPickerImageField(d, target, title, label, noBorder, namespace) {
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}" data-namespace="${ns}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" data-namespace="${ns}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}" data-namespace="${ns}">🗑️ Remove</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -4559,7 +4607,7 @@ function mediaPickerAudioField(d, target, title, label) {
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="audio" data-title="${title}">${d[target] ? '🔄 Replace Audio' : '📤 Upload Audio'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove Audio</button>` : ''}
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove Audio</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: MP3, WAV, M4A, OGG · Max size 100MB.</p>
@@ -4585,7 +4633,7 @@ function mediaPickerVideoField(d, target, title, label) {
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="video" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Video'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: MP4, WEBM, MOV · Max size 500MB.</p>
@@ -4611,7 +4659,7 @@ function mediaPickerFileField(d, target, title, label) {
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="file" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Attachment'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove" data-target="${target}" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: PDF, DOCX, PPTX, XLSX, CSV, TXT, ZIP · Max size 100MB.</p>
@@ -4763,7 +4811,7 @@ function renderVideoBlockPanel(block, index) {
       <p class="text-sm text-muted mb-8">Upload a VTT or SRT file, or paste subtitle/transcript text below. Adds a CC button to the video player.</p>
       <div class="flex items-center gap-8" style="flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" id="subtitle-upload-trigger">${d.subtitles ? '🔄 Replace Subtitles File' : '📤 Upload Subtitles (VTT/SRT)'}</button>
-        ${d.subtitles ? `<button class="btn btn-ghost btn-sm" id="subtitle-remove" style="color:#E5484D;">🗑️ Remove</button>` : ''}
+        ${d.subtitles ? `<button class="btn btn-ghost btn-sm text-destructive" id="subtitle-remove">🗑️ Remove</button>` : ''}
         <input type="file" id="subtitle-file-input" accept=".vtt,.srt,text/vtt" style="display:none" />
       </div>
       <textarea class="textarea content-field mt-8" data-field="subtitles" rows="5" placeholder="Or paste WebVTT / SRT subtitle text here">${escapeHtml(d.subtitles || '')}</textarea>
@@ -4965,7 +5013,7 @@ function flashcardContentPanel(block, d) {
           <p class="text-sm text-muted mb-4">Click directly on the ${face} text on the canvas to edit it.</p>
           <div class="flex items-center gap-8 mt-4">
             <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? '🔄 Change Image' : '📤 Add Image'}</button>
-            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove" data-findex="${i}" data-face="${face}" style="color:#E5484D;">Remove image</button>` : ''}
+            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove text-destructive" data-findex="${i}" data-face="${face}">Remove image</button>` : ''}
           </div>
           ${item[face].image ? `
             <p class="text-sm text-muted mb-4 mt-8">Image layout</p>
@@ -5204,13 +5252,13 @@ function itemMediaContentFields(item, listKey, i) {
   return `
     <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="image" data-kind="image" data-title="Image">${item.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="image" style="color:#E5484D;">Remove image</button>` : ''}
+      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="image">Remove image</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="video" data-kind="video" data-title="Video">${item.video ? '🔄 Change Video' : '📤 Add Video'}</button>
-      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="video" style="color:#E5484D;">Remove video</button>` : ''}
+      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="video">Remove video</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="audio" data-kind="audio" data-title="Audio">${item.audio ? '🔄 Change Audio' : '📤 Add Audio'}</button>
-      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="audio" style="color:#E5484D;">Remove audio</button>` : ''}
+      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="audio">Remove audio</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="file" data-kind="file" data-title="Attachment">${item.file ? '🔄 Change File' : '📤 Add Attachment'}</button>
-      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="${listKey}" data-iindex="${i}" data-field="file" style="color:#E5484D;">Remove file</button>` : ''}
+      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="file">Remove file</button>` : ''}
     </div>
     ${item.audio ? `<div class="field mt-8"><label>Audio Transcript</label><textarea class="textarea lumio-item-text" rows="2" data-list="${listKey}" data-iindex="${i}" data-field="audioTranscript">${escapeHtml(item.audioTranscript || '')}</textarea></div>` : ''}
     ${item.image ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="${listKey}" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
@@ -5270,7 +5318,7 @@ function quoteCarouselContentPanel(block, d) {
           ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="quotes" data-iindex="${i}" data-field="avatar" data-kind="image" data-title="Avatar Image">${q.avatar ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="quotes" data-iindex="${i}" data-field="avatar" style="color:#E5484D;">Remove image</button>` : ''}
+        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="quotes" data-iindex="${i}" data-field="avatar">Remove image</button>` : ''}
       </div>
     </div>
   `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="quotes">+ Add Quote</button>` + aiActions();
@@ -5292,7 +5340,7 @@ function galleryCarouselContentPanel(block, d) {
       <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
       <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="items" data-iindex="${i}" data-field="src" data-kind="image" data-title="Image">${item.src ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove" data-list="items" data-iindex="${i}" data-field="src" style="color:#E5484D;">Remove image</button>` : ''}
+        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="items" data-iindex="${i}" data-field="src">Remove image</button>` : ''}
       </div>
       ${item.src ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="items" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
     </div>
@@ -5410,7 +5458,7 @@ function labelledGraphicContentPanel(block, d) {
       <div class="prop-section-title">Primary Image</div>
       <div class="flex items-center gap-8" style="flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm lumio-lg-image-trigger">${d.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove" style="color:#E5484D;">Remove image</button>` : ''}
+        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove text-destructive">Remove image</button>` : ''}
       </div>
       <p class="text-sm text-muted mt-8">Drag the numbered markers directly on the canvas to position each hotspot.</p>
     </div>`;
@@ -5485,7 +5533,7 @@ function scenarioContentPanel(block, d) {
     `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   const mediaBtn = (sindex, field, kind, title, current) => `
     <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `🔄 Change ${title}` : `📤 Add ${title}`}</button>
-    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove" data-sindex="${sindex}" data-field="${field}" style="color:#E5484D;">Remove</button>` : ''}`;
+    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove text-destructive" data-sindex="${sindex}" data-field="${field}">Remove</button>` : ''}`;
   return scenes.map((scene, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
@@ -5886,13 +5934,13 @@ function renderAIPanel(lesson, blocks) {
   return `
     <div style="position:fixed; top:0; right:0; bottom:0; width:340px; background:var(--surface-0); border-left:1px solid var(--border); box-shadow:var(--elevation-2); z-index:60; display:flex; flex-direction:column;" class="fade-in">
       <div class="flex items-center justify-between" style="padding:14px 16px; border-bottom:1px solid var(--border);">
-        <div class="flex items-center gap-8"><div class="ai-spark">✨</div><strong style="font-size:14px;">Lumio AI Assistant</strong></div>
+        <div class="flex items-center gap-8"><div class="ai-spark">✨</div><strong>Lumio AI Assistant</strong></div>
         <button class="btn-icon" id="close-ai">✕</button>
       </div>
       <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;" id="chat-log">
         ${messages.map(m => `
           <div style="align-self:${m.from==='ai'?'flex-start':'flex-end'}; max-width:85%;">
-            <div class="card card-pad" style="font-size:13px; background:${m.from==='ai' ? 'var(--pastel-lavender)' : 'var(--surface-0)'}; border:${m.from==='ai'?'none':'1px solid var(--border)'};">${m.text}</div>
+            <div class="card card-pad text-sm" style="background:${m.from==='ai' ? 'var(--pastel-lavender)' : 'var(--surface-0)'}; border:${m.from==='ai'?'none':'1px solid var(--border)'};">${m.text}</div>
           </div>
         `).join('')}
       </div>
@@ -6548,19 +6596,52 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Numbered list — manual number/label override per item (live update, no re-render so focus is kept)
-  app.querySelectorAll('.list-number-override').forEach(input => input.addEventListener('input', (e) => {
-    const wrapper = e.target.closest('.canvas-block');
-    const block = blocks[parseInt(wrapper.dataset.index)];
-    const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
-    const i = parseInt(e.target.dataset.itemindex);
-    items[i] = items[i] || {};
-    items[i].override = e.target.value;
-    const row = e.target.closest('.list-item-row');
-    const marker = row ? row.querySelector('.list-marker') : null;
-    if (marker) {
-      const override = e.target.value.trim();
-      marker.textContent = override || listNumberMarker((block.design || {}).numberStyle || 'decimal', i + 1);
+  // Numbered list — directly-editable marker (contenteditable span).
+  // On input: live-update the stored override. On blur: clear if matches auto-value.
+  app.querySelectorAll('.list-num-marker[contenteditable]').forEach(marker => {
+    marker.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); marker.blur(); }
+    });
+    marker.addEventListener('input', (e) => {
+      e.stopPropagation();
+      const wrapper = marker.closest('.canvas-block');
+      const block = blocks[parseInt(wrapper.dataset.index)];
+      const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+      const i = parseInt(marker.dataset.itemindex);
+      items[i] = items[i] || {};
+      const val = marker.textContent.trim();
+      const auto = marker.dataset.autonum || '';
+      items[i].override = (val && val !== auto) ? val : '';
+      flashSaveStatus();
+    });
+    marker.addEventListener('blur', (e) => {
+      const wrapper = marker.closest('.canvas-block');
+      const block = blocks[parseInt(wrapper.dataset.index)];
+      const items = normalizeListItems(block.data, (LIST_DEFAULTS[block.type] || {}).items);
+      const i = parseInt(marker.dataset.itemindex);
+      const val = marker.textContent.trim();
+      const auto = marker.dataset.autonum || '';
+      if (!val || val === auto) {
+        marker.textContent = auto;
+        if (items[i]) items[i].override = '';
+      }
+    });
+  });
+
+  // Numbered list — Number Colour live update
+  app.querySelectorAll('.list-number-color').forEach(input => input.addEventListener('input', (e) => {
+    const block = blocks[BuilderUI.selected];
+    if (!block) return;
+    block.design = block.design || {};
+    block.design.numberColor = e.target.value;
+    const ms = block.design.numberMarkerStyle || 'plain';
+    const color = e.target.value;
+    const selBlock = document.querySelector(`.canvas-block[data-index="${BuilderUI.selected}"]`);
+    if (selBlock) {
+      selBlock.querySelectorAll('.list-num-marker').forEach(m => {
+        if (ms === 'filled') { m.style.background = color; m.style.color = '#fff'; m.style.borderColor = ''; }
+        else { m.style.color = color; m.style.borderColor = color; m.style.background = ''; }
+      });
     }
     flashSaveStatus();
   }));
@@ -7502,7 +7583,7 @@ function bindBuilderEvents(course, lesson, blocks) {
       const newBlockEl = app.querySelector(`.canvas-block[data-block-id="${block.id}"]`);
       if (newBlockEl) {
         newBlockEl.querySelectorAll('.flip-card').forEach((fc, i) => {
-          if (flippedSet.has(i)) { fc.classList.add('flipped'); fc.setAttribute('aria-pressed', 'true'); }
+          if (flippedSet.has(i)) { fc.classList.add('flipped'); fc.querySelectorAll('.flip-card-flipicon').forEach(icon => icon.setAttribute('aria-pressed', 'true')); }
         });
       }
     }

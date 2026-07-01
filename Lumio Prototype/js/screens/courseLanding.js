@@ -59,7 +59,7 @@ function renderCourseLanding(courseId) {
       ${ambientBlobs([
         ['var(--pastel-lavender)', '380px', '380px', '-100px', null, null, '40%'],
       ])}
-      <div style="position:relative; z-index:1; max-width:760px; margin:0 auto; ${themeVarStyle(course.themeDesign)}">
+      <div class="course-landing-root" style="position:relative; z-index:1; max-width:760px; margin:0 auto; ${themeVarStyle(course.themeDesign)}">
 
         <!-- Review Status (Phase 5: creator visibility) -->
         ${project ? renderReviewStatusSection(project) : ''}
@@ -116,7 +116,7 @@ function renderReviewStatusSection(project) {
   const history = Array.isArray(project.reviewHistory) ? project.reviewHistory.slice().reverse() : [];
 
   return `
-    <div class="card card-pad mb-24" style="${isRejected ? 'border:1px solid #E5484D; background:#FEECEC;' : ''}">
+    <div class="card card-pad mb-24" style="${isRejected ? 'border:1px solid var(--color-destructive); background:var(--color-destructive-tint);' : ''}">
       <div class="flex items-center justify-between mb-8">
         <div class="prop-section-title" style="margin:0;">Review Status</div>
         <span class="pill ${STATUS_BADGE[project.status] || 'pill-grey'}">${PROJECT_STATUS_LABELS[project.status] || project.status}</span>
@@ -839,7 +839,7 @@ function openPublishModal(course) {
     };
     const warningsHtml = analysis.warnings.length ? `
       <div style="margin-top:10px; padding:10px 12px; background:rgba(229,72,77,0.06); border:1px solid rgba(229,72,77,0.18); border-radius:var(--r-sm);">
-        <div style="font-size:12px; font-weight:700; color:#E5484D; margin-bottom:4px;">⚠️ Large Asset Warnings</div>
+        <div class="text-destructive" style="font-size:12px; font-weight:700; margin-bottom:4px;">⚠️ Large Asset Warnings</div>
         ${analysis.warnings.map(w => `<div class="text-sm" style="color:var(--ink-700); margin-top:3px;">${w}</div>`).join('')}
       </div>` : '';
     panel.innerHTML = `
@@ -1010,7 +1010,7 @@ function openCourseSettings(course, initialTab) {
                 <textarea class="input cs-objective-text" data-i="${i}" rows="1" style="flex:1; resize:vertical;">${(o || '').replace(/</g, '&lt;')}</textarea>
                 <button class="btn-icon cs-objective-up" data-i="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
                 <button class="btn-icon cs-objective-down" data-i="${i}" title="Move down" ${i === (course.learnerOutcomes.length - 1) ? 'disabled' : ''}>↓</button>
-                <button class="btn-icon cs-objective-remove" data-i="${i}" title="Remove" style="color:#E5484D;">✕</button>
+                <button class="btn-icon cs-objective-remove text-destructive" data-i="${i}" title="Remove">✕</button>
               </div>
             `).join('') || '<p class="text-sm text-muted">No objectives yet — add one below.</p>'}
           </div>
@@ -1035,11 +1035,11 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-thumb-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-thumb-upload">${course.thumbnailImage.src ? '🔄 Replace Thumbnail' : '📤 Upload Thumbnail'}</button>
-            ${course.thumbnailImage.src ? `<button class="btn btn-secondary btn-sm" id="cs-thumb-remove" style="color:#E5484D;">🗑️ Remove Thumbnail</button>` : ''}
+            ${course.thumbnailImage.src ? `<button class="btn btn-secondary btn-sm text-destructive" id="cs-thumb-remove">🗑️ Remove Thumbnail</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-thumb-reset">↩️ Restore Default Thumbnail</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
-          <div id="cs-thumb-error" class="text-sm mt-8" style="color:#E5484D; display:none;"></div>
+          <div id="cs-thumb-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>
         </div>
       `;
 
@@ -1310,11 +1310,11 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-hero-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-hero-upload">${hasImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-            ${hasImage ? `<button class="btn btn-secondary btn-sm" id="cs-hero-remove" style="color:#E5484D;">🗑️ Remove Image</button>` : ''}
+            ${hasImage ? `<button class="btn btn-secondary btn-sm text-destructive" id="cs-hero-remove">🗑️ Remove Image</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-hero-reset">↩️ Restore Default Image</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
-          <div id="cs-hero-error" class="text-sm mt-8" style="color:#E5484D; display:none;"></div>
+          <div id="cs-hero-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>
         </div>
 
         <div class="prop-section">

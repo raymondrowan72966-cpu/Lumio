@@ -88,7 +88,7 @@ function paintLogin() {
         <h2 style="font-size:24px; margin-bottom:8px;">${isRegister ? 'Create your account ✨' : 'Welcome back 👋'}</h2>
         <p class="text-muted mb-24" style="font-size:14px;">${isRegister ? 'Set up a new Lumio account with email.' : 'Sign in to your Lumio workspace.'}</p>
 
-        <div id="login-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+        <div id="login-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
 
         ${isRegister ? `
         <div class="flex gap-16" style="flex-wrap:wrap;">
@@ -219,7 +219,7 @@ function paintForgotPassword() {
   const inner = `
     <h2 style="font-size:24px; margin-bottom:8px;">Reset your password 🔑</h2>
     <p class="text-muted mb-24" style="font-size:14px;">${step === 'request' ? "Enter the email on your account and we'll generate a reset link." : 'A reset link has been generated below.'}</p>
-    <div id="forgot-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+    <div id="forgot-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
     ${step === 'request' ? `
       <div class="field">
         <label>Email Address</label>
@@ -230,7 +230,7 @@ function paintForgotPassword() {
       </div>
       <button class="btn btn-primary w-full btn-lg" id="forgot-send-btn">Send Reset Link →</button>
     ` : `
-      <div class="text-sm mb-16" style="padding:10px 12px; border-radius:8px; background:#EAF7F0; color:#22A06B; word-break:break-all;">
+      <div class="text-sm mb-16 text-success" style="padding:10px 12px; border-radius:8px; background:var(--color-success-tint); word-break:break-all;">
         Email delivery isn't connected yet, so here's your reset link directly:<br/>
         <a href="${LumioForgotState.link}" id="forgot-link-anchor">${LumioForgotState.link}</a>
       </div>
@@ -288,7 +288,7 @@ function renderResetPassword(token) {
   ` : `
     <h2 style="font-size:24px; margin-bottom:8px;">Set a new password 🔒</h2>
     <p class="text-muted mb-24" style="font-size:14px;">Choose a new password for ${escapeHtml(check.reset.email)}.</p>
-    <div id="reset-feedback" class="text-sm mb-16" style="display:none; padding:10px 12px; border-radius:8px; background:#FEEAEA; color:#E5484D;"></div>
+    <div id="reset-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
     <div class="field">
       <label>New Password</label>
       <input class="input" id="reset-new-password" type="password" placeholder="Create a password (min. 6 characters)" />

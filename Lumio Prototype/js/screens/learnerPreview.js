@@ -325,7 +325,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
     </header>`;
 
   app.innerHTML = `
-    <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+    <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
       ${prodHeader}
       <div style="display:flex; position:relative;">
         ${!isOverview ? `<div id="lp-sidebar-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>` : ''}
@@ -428,7 +428,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
     if (isDesktop) {
       // Fullscreen desktop: page scroll, sticky mini-header
       app.innerHTML = `
-        <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+        <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
           <div id="lp-header" style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface-0);">
             <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
           </div>
@@ -496,7 +496,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
   } else if (isDesktop) {
     // Normal desktop: browser-level scroll, sticky header + sticky sidebar
     app.innerHTML = `
-      <div style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+      <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
         ${headerHtml}
         <div style="display:flex;">
           ${sidebarHtml}
@@ -1189,7 +1189,7 @@ function kcPostSubmitFooter(ans, settings, key) {
                       : lastCorrect === false ? settings.incorrectFeedback
                       : 'Response recorded.';
   const feedbackColor = lastCorrect === true  ? 'var(--teal)'
-                      : lastCorrect === false ? '#E5484D'
+                      : lastCorrect === false ? 'var(--color-destructive)'
                       : 'var(--ink-700)';
   const prefix        = lastCorrect === true ? '✓ ' : lastCorrect === false ? '✕ ' : '';
   const attemptLine   = maxAttempts > 0
@@ -1240,7 +1240,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
               ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
             <span style="flex:1;">${escapeHtml(o)}</span>
             ${isCorrect ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span style="color:#E5484D; font-size:12px; font-weight:600;">✕ Your answer</span>' : ''}
+            ${isWrong   ? '<span class="text-destructive" style="font-size:12px; font-weight:600;">✕ Your answer</span>' : ''}
           </label>`;
         }).join('')}
       </div>
@@ -1361,7 +1361,7 @@ function learnerKcOrdering(block, index, ctx) {
             <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''}>↓</button>
           ` : ''}
           ${inCorrectPos ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓</span>' : ''}
-          ${inWrongPos   ? '<span style="color:#E5484D; font-size:12px; font-weight:600;">✕</span>'   : ''}
+          ${inWrongPos   ? '<span class="text-destructive" style="font-size:12px; font-weight:600;">✕</span>'   : ''}
         </div>`;
       }).join('')}
     </div>

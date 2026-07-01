@@ -37,7 +37,7 @@ function renderProfile() {
             <div id="profile-avatar-wrap">${avatarHtml(u, 72)}</div>
             <div class="flex gap-12" style="flex-wrap:wrap;">
               <button class="btn btn-secondary btn-sm" id="profile-photo-upload">${u.avatar ? '🔄 Replace Photo' : '📤 Upload Photo'}</button>
-              ${u.avatar ? `<button class="btn btn-secondary btn-sm" id="profile-photo-remove" style="color:#E5484D;">🗑️ Remove Photo</button>` : ''}
+              ${u.avatar ? `<button class="btn btn-secondary btn-sm text-destructive" id="profile-photo-remove">🗑️ Remove Photo</button>` : ''}
             </div>
           </div>
         </div>
@@ -171,7 +171,7 @@ function bindProfileEvents() {
     const showFeedback = (msg, ok) => {
       feedback.textContent = msg;
       feedback.style.display = 'block';
-      feedback.style.color = ok ? '#22A06B' : '#E5484D';
+      feedback.style.color = ok ? 'var(--color-success)' : 'var(--color-destructive)';
     };
 
     if (!current || !next || !confirm) {
