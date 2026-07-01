@@ -1,4 +1,4 @@
-import { jsonResponse } from '../utils/response.js';
+import { dataResponse } from '../utils/response.js';
 import { getSchemaVersion } from '../database/schemaVersion.js';
 
 /** Not part of the sprint's required /auth, /users, /workspaces, /projects,
@@ -12,7 +12,7 @@ export const healthRoutes = [
     handler: async (_req, _params, ctx) => {
       const dbOk = await ctx.db.ping();
       const schema = dbOk ? await getSchemaVersion(ctx.db) : { applied: [], latest: null };
-      return jsonResponse({
+      return dataResponse({
         status: dbOk ? 'ok' : 'degraded',
         environment: ctx.config.environment,
         database: { reachable: dbOk, schemaVersion: schema.latest },

@@ -8,7 +8,8 @@ One row per sprint. Each sprint solves exactly one major objective, per `docs/BA
 | 2A | Database Foundation | ✅ Complete | Production D1 schema for `users`/`workspaces`/`workspace_members`/`sessions`/`password_resets` only. Explicitly excluded: authentication, registration, login, sessions logic, invitations, hashing, tokens, API endpoints, Worker business logic. |
 | 2B | Security Services | ✅ Complete | PasswordService, TokenService, SessionService, security config, security utilities only. Explicitly excluded: registration, login, logout, Remember Me UI/cookie wiring, invitations, OAuth, workspace creation, API business logic. |
 | 2C | Workspace Owner Registration (Email & Password) | ✅ Complete | `POST /auth/register` only — Email & Password self-registration. Explicitly excluded: login, logout, Remember Me, password reset, invitations, Administrator registration, OAuth, projects, assets, workspace switching. |
-| 2D+ | *(not started)* | — | To be scoped per the charter's one-objective-per-sprint rule. Recommended next: Email & Password Login. |
+| 2D | Authentication Middleware & API Standards | ✅ Complete | Auth middleware (`loadAuthContext`), authorization guards (`requireAuthenticated`/`requireRole`/HOC wrappers), per-request `ctx.auth` context, ADR-017 response envelope. Explicitly excluded: login, logout, Remember Me, invitations, OAuth, password reset, business logic, frontend changes. |
+| 2E+ | *(not started)* | — | To be scoped per the charter's one-objective-per-sprint rule. Recommended next: Email & Password Login. |
 
 ## Sprint 1 — Cloud Foundation
 
@@ -40,3 +41,19 @@ One row per sprint. Each sprint solves exactly one major objective, per `docs/BA
 - **Delivered:** see `CHANGELOG.md` Sprint 2C entry — 28/28 end-to-end assertions passed against the real Worker fetch handler + real D1 (Miniflare), plus a 4-assertion SessionService regression check confirming no behavior change from the refactor this sprint needed.
 - **Found during this sprint:** D1's actual transaction primitive (`db.batch()`) constrains exactly which steps can be "in the transaction" (no async work between statements) — documented as the deliberate, correct design rather than a shortcut (ADR-014), plus the necessarily-string-based UNIQUE-constraint race detection this implies (ADR-013).
 - **Explicitly deferred:** login, logout, Remember Me, password reset, invitations, Administrator registration, OAuth, projects, assets, workspace switching — Sprint 2D should implement Email & Password Login only.
+
+## Sprint 2D — Authentication Middleware & API Standards
+
+- **Objective:** implement the shared authentication infrastructure that every protected endpoint will use — middleware, authorization guards, per-request context, and standard API response envelope.
+- **Status:** Complete.
+- **Delivered:**
+  - `src/middleware/authContext.js` — `loadAuthContext(request, {db, sessionService})` returns `ANONYMOUS_CONTEXT` (unauthenticated) or `{isAuthenticated, currentUser, currentWorkspace, currentMembership, session}` (authenticated). Token extracted from `Authorization: Bearer <token>` header. Active workspace resolution: if the user has exactly one membership, that workspace is loaded; multiple memberships → `currentWorkspace = null` pending multi-workspace selector (auth spec Section 8).
+  - `src/middleware/authorize.js` — `requireAuthenticated`, `requireRole`, `requireWorkspaceOwner`, `requireWorkspaceAdministratorOrAbove`, `withAuth(handler)`, `withRole(allowedRoles, handler)` HOC wrappers.
+  - `src/index.js` — `TokenService` + `SessionService` constructed per-request, `loadAuthContext` called before every route dispatch, result attached as `ctx.auth`.
+  - `src/utils/response.js` — `dataResponse(data, {status})` added for ADR-017 success envelope.
+  - `src/routes/auth.js` — `handleRegister` updated to `dataResponse(result, {status:201})`.
+  - `src/routes/health.js` — health handler updated to `dataResponse(...)`.
+  - `DECISIONS.md` — ADR-017 (Standard API Response Envelope) and ADR-018 (Bearer token transport) added.
+- **Validation:** 44/44 assertions passed — ADR-017 envelope (success + error), HTTP status matrix (201/400/404/409), auth context (valid/invalid/expired/revoked/no-token), authorization guards (all roles + HOC wrappers), integration `loadAuthContext` against real D1 + real session rows, registration regression.
+- **Build:** `wrangler deploy --dry-run` succeeded (47.43 KiB, all three environments).
+- **Explicitly deferred:** login, logout, Remember Me, invitations, OAuth, password reset, business logic, frontend changes — Sprint 2E should implement Email & Password Login.

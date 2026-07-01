@@ -6,6 +6,9 @@ import { handleError } from './middleware/errorHandler.js';
 import { logRequest } from './middleware/requestLogger.js';
 import { generateRequestId } from './middleware/requestId.js';
 import { notFound } from './utils/response.js';
+import { loadAuthContext } from './middleware/authContext.js';
+import { TokenService } from './services/TokenService.js';
+import { SessionService } from './services/SessionService.js';
 
 const router = createAppRouter();
 
@@ -27,7 +30,10 @@ export default {
       if (!match) {
         response = notFound(`No route for ${request.method} ${url.pathname}`);
       } else {
-        response = await match.handler(request, match.params, { config, db, logger });
+        const tokenService = new TokenService(config.security);
+        const sessionService = new SessionService({ db, tokenService, securityConfig: config.security });
+        const auth = await loadAuthContext(request, { db, sessionService });
+        response = await match.handler(request, match.params, { config, db, logger, auth });
       }
 
       logRequest(logger, request, response, startedAt);

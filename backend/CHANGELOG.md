@@ -2,6 +2,36 @@
 
 All notable backend changes are recorded here, newest first. Frontend (`Lumio Prototype/`) changes are not tracked in this file.
 
+## Sprint 2D — Authentication Middleware & API Standards
+
+### Added
+- `src/middleware/authContext.js` — `loadAuthContext(request, {db, sessionService})` reads the `Authorization: Bearer <token>` header, validates the token via `SessionService.validateSession`, loads the user (excluding deleted rows), resolves the single active workspace (if exactly one membership exists), and returns either a fully-populated auth context or `ANONYMOUS_CONTEXT` (unauthenticated). Exported `ANONYMOUS_CONTEXT` constant (`Object.freeze`) used by callers that need a typed empty context.
+- `src/middleware/authorize.js` — six authorization helpers, all zero-dependency pure functions:
+  - `requireAuthenticated(authContext)` — throws `AuthenticationError` if not authenticated.
+  - `requireRole(authContext, allowedRoles)` — throws `AuthenticationError` (not authenticated) or `PermissionError` (wrong role).
+  - `requireWorkspaceOwner(authContext)` — `requireRole` preset for `['workspace_owner']`.
+  - `requireWorkspaceAdministratorOrAbove(authContext)` — `requireRole` preset for `['workspace_owner', 'administrator']`.
+  - `withAuth(handler)` — HOC: calls `requireAuthenticated(ctx.auth)` before delegating to the wrapped handler.
+  - `withRole(allowedRoles, handler)` — HOC: calls `requireRole(ctx.auth, allowedRoles)` before delegating.
+- `src/utils/response.js` — `dataResponse(data, {status=200, headers={}})` wraps the payload as `{data:{...}}` per ADR-017. All new success responses must use this.
+
+### Changed
+- `src/index.js` — `TokenService` + `SessionService` now constructed per-request (stateless, cheap); `loadAuthContext` called before every route dispatch; result attached as `ctx.auth`. Every route handler now receives `ctx.auth` alongside `ctx.config`/`ctx.db`/`ctx.logger`.
+- `src/routes/auth.js` — `handleRegister` now returns `dataResponse(result, {status:201})` (ADR-017). `jsonResponse` import replaced with `dataResponse`.
+- `src/routes/health.js` — health handler now returns `dataResponse(...)` (ADR-017). `jsonResponse` import replaced with `dataResponse`.
+- `DECISIONS.md` — ADR-017 (Standard API Response Envelope) and ADR-018 (Bearer token transport) added.
+- `SPRINTS.md` — Sprint 2D row and detail section added; 2D+ row relabelled 2E+.
+
+### Not included (by design — out of Sprint 2D scope)
+- No login, logout, Remember Me, invitations, OAuth, password reset.
+- No business logic, no frontend changes.
+- No schema changes.
+- Multi-workspace selector (auth spec Section 8) — not built; `currentWorkspace` is `null` when a user has more than one membership.
+
+### Validation
+- 44/44 assertions passed in a throwaway end-to-end test (not committed): ADR-017 envelope shape for `/health` and `/auth/register`, duplicate-email 409 with exact code + message, invalid email 400, unknown route 404, all six authorization guards (all role combinations + both HOC wrappers), `loadAuthContext` integration against real D1 via Miniflare (valid token → full context, no header → anonymous, invalid token → anonymous, revoked session → anonymous, expired session → anonymous), registration regression (201, no password_hash in response, exact email reflected).
+- `wrangler deploy --dry-run` succeeded for all three environments (47.43 KiB / 12.92 KiB gzip), no broken imports.
+
 ## API Standards review: duplicate-email status code (addendum to Sprint 2C)
 
 ### Changed

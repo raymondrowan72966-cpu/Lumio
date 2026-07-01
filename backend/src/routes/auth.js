@@ -1,4 +1,4 @@
-import { notImplemented, jsonResponse } from '../utils/response.js';
+import { notImplemented, dataResponse } from '../utils/response.js';
 import { ValidationError } from '../errors/index.js';
 import { UserRepository } from '../repositories/UserRepository.js';
 import { WorkspaceRepository } from '../repositories/WorkspaceRepository.js';
@@ -53,7 +53,7 @@ async function handleRegister(request, _params, ctx) {
     lastName: body.lastName,
   });
 
-  return jsonResponse(result, { status: 201 });
+  return dataResponse(result, { status: 201 });
 }
 
 export const authRoutes = [

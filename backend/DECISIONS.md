@@ -4,6 +4,34 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-018: Bearer token transport for session authentication
+
+**Decision:** the `Authorization: Bearer <rawToken>` header is the mechanism for delivering the session refresh token from client to server on authenticated requests. The middleware (`loadAuthContext`) extracts the token via a case-insensitive `^Bearer\s+(.+)$` regex, then passes it to `SessionService.validateSession()` for hash-comparison and expiry/revocation checking against D1.
+**Why:** Bearer is the established HTTP standard for token-based authentication (RFC 6750), is stateless (no server-side session affinity needed), works for both browser and native clients, and is straightforward to implement with the existing `Authorization` header infrastructure. No cookie infrastructure or CSRF protection is required for token-bearing API clients, which is the current deployment model (SPA calling the Worker API).
+**Subject to revision:** when the login/logout/Remember Me flow (Sprint 2E) is implemented, the decision of whether session tokens are delivered as `Authorization: Bearer` headers, `HttpOnly` cookies, or a hybrid will be revisited. The current design does not assume either approach is permanent — `loadAuthContext` reads only from the header and can be extended without breaking existing callers.
+**Alternatives considered:** `Cookie: session=<token>` transport. Deferred to Sprint 2E when cookie semantics, `SameSite` policy, and CSRF mitigation for the real login flow need to be decided together rather than piecemeal.
+**Known limitations:** if cookies are ultimately chosen for the session delivery mechanism, `loadAuthContext` will need to be updated. This was acknowledged as a deliberate "decide the minimum now, revise when the login flow is real" trade-off, not an oversight.
+
+---
+
+## ADR-017: Standard API response envelope
+
+**Decision:** all API responses from this Worker follow a two-shape envelope.
+
+Successful responses: `{ "data": { ...payload } }` — the payload is always nested under `"data"`, never returned at the top level. HTTP status 200 or 201 (or other 2xx as appropriate).
+
+Error responses: `{ "error": { "code": "SCREAMING_SNAKE_CASE", "message": "Human-readable.", "details": {} } }` — the `details` key is optional and omitted when there is no structured per-field detail (e.g. a 401 has only `code` + `message`). HTTP status 4xx or 5xx as appropriate. Already in use since Sprint 1 (`AppError.toJSON()` produces this shape); this ADR formalises it as the permanent standard.
+
+**Applied this sprint:** `/auth/register` response updated from `jsonResponse(result, {status:201})` to `dataResponse(result, {status:201})` (wraps in `{data:{...}}`). `/health` response similarly wrapped. `dataResponse(data, {status})` helper added to `src/utils/response.js`.
+
+**Why:** a consistent envelope makes client-side error detection trivial (`if (body.error)` vs. `if (!body.user && !body.workspace && ...)`), avoids key collisions between payload properties and HTTP meta-properties (e.g. a payload field named `"status"` would collide at the top level of the health response), and is an industry-standard practice for REST APIs serving JavaScript clients.
+
+**Exceptions:** none. Every new endpoint MUST use `dataResponse` for success and return the `{error:{...}}` shape (via the centralised `handleError` or by throwing a typed `AppError` subclass) for failure.
+
+**Known limitations:** the duplicate-email error (`409 DUPLICATE_EMAIL`) explicitly preserves its existing `{error:{code,message}}` shape — this is the error envelope, which is unchanged by this ADR (ADR-017 only affects the *success* shape). No existing API contract is broken.
+
+---
+
 ## ADR-016: Duplicate-email registration returns 409 Conflict, not 400 Bad Request
 
 **Decision:** `DuplicateEmailError` extends `AppError` directly with `status: 409`, not `ValidationError` (hardcoded to 400). The error `code` (`DUPLICATE_EMAIL`) and the response envelope shape (`{ error: { code, message } }`) are unchanged from before this fix — only the HTTP status moved.
