@@ -97,8 +97,11 @@ const CompletionEngine = (function () {
       case 'quote_carousel':
         return (bp.visited || []).length >= itemCount(block, d);
       case 'flashcard_grid':
-      case 'flashcard_stack':
-        return (bp.flipped || []).length >= itemCount(block, d);
+      case 'flashcard_stack': {
+        const rule = (block.settings || {}).completionRule || 'all_cards';
+        const flipped = (bp.flipped || []).length;
+        return rule === 'any_card' ? flipped >= 1 : flipped >= itemCount(block, d);
+      }
       case 'scenario':
       case 'list_checkbox':
       default:

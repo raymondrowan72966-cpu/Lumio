@@ -115,7 +115,17 @@ h1, h2, h3, h4 {
   margin: 0;
 }
 
-p { margin: 0; line-height: 1.6; }
+p { margin: 0; line-height: 1.7; }
+
+/* Shared Rich Text line-height — applies to every .editable-text field in the
+   builder, learner preview, and all export formats. Block-specific inline
+   line-height overrides have been removed; this single rule is authoritative. */
+.editable-text { line-height: 1.7; }
+
+/* Paragraph spacing inside rich text fields (builder + learner preview + export).
+   <p> elements are now preserved by sanitizeRichHtml, replacing <br>-only structure. */
+.editable-text p { margin: 0; line-height: 1.7; }
+.editable-text p:not(:last-child) { margin-bottom: 0.65em; }
 
 a { color: var(--theme-primary, var(--indigo)); text-decoration: none; }
 a:hover { text-decoration: underline; }

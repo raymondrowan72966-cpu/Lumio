@@ -1140,8 +1140,6 @@ function learnerListCheckboxBlock(block, index, ctx) {
     <div class="list-items-wrap" role="list" style="padding-left:${indent}px;">${itemsHtml}</div>`;
 }
 
-/* ---- Flashcards ---- */
-
 /* ---- Knowledge Checks ---- */
 
 // Normalise KC block.settings with safe defaults so the rest of the engine

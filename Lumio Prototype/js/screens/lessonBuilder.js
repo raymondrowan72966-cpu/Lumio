@@ -730,7 +730,7 @@ function normalizeListItems(d, defaultItems) {
 function listBlockExtraStyle(block) {
   if (blockCategory(block.type) !== 'Lists') return '';
   const ds = block.design || {};
-  return `padding-top:${ds.paddingTop ?? 4}px; padding-bottom:${ds.paddingBottom ?? 4}px;`;
+  return `padding-top:${ds.paddingTop ?? 12}px; padding-bottom:${ds.paddingBottom ?? 12}px;`;
 }
 
 /* Renders the marker/control for a single checkbox-list item. */
@@ -792,7 +792,7 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
       </div>` : '';
     return `<div class="list-item-row flex items-start gap-4" data-itemindex="${i}" role="listitem" style="margin-bottom:8px;">
       ${marker}
-      <div class="editable-text list-item-text" data-role="body" data-field="listItem" data-col="${i}" data-richtext="true" ${editable ? 'contenteditable="true" spellcheck="false"' : ''} data-placeholder="List item" style="flex:1; line-height:1.7; font-size:15px;${item.textAlign ? ` text-align:${item.textAlign};` : ''}">${richTextOut(item.text || '')}</div>
+      <div class="editable-text list-item-text" data-role="body" data-field="listItem" data-col="${i}" data-richtext="true" ${editable ? 'contenteditable="true" spellcheck="false"' : ''} data-placeholder="List item" style="flex:1; font-size:15px;${item.textAlign ? ` text-align:${item.textAlign};` : ''}">${richTextOut(item.text || '')}</div>
       ${controls}
     </div>`;
   }).join('');
@@ -958,7 +958,7 @@ function applyStatementStylesToDom(block, index) {
     if (elx.dataset.role === 'title') {
       elx.style.cssText = `font-weight:700; margin-bottom:4px; ${textTypographyStyle(ds, 15)}${data.titleAlign ? `text-align:${data.titleAlign};` : ''}`;
     } else {
-      elx.style.cssText = `line-height:1.6; ${textTypographyStyle(ds, 15)}${data.textAlign ? `text-align:${data.textAlign};` : ''}`;
+      elx.style.cssText = `${textTypographyStyle(ds, 15)}${data.textAlign ? `text-align:${data.textAlign};` : ''}`;
     }
   });
   const iconEl = wrapper.querySelector('.stmt-icon-display');
@@ -1219,10 +1219,12 @@ function escapeHtml(str) {
    block.data.heading / block.data.body instead of plain text.
    ============================================================ */
 
-const RICH_TEXT_ALLOWED_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'BR']);
+const RICH_TEXT_ALLOWED_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'BR', 'P']);
 
 /* Whitelist-based sanitizer: strips all tags/attributes except the small
-   set of inline formatting elements the toolbar produces. */
+   set of inline formatting elements the toolbar produces. <p> is allowed
+   with text-align style only; empty <p> elements get a <br> so blank
+   paragraphs retain height after save/reload. */
 function sanitizeRichHtml(html) {
   const tmp = document.createElement('div');
   tmp.innerHTML = html == null ? '' : String(html);
@@ -1243,11 +1245,22 @@ function sanitizeRichHtml(html) {
               .map(([prop, val]) => `${prop}:${val}`)
               .join(';');
             if (kept) child.setAttribute('style', kept); else child.removeAttribute('style');
+          } else if (child.tagName === 'P' && attr.name === 'style') {
+            const kept = attr.value.split(';')
+              .map(decl => decl.split(':').map(s => s.trim()))
+              .filter(([prop, val]) => val && prop === 'text-align')
+              .map(([prop, val]) => `${prop}:${val}`)
+              .join(';');
+            if (kept) child.setAttribute('style', kept); else child.removeAttribute('style');
           } else {
             child.removeAttribute(attr.name);
           }
         });
         clean(child);
+        // Ensure empty <p> has a <br> so it retains height
+        if (child.tagName === 'P' && !child.firstChild) {
+          child.appendChild(document.createElement('br'));
+        }
       } else if (child.nodeType !== 3) {
         node.removeChild(child);
       }
@@ -1396,6 +1409,10 @@ function ensureRichTextToolbar() {
   // picker keeps the OS-level drag session uninterrupted while the text
   // colour still updates live.
   let liveColorEl = null;
+  // Reset liveColorEl before each new colour-picker session so that selecting
+  // different text between sessions always runs applyAndSync on the first tick
+  // rather than reusing a still-connected element from the previous session.
+  el.querySelector('.rt-color').addEventListener('mousedown', () => { liveColorEl = null; });
   el.querySelector('.rt-color').addEventListener('input', (e) => {
     if (liveColorEl && liveColorEl.isConnected) {
       liveColorEl.style.color = e.target.value;
@@ -1591,6 +1608,11 @@ function bindEditableTextField(elx, blocks) {
       RichTextToolbar.activeField = { block, elx };
       positionRichTextToolbar();
     };
+    elx.addEventListener('focus', () => {
+      // Standardise Enter key behaviour across Chrome/Safari/Firefox so all
+      // browsers create <p> elements (not <div> or <br>) on Enter.
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+    });
     elx.addEventListener('mouseup', () => setTimeout(showToolbar, 0));
     elx.addEventListener('keyup', () => setTimeout(showToolbar, 0));
     elx.addEventListener('blur', () => {
@@ -1663,9 +1685,9 @@ function renderBlockContent(block, editable) {
       return `<h2 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}${d.headingAlign ? `text-align:${d.headingAlign};` : ''}">${richTextOut(d.heading)}</h2>`;
     case 'heading_paragraph':
       return `<h2 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 22)}${d.headingAlign ? `text-align:${d.headingAlign};` : ''}">${richTextOut(d.heading)}</h2>
-        <div class="editable-text mt-12" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Paragraph text..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
+        <div class="editable-text mt-12" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Paragraph text..." style="${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
     case 'paragraph':
-      return `<div class="editable-text" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Write your paragraph content here..." style="line-height:1.7; ${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
+      return `<div class="editable-text" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Write your paragraph content here..." style="${textTypographyStyle(ds, 15)}${d.bodyAlign ? `text-align:${d.bodyAlign};` : ''}">${richTextOut(d.body)}</div>`;
     case 'columns': {
       const cols = d.cols || DEFAULT_COLUMNS;
       const colAlign = d.colAlign || [];
@@ -1719,7 +1741,7 @@ function renderBlockContent(block, editable) {
         ${iconImageHtml || (icon ? `<span class="stmt-icon-display" style="font-size:${iconSize}px; line-height:1.4; color:${iconColor}; flex-shrink:0;">${escapeHtml(icon)}</span>` : '')}
         <div style="flex:1; min-width:0;">
           <div class="editable-text" data-role="title" data-field="title" data-richtext="true" ${ce} data-placeholder="${def.label || 'Statement'}" style="font-weight:700; margin-bottom:4px; ${textTypographyStyle(ds, 15)}${d.titleAlign ? `text-align:${d.titleAlign};` : ''}">${richTextOut(d.title != null ? d.title : (def.label || 'Statement'))}</div>
-          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Add your message here..." style="line-height:1.6; ${textTypographyStyle(ds, 15)}${d.textAlign ? `text-align:${d.textAlign};` : ''}">${richTextOut(d.text || 'Add your message here.')}</div>
+          <div class="editable-text" data-role="body" data-field="text" data-richtext="true" ${ce} data-placeholder="Add your message here..." style="${textTypographyStyle(ds, 15)}${d.textAlign ? `text-align:${d.textAlign};` : ''}">${richTextOut(d.text || 'Add your message here.')}</div>
         </div>
       </div>`;
     }
@@ -1867,7 +1889,7 @@ function renderBlockContent(block, editable) {
         : imagePlaceholder(alt || 'Image placeholder', 140);
       const textBlock = `<div>
         <h3 class="editable-text" data-role="heading" data-field="heading" data-richtext="true" ${ce} data-placeholder="Heading" style="${textTypographyStyle(ds, 16)}">${richTextOut(d.heading || '')}</h3>
-        <div class="editable-text text-sm mt-8" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Supporting paragraph text goes here." style="line-height:1.7; ${textTypographyStyle(ds, 14)}">${richTextOut(d.body || '')}</div>
+        <div class="editable-text text-sm mt-8" data-role="body" data-field="body" data-richtext="true" ${ce} data-placeholder="Supporting paragraph text goes here." style="${textTypographyStyle(ds, 14)}">${richTextOut(d.body || '')}</div>
       </div>`;
       return `<div class="image-text-layout" style="${interactiveSpacingStyle(ds)} display:grid; grid-template-columns:${gridCols}; gap:20px; align-items:center;">
         ${pos === 'right' ? `${textBlock}${imageBlock}` : `${imageBlock}${textBlock}`}
@@ -2336,7 +2358,7 @@ function renderBlockContent(block, editable) {
         <div style="display:grid; grid-template-columns:repeat(${cols}, ${colWidth}px); gap:12px; width:fit-content; max-width:100%;">
           ${items.map((item, i) => `
             <div>
-              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
+              <div class="flip-card" role="button" tabindex="0" aria-label="Card ${i+1}" aria-pressed="false" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" onkeydown="if(event.key===' '||event.key==='Enter'){ event.preventDefault(); event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -2355,15 +2377,17 @@ function renderBlockContent(block, editable) {
     case 'flashcard_stack': {
       const items = normalizeFlashcardItems(d);
       const flipHint = ds.flipHint !== false;
+      const sizeMap = { sm: 140, md: 180, lg: 220 };
+      const cardH = sizeMap[ds.cardSize] || sizeMap.md;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       const backBg = (ds.bg && ds.bg !== 'transparent') ? ds.bg : 'var(--surface-0)';
       const borderStyle = ds.cardBorder === true ? `1px solid ${ds.cardBorderColor || 'var(--border)'}` : 'none';
       return `<div style="${flashcardSpacingStyle(ds)} display:flex; justify-content:${justifyMap[ds.align] || 'flex-start'};">
-        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);">
+        <div class="flashcard-stack-wrap" tabindex="0" style="outline:none; width:min(480px, 100%);" onkeydown="if(event.key==='ArrowLeft')lumioFcsNav(this.querySelector('.fcs-prev'),-1); if(event.key==='ArrowRight')lumioFcsNav(this.querySelector('.fcs-next'),1);" ontouchstart="this._touchX=event.touches[0].clientX" ontouchend="(function(el,e){const dx=e.changedTouches[0].clientX-el._touchX;if(Math.abs(dx)>40){lumioFcsNav(el.querySelector(dx<0?'.fcs-next':'.fcs-prev'),dx<0?1:-1);}})(this,event)">
           ${items.map((item, i) => `
             <div class="fcs-card" data-findex="${i}" style="display:${i===0?'flex':'none'}; flex-direction:column;">
-              <div class="flip-card" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); this.classList.toggle('flipped'); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:220px; cursor:pointer;">
+              <div class="flip-card" role="button" tabindex="0" aria-label="Card ${i+1}" aria-pressed="false" onclick="if(!event.target.closest('.editable-text[contenteditable=true]')){ event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" onkeydown="if(event.key===' '||event.key==='Enter'){ event.preventDefault(); event.stopPropagation(); const f=this.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(this, 'flipped', ${i}); }" style="height:${cardH}px; cursor:pointer;">
                 <div class="flip-card-inner">
                   <div class="flip-card-face flip-card-front" style="${flashcardFrontThemeStyle()} color:#fff; border-radius:${radius}; border:${borderStyle};">
                     ${flashcardFaceContent(item.front, i, 'front', ce, editable)}
@@ -5037,11 +5061,11 @@ function flashcardDesignFields(block, ds) {
       <div class="prop-section-title">Flip Hint</div>
       <label class="flex items-center gap-8"><input type="checkbox" class="design-checkbox" data-prop="flipHint" ${ds.flipHint !== false ? 'checked' : ''}/> Show "Click to flip" hint</label>
     </div>`;
-  const sizeField = block.type === 'flashcard_grid' ? `
+  const sizeField = `
     <div class="prop-section">
       <div class="prop-section-title">Card Size</div>
       ${segControl('design-cardsize', 'cardSize', [{id:'sm',label:'Small'},{id:'md',label:'Medium'},{id:'lg',label:'Large'}], ds.cardSize || 'md')}
-    </div>` : '';
+    </div>`;
   return sizeField + borderField + flipHintField + spacingField;
 }
 
@@ -7459,16 +7483,30 @@ function bindBuilderEvents(course, lesson, blocks) {
     flashSaveStatus();
   }));
 
-  // Flashcards — Content panel: per-face text
-  app.querySelectorAll('.flashcard-face-text').forEach(ta => ta.addEventListener('input', (e) => {
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    const i = parseInt(ta.dataset.findex);
-    const face = ta.dataset.face === 'back' ? 'back' : 'front';
-    items[i][face].text = e.target.value;
-    flashSaveStatus();
-  }));
+  // Shared helper: re-renders the builder while preserving each flip card's
+  // current flipped state. Flip state is held only in the CSS class on the
+  // DOM element (not in block.data), so a full re-render would reset every
+  // card to its front face. This wrapper saves and restores the set of
+  // flipped card indices so an author editing the back face is not disrupted
+  // by panel actions (image add/remove, card reorder, etc.).
+  function rerenderFlashcardBlock(block) {
+    const blockEl = app.querySelector(`.canvas-block[data-block-id="${block.id}"]`);
+    const flippedSet = new Set();
+    if (blockEl) {
+      blockEl.querySelectorAll('.flip-card').forEach((fc, i) => {
+        if (fc.classList.contains('flipped')) flippedSet.add(i);
+      });
+    }
+    renderLessonBuilder(lesson.id);
+    if (flippedSet.size > 0) {
+      const newBlockEl = app.querySelector(`.canvas-block[data-block-id="${block.id}"]`);
+      if (newBlockEl) {
+        newBlockEl.querySelectorAll('.flip-card').forEach((fc, i) => {
+          if (flippedSet.has(i)) { fc.classList.add('flipped'); fc.setAttribute('aria-pressed', 'true'); }
+        });
+      }
+    }
+  }
 
   // Flashcards — Content panel: per-face image via Media Picker
   app.querySelectorAll('.flashcard-face-image-trigger').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7483,12 +7521,12 @@ function bindBuilderEvents(course, lesson, blocks) {
       currentSrc: items[i][face].image,
       onInsert: (result) => {
         items[i][face].image = result.src;
-        renderLessonBuilder(lesson.id);
+        rerenderFlashcardBlock(block);
         flashSaveStatus();
       },
       onRemove: () => {
         items[i][face].image = null;
-        renderLessonBuilder(lesson.id);
+        rerenderFlashcardBlock(block);
         flashSaveStatus();
       },
     });
@@ -7500,7 +7538,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = normalizeFlashcardItems(block.data);
     const face = btn.dataset.face === 'back' ? 'back' : 'front';
     items[parseInt(btn.dataset.findex)][face].image = null;
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
 
@@ -7513,7 +7551,7 @@ function bindBuilderEvents(course, lesson, blocks) {
       const i = parseInt(seg.dataset.findex);
       const face = seg.dataset.face === 'back' ? 'back' : 'front';
       items[i][face].imageFit = btn.dataset.val;
-      renderLessonBuilder(lesson.id);
+      rerenderFlashcardBlock(block);
       flashSaveStatus();
     }));
   });
@@ -7525,7 +7563,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     if (!block) return;
     const items = normalizeFlashcardItems(block.data);
     items.push({ front: { text: '', image: null, imageFit: 'cover' }, back: { text: '', image: null, imageFit: 'cover' } });
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.flashcard-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7535,7 +7573,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = normalizeFlashcardItems(block.data);
     const i = parseInt(btn.dataset.findex);
     items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.flashcard-remove').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7545,7 +7583,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = normalizeFlashcardItems(block.data);
     if (items.length <= 1) return;
     items.splice(parseInt(btn.dataset.findex), 1);
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.flashcard-move-up').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7556,7 +7594,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const i = parseInt(btn.dataset.findex);
     if (i <= 0) return;
     [items[i - 1], items[i]] = [items[i], items[i - 1]];
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.flashcard-move-down').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7567,7 +7605,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const i = parseInt(btn.dataset.findex);
     if (i >= items.length - 1) return;
     [items[i + 1], items[i]] = [items[i], items[i + 1]];
-    renderLessonBuilder(lesson.id);
+    rerenderFlashcardBlock(block);
     flashSaveStatus();
   }));
 
