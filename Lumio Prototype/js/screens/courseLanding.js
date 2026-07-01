@@ -732,10 +732,13 @@ function openPublishModal(course) {
       </div>` : '';
 
     const summaryPanel = `
-      <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:16px 18px; margin-bottom:20px;">
+      <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 18px; margin-bottom:20px;">
         <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Course Summary</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;">
-          <div><span class="text-sm text-muted">Title</span><div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title || '—'}</div></div>
+        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border);">
+          <div class="text-sm text-muted" style="margin-bottom:2px;">Title</div>
+          <div style="font-size:14px; font-weight:700; color:var(--ink-900); word-break:break-word; line-height:1.4;">${escapeHtml(course.title || '—')}</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 24px;">
           <div><span class="text-sm text-muted">Language</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.language || 'English'}</div></div>
           <div><span class="text-sm text-muted">Lessons</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.lessons.length}</div></div>
           <div><span class="text-sm text-muted">Assessments</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.assessments.length}</div></div>
@@ -809,7 +812,7 @@ function openPublishModal(course) {
             <div class="tab ${activeTab === 'publish' ? 'active' : ''}" data-tab="publish">Publish</div>
             <div class="tab ${activeTab === 'history' ? 'active' : ''}" data-tab="history">History${course.publishHistory.length ? ` (${course.publishHistory.length})` : ''}</div>
           </div>
-          <div style="flex:1; overflow-y:auto; padding:20px 28px 24px;" id="publish-tab-body">
+          <div style="flex:1; overflow-y:auto; overflow-x:hidden; padding:20px 28px 24px;" id="publish-tab-body">
             ${activeTab === 'publish' ? publishTabContent : historyTabContent}
           </div>
           <div style="padding:16px 28px; border-top:1px solid var(--border); flex-shrink:0; display:flex; justify-content:flex-end;">
@@ -876,7 +879,7 @@ function openPublishModal(course) {
         <div style="background:var(--surface-1, var(--surface-0)); border:1px solid var(--border); border-radius:var(--r-md); padding:16px 18px; margin-bottom:20px;">
           <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Course Summary</div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;">
-            <div><span class="text-sm text-muted">Title</span><div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title || '—'}</div></div>
+            <div style="min-width:0;"><span class="text-sm text-muted">Title</span><div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title || '—'}</div></div>
             <div><span class="text-sm text-muted">Language</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.language || 'English'}</div></div>
             <div><span class="text-sm text-muted">Lessons</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.lessons.length}</div></div>
             <div><span class="text-sm text-muted">Assessments</span><div style="font-size:13px; font-weight:600; color:var(--ink-900);">${course.assessments.length}</div></div>
@@ -1035,7 +1038,7 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-thumb-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-thumb-upload">${course.thumbnailImage.src ? '🔄 Replace Thumbnail' : '📤 Upload Thumbnail'}</button>
-            ${course.thumbnailImage.src ? `<button class="btn btn-secondary btn-sm text-destructive" id="cs-thumb-remove">🗑️ Remove Thumbnail</button>` : ''}
+            ${course.thumbnailImage.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-thumb-remove">🗑️ Remove Thumbnail</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-thumb-reset">↩️ Restore Default Thumbnail</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
@@ -1310,7 +1313,7 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-hero-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-hero-upload">${hasImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-            ${hasImage ? `<button class="btn btn-secondary btn-sm text-destructive" id="cs-hero-remove">🗑️ Remove Image</button>` : ''}
+            ${hasImage ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-hero-remove">🗑️ Remove Image</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-hero-reset">↩️ Restore Default Image</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>

@@ -37,7 +37,7 @@ function renderProfile() {
             <div id="profile-avatar-wrap">${avatarHtml(u, 72)}</div>
             <div class="flex gap-12" style="flex-wrap:wrap;">
               <button class="btn btn-secondary btn-sm" id="profile-photo-upload">${u.avatar ? '🔄 Replace Photo' : '📤 Upload Photo'}</button>
-              ${u.avatar ? `<button class="btn btn-secondary btn-sm text-destructive" id="profile-photo-remove">🗑️ Remove Photo</button>` : ''}
+              ${u.avatar ? `<button class="btn btn-ghost btn-sm text-destructive" id="profile-photo-remove">🗑️ Remove Photo</button>` : ''}
             </div>
           </div>
         </div>

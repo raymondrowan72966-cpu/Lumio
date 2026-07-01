@@ -323,7 +323,7 @@ function trashCard(p) {
         <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
         <div class="flex gap-12 mt-16">
           <button class="btn btn-secondary btn-sm restore-btn" data-restore="${p.id}" style="flex:1;">↩️ Restore</button>
-          <button class="btn btn-secondary btn-sm delete-forever-btn text-destructive" data-delete-forever="${p.id}" style="flex:1;">🗑️ Delete Forever</button>
+          <button class="btn btn-ghost btn-sm delete-forever-btn text-destructive" data-delete-forever="${p.id}" style="flex:1;">🗑️ Delete Forever</button>
         </div>
       </div>
     </div>
@@ -1036,7 +1036,7 @@ function openShareModal(id) {
         </div>
 
         <div class="flex gap-12" style="justify-content:space-between; align-items:center;">
-          <button class="btn btn-ghost btn-sm text-destructive" id="share-remove" style="${currentScope ? '' : 'visibility:hidden;'}">Remove sharing</button>
+          <button class="btn btn-ghost btn-sm text-destructive" id="share-remove" style="${currentScope ? '' : 'visibility:hidden;'}">🗑️ Remove Sharing</button>
           <div class="flex gap-12">
             <button class="btn btn-ghost" id="share-cancel">Cancel</button>
             <button class="btn btn-primary" id="share-save">Save</button>

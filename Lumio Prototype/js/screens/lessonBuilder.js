@@ -23,6 +23,10 @@ const BuilderUI = {
   // accordion/tabs/process/labelled_graphic render branches below, written
   // by lumioAccordionToggle/lumioTabSwitch/lumioProcessNav/lumioHotspotToggle.
   openItemState: {},
+  // Flip state for flashcard blocks: keyed by "blockIdx-cardIdx" → boolean.
+  // Survives re-renders; written by the flip icon onclick, read after every
+  // renderLessonBuilder call to re-apply .flipped classes to the rebuilt DOM.
+  flashcardFlipState: {},
 };
 
 // Resolves the course + lesson/assessment object for a given lessonId.
@@ -510,7 +514,7 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   // Placing handlers here (not on .flip-card) means: clicking text, images,
   // whitespace or selections never flips the card, and typing Space/Enter
   // inside a contenteditable cannot bubble to a card-level keydown handler.
-  const flipIcon = `<button class="flip-card-flipicon" type="button" aria-label="Flip card" aria-pressed="false" onclick="event.stopPropagation(); var fc=this.closest('.flip-card'); var f=fc.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(fc,'flipped',${i});" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();var fc=this.closest('.flip-card');var f=fc.classList.toggle('flipped');this.setAttribute('aria-pressed',f);lumioRecordProgress(fc,'flipped',${i});}">↻</button>`;
+  const flipIcon = `<button class="flip-card-flipicon" type="button" aria-label="Flip card" aria-pressed="false" onclick="event.stopPropagation(); var fc=this.closest('.flip-card'); var f=fc.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(fc,'flipped',${i}); try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();var fc=this.closest('.flip-card');var f=fc.classList.toggle('flipped');this.setAttribute('aria-pressed',f);lumioRecordProgress(fc,'flipped',${i});try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}}">↻</button>`;
   // Builder always keeps the field present (so an empty face stays
   // click-to-edit); learner-facing contexts only render it when there's
   // genuinely something to show — this is what removes the reserved
@@ -1096,6 +1100,16 @@ function refreshGenericCanvas(block, index) {
   content.innerHTML = renderBlockContent(block, true);
   const blocks = LumioState.lessons[LumioState.currentLessonId];
   content.querySelectorAll('.editable-text[contenteditable="true"]').forEach(elx => bindEditableTextField(elx, blocks));
+  // Restore flip state after innerHTML replacement (same logic as post-renderLessonBuilder).
+  content.querySelectorAll('.flip-card').forEach(fc => {
+    const colEl = fc.querySelector('[data-col]');
+    const cIdx = colEl ? colEl.dataset.col : '0';
+    if (BuilderUI.flashcardFlipState[index + '-' + cIdx]) {
+      fc.classList.add('flipped');
+      const icon = fc.querySelector('.flip-card-flipicon');
+      if (icon) icon.setAttribute('aria-pressed', 'true');
+    }
+  });
 }
 
 /* Re-apply Audio block padding directly to the DOM for live preview during slider drags. */
@@ -1970,9 +1984,9 @@ function renderBlockContent(block, editable) {
               : imagePlaceholder(item.title || 'Item', 150)}
             <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
-            ${editable ? `<div class="flex items-center justify-center gap-8 mt-8">
+            ${editable ? `<div class="flex items-center justify-center gap-8 mt-8" style="flex-wrap:wrap;">
               <button class="btn btn-secondary btn-sm grid-item-image-trigger" data-gindex="${i}">${item.imageUrl ? '🔄 Replace' : '📤 Upload'}</button>
-              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove text-destructive" data-gindex="${i}">🗑️</button>` : ''}
+              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove text-destructive" data-gindex="${i}">🗑️ Remove Image</button>` : ''}
             </div>` : ''}
           </div>
         `).join('')}
@@ -5011,9 +5025,9 @@ function flashcardContentPanel(block, d) {
         <div class="field">
           <label>${face === 'front' ? 'Front' : 'Back'}</label>
           <p class="text-sm text-muted mb-4">Click directly on the ${face} text on the canvas to edit it.</p>
-          <div class="flex items-center gap-8 mt-4">
+          <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? '🔄 Change Image' : '📤 Add Image'}</button>
-            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove text-destructive" data-findex="${i}" data-face="${face}">Remove image</button>` : ''}
+            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove text-destructive" data-findex="${i}" data-face="${face}">🗑️ Remove Image</button>` : ''}
           </div>
           ${item[face].image ? `
             <p class="text-sm text-muted mb-4 mt-8">Image layout</p>
@@ -5252,13 +5266,13 @@ function itemMediaContentFields(item, listKey, i) {
   return `
     <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="image" data-kind="image" data-title="Image">${item.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="image">Remove image</button>` : ''}
+      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="image">🗑️ Remove Image</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="video" data-kind="video" data-title="Video">${item.video ? '🔄 Change Video' : '📤 Add Video'}</button>
-      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="video">Remove video</button>` : ''}
+      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="video">🗑️ Remove Video</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="audio" data-kind="audio" data-title="Audio">${item.audio ? '🔄 Change Audio' : '📤 Add Audio'}</button>
-      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="audio">Remove audio</button>` : ''}
+      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="audio">🗑️ Remove Audio</button>` : ''}
       <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="file" data-kind="file" data-title="Attachment">${item.file ? '🔄 Change File' : '📤 Add Attachment'}</button>
-      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="file">Remove file</button>` : ''}
+      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="file">🗑️ Remove File</button>` : ''}
     </div>
     ${item.audio ? `<div class="field mt-8"><label>Audio Transcript</label><textarea class="textarea lumio-item-text" rows="2" data-list="${listKey}" data-iindex="${i}" data-field="audioTranscript">${escapeHtml(item.audioTranscript || '')}</textarea></div>` : ''}
     ${item.image ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="${listKey}" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
@@ -5313,12 +5327,12 @@ function quoteCarouselContentPanel(block, d) {
         ${itemManageToolbar('quotes', i, quotes.length)}
       </div>
       <p class="text-sm text-muted mb-8">Click directly on the quote text or attribution in the canvas to edit them.</p>
-      <div class="flex items-center gap-12">
+      <div class="flex items-center gap-12" style="flex-wrap:wrap;">
         <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
           ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
         </div>
         <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="quotes" data-iindex="${i}" data-field="avatar" data-kind="image" data-title="Avatar Image">${q.avatar ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="quotes" data-iindex="${i}" data-field="avatar">Remove image</button>` : ''}
+        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="quotes" data-iindex="${i}" data-field="avatar">🗑️ Remove Image</button>` : ''}
       </div>
     </div>
   `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="quotes">+ Add Quote</button>` + aiActions();
@@ -5340,7 +5354,7 @@ function galleryCarouselContentPanel(block, d) {
       <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
       <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="items" data-iindex="${i}" data-field="src" data-kind="image" data-title="Image">${item.src ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="items" data-iindex="${i}" data-field="src">Remove image</button>` : ''}
+        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="items" data-iindex="${i}" data-field="src">🗑️ Remove Image</button>` : ''}
       </div>
       ${item.src ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="items" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
     </div>
@@ -5458,7 +5472,7 @@ function labelledGraphicContentPanel(block, d) {
       <div class="prop-section-title">Primary Image</div>
       <div class="flex items-center gap-8" style="flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm lumio-lg-image-trigger">${d.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove text-destructive">Remove image</button>` : ''}
+        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove text-destructive">🗑️ Remove Image</button>` : ''}
       </div>
       <p class="text-sm text-muted mt-8">Drag the numbered markers directly on the canvas to position each hotspot.</p>
     </div>`;
@@ -5533,7 +5547,7 @@ function scenarioContentPanel(block, d) {
     `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   const mediaBtn = (sindex, field, kind, title, current) => `
     <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `🔄 Change ${title}` : `📤 Add ${title}`}</button>
-    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove text-destructive" data-sindex="${sindex}" data-field="${field}">Remove</button>` : ''}`;
+    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove text-destructive" data-sindex="${sindex}" data-field="${field}">🗑️ Remove</button>` : ''}`;
   return scenes.map((scene, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
@@ -6070,6 +6084,10 @@ function bindBuilderEvents(course, lesson, blocks) {
 
     const idx = parseInt(b.dataset.index);
     const editableTarget = e.target.closest('.editable-text[contenteditable="true"]');
+    // List number markers are their own contenteditable spans (not .editable-text).
+    // Without this check, clicking a marker on an already-selected block would
+    // fall through to the collapse/re-render path and wipe the caret.
+    const numMarkerTarget = e.target.closest('.list-num-marker[contenteditable]');
     // Failed Acceptance Criteria Correction Sprint (Issue 4): every
     // nested-item block's own interaction control (tab buttons, accordion
     // headers, process nav/dots, hotspot markers/panels) has its own
@@ -6090,7 +6108,7 @@ function bindBuilderEvents(course, lesson, blocks) {
 
     // If the block is already selected/expanded, let a click on its text
     // place the cursor natively — don't re-render and lose focus.
-    if (editableTarget && BuilderUI.selected === idx && BuilderUI.expandedBlocks.has(idx)) {
+    if ((editableTarget || numMarkerTarget) && BuilderUI.selected === idx && BuilderUI.expandedBlocks.has(idx)) {
       return;
     }
     // Same idea for interactive controls: if the block is already selected,
@@ -6554,6 +6572,23 @@ function bindBuilderEvents(course, lesson, blocks) {
   // Text blocks — universal inline (contenteditable) editing, plus the
   // rich-text formatting toolbar for fields that support it.
   app.querySelectorAll('.editable-text[contenteditable="true"]').forEach(elx => bindEditableTextField(elx, blocks));
+
+  // Restore flip state after re-render. The .flipped CSS class only lives in
+  // the DOM; any renderLessonBuilder() call wipes it. BuilderUI.flashcardFlipState
+  // persists the intended state across re-renders so the author doesn't lose
+  // their flip position when selecting a block or making property panel changes.
+  app.querySelectorAll('.flip-card').forEach(fc => {
+    const cb = fc.closest('.canvas-block');
+    if (!cb) return;
+    const bIdx = cb.dataset.index;
+    const colEl = fc.querySelector('[data-col]');
+    const cIdx = colEl ? colEl.dataset.col : '0';
+    if (BuilderUI.flashcardFlipState[bIdx + '-' + cIdx]) {
+      fc.classList.add('flipped');
+      const icon = fc.querySelector('.flip-card-flipicon');
+      if (icon) icon.setAttribute('aria-pressed', 'true');
+    }
+  });
 
   // List blocks — on-canvas item management (add / remove / reorder)
   app.querySelectorAll('.list-item-add').forEach(btn => btn.addEventListener('click', (e) => {

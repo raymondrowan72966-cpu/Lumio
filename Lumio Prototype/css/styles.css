@@ -262,6 +262,9 @@ button { font-family: var(--font-body); cursor: pointer; }
   border: none;
 }
 .btn-ghost:hover { background: var(--pastel-lavender); }
+/* Destructive ghost buttons get a red-tint hover/focus so the intent is clear */
+.btn-ghost.text-destructive:hover { background: var(--color-destructive-tint); }
+.btn-ghost.text-destructive:focus-visible { outline: 2px solid var(--color-destructive); outline-offset: 2px; background: var(--color-destructive-tint); }
 
 .btn-danger {
   background: var(--color-destructive);
@@ -1016,7 +1019,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .text-destructive { color: var(--color-destructive); }
 .text-success { color: var(--color-success); }
 .prop-section input[type="checkbox"],
-.prop-panel input[type="checkbox"] {
+.prop-panel input[type="checkbox"],
+#right-panel-scroll input[type="checkbox"] {
   accent-color: var(--violet); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
 }
 /* Prop panel baseline typography — overrides scattered inline font-size:13px */

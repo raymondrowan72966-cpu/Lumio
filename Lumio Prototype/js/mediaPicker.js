@@ -193,7 +193,7 @@ function openMediaPicker(opts) {
           <input type="file" id="mp-file-input" accept="${mediaPickerFileAccept(opts)}" style="display:none" />
           <div class="flex gap-12 mt-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="mp-browse">${state.src ? `🔄 Replace ${nounCap}` : '📤 Browse File'}</button>
-            ${state.src ? `<button class="btn btn-secondary btn-sm text-destructive" id="mp-remove">🗑️ Remove ${nounCap}</button>` : ''}
+            ${state.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="mp-remove">🗑️ Remove ${nounCap}</button>` : ''}
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: ${cfg.formatsLabel} · Max size ${cfg.maxLabel}.</div>
           <div id="mp-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>

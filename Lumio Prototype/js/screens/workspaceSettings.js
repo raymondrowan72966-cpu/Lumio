@@ -238,7 +238,7 @@ function userRow(user) {
       <span class="pill ${user.status === 'active' ? 'pill-teal' : 'pill-grey'}">${user.status === 'active' ? 'Active' : 'Disabled'}</span>
       <div class="flex gap-8">
         <button class="btn btn-ghost btn-sm" data-user-toggle="${user.id}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
-        <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">Remove</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">🗑️ Remove</button>
       </div>
     </div>
   `;
@@ -256,7 +256,7 @@ function invitationRow(inv) {
       <span class="pill pill-grey">Pending</span>
       <div class="flex gap-8">
         <button class="btn btn-ghost btn-sm" data-invite-copy="${inv.id}">Copy Link</button>
-        <button class="btn btn-ghost btn-sm text-destructive" data-invite-revoke="${inv.id}">Revoke</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-invite-revoke="${inv.id}">🗑️ Revoke</button>
       </div>
     </div>
   `;

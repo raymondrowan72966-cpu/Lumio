@@ -1775,17 +1775,50 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   function scrollContinueTargetIntoView(lessonId, nextIndex) {
     const target = document.querySelector(`[data-lp-lesson="${lessonId}"][data-lp-index="${nextIndex}"]`);
     if (!target) return;
+
+    // Detect the real scroll owner. In mobile/tablet preview the content lives
+    // inside a fixed-height device frame whose <main> has overflow-y:auto —
+    // window.scrollY is always 0 in that layout, so window.scrollTo does nothing.
+    // Walk up the DOM to find the first element that actually scrolls, falling
+    // back to null (→ window) for desktop preview and all published exports.
+    function findScrollParent(el) {
+      let node = el.parentElement;
+      while (node && node !== document.documentElement) {
+        if (/auto|scroll/.test(getComputedStyle(node).overflowY)) return node;
+        node = node.parentElement;
+      }
+      return null;
+    }
+    const scrollParent = findScrollParent(target);
+
     let settled = false;
     const doScroll = () => {
       if (settled) return;
       settled = true;
-      requestAnimationFrame(() => {
-        const rect = target.getBoundingClientRect();
-        const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-        if (fullyVisible) return;
-        window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
-      });
+      // Double rAF: first frame ensures the freshly-injected DOM nodes are in
+      // the render tree; second ensures getBoundingClientRect() reflects the
+      // fully-settled layout (avoids measuring mid-reflow after innerHTML swap).
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (scrollParent) {
+          // In-frame scroll: mobile/tablet preview (<main> is the scroll owner).
+          const parentRect = scrollParent.getBoundingClientRect();
+          const targetRect = target.getBoundingClientRect();
+          const fullyVisible = targetRect.top >= parentRect.top && targetRect.bottom <= parentRect.bottom;
+          if (!fullyVisible) {
+            const relTop = targetRect.top - parentRect.top + scrollParent.scrollTop;
+            scrollParent.scrollTo({ top: Math.max(0, relTop - 100), behavior: 'smooth' });
+          }
+        } else {
+          // Window scroll: desktop preview and all published formats (HTML/SCORM/xAPI).
+          const rect = target.getBoundingClientRect();
+          const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+          if (!fullyVisible) {
+            window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
+          }
+        }
+      }));
     };
+
     const pendingImages = Array.from(target.querySelectorAll('img')).filter(img => !img.complete);
     if (pendingImages.length === 0) { doScroll(); return; }
     let remaining = pendingImages.length;
