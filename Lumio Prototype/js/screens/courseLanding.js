@@ -933,7 +933,118 @@ function openPublishModal(course) {
     else if (btn.dataset.publishFormat === 'scorm2004_3') publishScorm2004_3rdPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm2004_4') publishScorm2004Package(course, btn);
     else if (btn.dataset.publishFormat === 'xapi') publishXapiPackage(course, btn);
-    else if (btn.dataset.publishFormat === 'pdf') publishPdfPackage(course, btn);
+    else if (btn.dataset.publishFormat === 'pdf') openPdfOptionsPanel(course, btn, overlay);
+  });
+}
+
+/* ============================================================
+   PDF EXPORT OPTIONS PANEL
+   ============================================================ */
+function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
+  const panelHtml = `
+    <div class="overlay" id="pdf-options-overlay" style="z-index:1001;">
+      <div class="modal" style="width:480px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; padding:0;">
+        <div class="flex items-center justify-between" style="padding:22px 28px 0; flex-shrink:0;">
+          <div>
+            <div style="font-size:18px; font-weight:700; color:var(--ink-900);">PDF Export Options</div>
+            <div class="text-sm text-muted" style="margin-top:2px;">Configure your PDF document before downloading.</div>
+          </div>
+          <button class="btn-icon" id="pdf-options-close" aria-label="Close">✕</button>
+        </div>
+        <div style="padding:22px 28px 28px; overflow-y:auto; display:flex; flex-direction:column; gap:18px;">
+
+          <div>
+            <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Page Size</label>
+            <div style="display:flex; gap:8px;">
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-page-size" value="letter" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Letter <span class="text-muted">(US)</span></span>
+              </label>
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-page-size" value="a4" style="accent-color:var(--primary);"> <span style="font-size:13px;">A4 <span class="text-muted">(International)</span></span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Orientation</label>
+            <div style="display:flex; gap:8px;">
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-orientation" value="portrait" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Portrait</span>
+              </label>
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-orientation" value="landscape" style="accent-color:var(--primary);"> <span style="font-size:13px;">Landscape</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Export Profile</label>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-profile" value="learner" checked style="accent-color:var(--primary); margin-top:2px;">
+                <span>
+                  <span style="font-size:13px; font-weight:600; color:var(--ink-900);">Learner Guide</span>
+                  <span class="text-sm text-muted" style="display:block; margin-top:2px;">All content blocks — narrative, activities, knowledge checks and media.</span>
+                </span>
+              </label>
+              <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-profile" value="assessment" style="accent-color:var(--primary); margin-top:2px;">
+                <span>
+                  <span style="font-size:13px; font-weight:600; color:var(--ink-900);">Assessment Pack</span>
+                  <span class="text-sm text-muted" style="display:block; margin-top:2px;">Knowledge check questions only — ideal for printed assessments.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div id="pdf-answers-row">
+            <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Knowledge Check Answers</label>
+            <div style="display:flex; gap:8px;">
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-answers" value="show" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Questions + Answers</span>
+              </label>
+              <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
+                <input type="radio" name="pdf-answers" value="hide" style="accent-color:var(--primary);"> <span style="font-size:13px;">Questions Only</span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+        <div style="padding:0 28px 24px; flex-shrink:0; display:flex; gap:10px; justify-content:flex-end;">
+          <button class="btn btn-secondary" id="pdf-options-cancel">Cancel</button>
+          <button class="btn btn-primary" id="pdf-options-export">📄 Generate PDF</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', panelHtml);
+  const panel = document.getElementById('pdf-options-overlay');
+
+  function closePanel() { panel.remove(); }
+
+  panel.querySelector('#pdf-options-close').addEventListener('click', closePanel);
+  panel.querySelector('#pdf-options-cancel').addEventListener('click', closePanel);
+
+  // Toggle answers row visibility based on profile
+  panel.querySelectorAll('[name="pdf-profile"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const answersRow = panel.querySelector('#pdf-answers-row');
+      answersRow.style.display = radio.value === 'assessment' ? '' : '';
+    });
+  });
+
+  panel.querySelector('#pdf-options-export').addEventListener('click', async () => {
+    const pageSize    = panel.querySelector('[name="pdf-page-size"]:checked').value;
+    const orientation = panel.querySelector('[name="pdf-orientation"]:checked').value;
+    const profile     = panel.querySelector('[name="pdf-profile"]:checked').value;
+    const answers     = panel.querySelector('[name="pdf-answers"]:checked').value;
+    closePanel();
+    await publishPdfPackage(course, triggerBtn, {
+      pageSize,
+      orientation,
+      profile,
+      includeAnswers: answers !== 'hide',
+    });
   });
 }
 

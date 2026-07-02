@@ -7875,7 +7875,12 @@ function bindBuilderEvents(course, lesson, blocks) {
     e.preventDefault();
     blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
     renderLessonBuilder(lesson.id);
-    toast('✨ Added a knowledge check based on this lesson', '✨');
+    NotifySystem.notify({
+      message: '✨ Knowledge check added',
+      detail: lesson.title,
+      type: 'ai',
+      dest: { route: 'lesson', lessonId: lesson.id, blockIndex: blocks.length - 1 },
+    });
   });
   app.querySelector('#link-objective')?.addEventListener('click', () => {
     if (!course) return;
@@ -8005,7 +8010,12 @@ function aiDraftLesson(lesson, blocks) {
       { id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) }
     );
     renderLessonBuilder(lesson.id);
-    toast('✨ Drafted a starting structure — feel free to edit any block', '✨');
+    NotifySystem.notify({
+      message: '✨ Lesson structure drafted',
+      detail: lesson.title + ' — click to open and review',
+      type: 'ai',
+      dest: { route: 'lesson', lessonId: lesson.id, blockIndex: 0 },
+    });
   }, 1100);
 }
 

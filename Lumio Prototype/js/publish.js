@@ -169,6 +169,11 @@ async function buildExportPackage(course, triggerBtn, adapter) {
   const originalLabel = triggerBtn ? triggerBtn.textContent : '';
   if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
 
+  const pgId = NotifySystem.progress(`Building ${adapter.formatLabel}…`, {
+    icon: '📦',
+    projectId: course.id,
+    dest: { route: 'course', courseId: course.id, openPublish: true },
+  });
   try {
     // Collect all lessons and assessments belonging to this course.
     const lessonData = {};
@@ -181,6 +186,7 @@ async function buildExportPackage(course, triggerBtn, adapter) {
 
     // Collect all asset:// refs from this course and fetch their blobs.
     const assetRefs = _collectProjectAssetRefs(course, lessonData);
+    NotifySystem.updateProgress(pgId, 20, 'Collecting assets…');
     const assetEntries = await AssetStore.exportAll(assetRefs);
 
     // Build publish-safe path map: { 'asset://hash' → 'assets/hash.ext' }
@@ -194,6 +200,7 @@ async function buildExportPackage(course, triggerBtn, adapter) {
       let finalExt = _mimeToExt(a.mimeType);
 
       if (a.mimeType && a.mimeType.startsWith('image/')) {
+        NotifySystem.updateProgress(pgId, 40, 'Optimising images…');
         const opt = await optimizeImageForPublish(a.blob, a.mimeType);
         finalBlob = opt.blob;
         finalMime = opt.mimeType;
@@ -243,6 +250,7 @@ ${jsBlocks}
     const manifestFile = adapter.buildManifestFile ? adapter.buildManifestFile(course, project) : null;
     const extraFiles = adapter.buildExtraFiles ? adapter.buildExtraFiles({ course, lessonData }) : [];
     const safeName = (course.title || 'course').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
+    NotifySystem.updateProgress(pgId, 80, 'Packaging…');
     const zipBytes = buildZip([
       ...(manifestFile ? [manifestFile] : []),
       { name: 'index.html', content: html },
@@ -261,10 +269,10 @@ ${jsBlocks}
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: adapter.formatLabel, version: course.publishVersion || '1.0', status: 'success' });
     scheduleLumioSave();
-    toast(adapter.successMessage({ assetEntries, savedBytes }), adapter.successIcon);
+    NotifySystem.complete(pgId, adapter.successMessage({ assetEntries, savedBytes }), 'export');
   } catch (err) {
     console.error(`[Lumio Publish] ${adapter.formatLabel} publish failed:`, err);
-    toast(`${adapter.formatLabel} publish failed — see console`, '❌');
+    NotifySystem.complete(pgId, `${adapter.formatLabel} export failed — see console`, 'error');
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: adapter.formatLabel, version: course.publishVersion || '1.0', status: 'failed' });
     scheduleLumioSave();
@@ -1023,13 +1031,18 @@ async function publishXapiPackage(course, triggerBtn) {
    normalizeItemList, normalizeKcOptions, normalizeFlashcardItems)
    lessonBuilder.js already defines, not a second parser.
    ============================================================ */
-async function publishPdfPackage(course, triggerBtn) {
+async function publishPdfPackage(course, triggerBtn, opts) {
   const gateError = checkPublishGate(course);
   if (gateError) { toast(gateError, '⚠️'); return; }
 
   const originalLabel = triggerBtn ? triggerBtn.textContent : '';
   if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = 'Generating…'; }
 
+  const pgId = NotifySystem.progress('Generating PDF…', {
+    icon: '📄',
+    projectId: course.id,
+    dest: { route: 'course', courseId: course.id, openPublish: true },
+  });
   try {
     const lessonData = {};
     (course.lessons || []).forEach(l => {
@@ -1040,9 +1053,11 @@ async function publishPdfPackage(course, triggerBtn) {
     });
 
     const assetRefs = _collectProjectAssetRefs(course, lessonData);
+    NotifySystem.updateProgress(pgId, 20, 'Collecting assets…');
     const assetEntries = await AssetStore.exportAll(assetRefs);
 
-    const pdfBytes = await renderCoursePdf(course, lessonData, assetEntries);
+    NotifySystem.updateProgress(pgId, 55, 'Rendering pages…');
+    const pdfBytes = await renderCoursePdf(course, lessonData, assetEntries, opts || {});
 
     const safeName = (course.title || 'course').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -1056,10 +1071,10 @@ async function publishPdfPackage(course, triggerBtn) {
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'success' });
     scheduleLumioSave();
-    toast(`PDF downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, '📄');
+    NotifySystem.complete(pgId, `PDF downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, 'export');
   } catch (err) {
     console.error('[Lumio Publish] PDF publish failed:', err);
-    toast('PDF publish failed — see console', '❌');
+    NotifySystem.complete(pgId, 'PDF export failed — see console', 'error');
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'failed' });
     scheduleLumioSave();

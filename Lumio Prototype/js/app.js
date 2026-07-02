@@ -560,11 +560,14 @@ function pushReviewHistory(project, action, comment) {
 
 // In-platform notifications (Phase 7) — no email integration, just a
 // persisted, per-user ledger surfaced via the notification bell.
-function addNotification(userId, message, projectId) {
+function addNotification(userId, message, projectId, opts) {
   if (!userId) return;
   if (!Array.isArray(LumioState.notifications)) LumioState.notifications = [];
   LumioState.notifications.unshift({
     id: generateUniqueId('n'), userId, message, projectId,
+    type: (opts && opts.type) || 'review',
+    icon: (opts && opts.icon) || null,
+    detail: (opts && opts.detail) || null,
     createdAt: Date.now(), read: false,
   });
 }
@@ -606,25 +609,39 @@ function transitionProjectStatus(project, action, comment) {
     // the Workspace Owner a real generated id, that hardcoded target
     // silently pointed at a user who may not exist — the notification was
     // created but nobody could ever see it. Resolved dynamically instead.
-    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was submitted for review by ${currentUserDisplayName()}.`, project.id);
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was submitted for review by ${currentUserDisplayName()}.`, project.id, {
+      type: 'review', dest: { route: 'workspace-settings' },
+    });
   } else if (action === 'approve') {
     project.reviewStatus = 'approved';
     project.reviewedBy = getCurrentUser()?.id;
     project.reviewedAt = now;
     project.reviewComments = comment || null;
-    addNotification(project.ownerId, `"${title}" was approved.`, project.id);
+    addNotification(project.ownerId, `"${title}" was approved.`, project.id, {
+      type: 'review', dest: { route: 'course', courseId: project.id },
+    });
   } else if (action === 'reject') {
     project.reviewStatus = 'rejected';
     project.reviewedBy = getCurrentUser()?.id;
     project.reviewedAt = now;
     project.reviewComments = comment;
-    addNotification(project.ownerId, `"${title}" was rejected.`, project.id);
+    addNotification(project.ownerId, `"${title}" was rejected.`, project.id, {
+      type: 'review',
+      detail: comment ? `Reviewer comment: ${comment}` : null,
+      dest: { route: 'course', courseId: project.id },
+    });
   } else if (action === 'publish' || action === 'republish') {
-    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was ${action === 'republish' ? 're-published' : 'published'} by ${currentUserDisplayName()}.`, project.id);
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was ${action === 'republish' ? 're-published' : 'published'} by ${currentUserDisplayName()}.`, project.id, {
+      type: 'review', dest: { route: 'course', courseId: project.id, openPublish: true },
+    });
   } else if (action === 'archive') {
-    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was archived by ${currentUserDisplayName()}.`, project.id);
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was archived by ${currentUserDisplayName()}.`, project.id, {
+      type: 'review', dest: { route: 'projects' },
+    });
   } else if (action === 'restore') {
-    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was restored from archive by ${currentUserDisplayName()}.`, project.id);
+    addNotification(getWorkspaceOwnerIdForProject(project), `"${title}" was restored from archive by ${currentUserDisplayName()}.`, project.id, {
+      type: 'review', dest: { route: 'projects' },
+    });
   }
   pushReviewHistory(project, action, comment);
   project.status = toStatus;
@@ -1963,16 +1980,232 @@ function confirmLeaveModal(message, onConfirm) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
-function toast(msg, icon) {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  const t = el(`<div class="toast">${icon ? `<span>${icon}</span>` : ''}<span>${msg}</span></div>`);
-  document.body.appendChild(t);
-  setTimeout(() => {
-    t.classList.add('toast-leaving');
-    t.addEventListener('animationend', () => t.remove(), { once: true });
-  }, 2600);
-}
+/* ── NotifySystem ─────────────────────────────────────────────
+   Unified notification engine for Sprint 9.
+   API:
+     NotifySystem.notify(opts)              → id
+     NotifySystem.progress(msg, opts)       → id
+     NotifySystem.updateProgress(id, pct, msg?)
+     NotifySystem.complete(id, msg, type?)
+     NotifySystem.dismiss(id)
+   opts: { message, type, icon, detail, duration, actions, projectId, persist }
+   ──────────────────────────────────────────────────────────── */
+const NotifySystem = (() => {
+  const _TYPE_META = {
+    success:  { icon: '✅', duration: 3500 },
+    info:     { icon: 'ℹ️', duration: 4000 },
+    warning:  { icon: '⚠️', duration: 6000 },
+    error:    { icon: '❌', duration: null  },
+    ai:       { icon: '✨', duration: 4000 },
+    export:   { icon: '📦', duration: 4000 },
+    publish:  { icon: '📤', duration: 4000 },
+    system:   { icon: '🔔', duration: 4000 },
+    review:   { icon: '👀', duration: 4000 },
+    progress: { icon: '⏳', duration: null  },
+  };
+
+  // Which types persist to the notification centre
+  const _PERSIST_TYPES = new Set(['error', 'publish', 'export', 'ai', 'review', 'system']);
+
+  // Infer type from legacy icon emoji
+  const _ICON_TYPE = {
+    '✅': 'success', '🎉': 'success', '✔️': 'success', '💾': 'success',
+    '❌': 'error',
+    '⚠️': 'warning',
+    '✨': 'ai',
+    '📄': 'export', '📦': 'export', '📤': 'publish',
+    '⧉': 'info',
+  };
+
+  const _active = new Map(); // id → { el, timer, opts }
+  const _queue  = [];
+  const MAX_VISIBLE = 5;
+
+  function _stack() {
+    let c = document.getElementById('notify-stack');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'notify-stack';
+      c.setAttribute('aria-live', 'polite');
+      c.setAttribute('aria-atomic', 'false');
+      document.body.appendChild(c);
+    }
+    return c;
+  }
+
+  function _refreshBadge() {
+    const count = myUnreadNotificationCount();
+    const bell  = document.querySelector('#notif-bell-trigger');
+    if (!bell) return;
+    let badge = bell.querySelector('.pill');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'pill pill-magenta';
+        badge.style.cssText = 'margin-left:auto; min-width:20px; text-align:center; padding:2px 6px;';
+        bell.appendChild(badge);
+      }
+      badge.textContent = count;
+    } else {
+      badge?.remove();
+    }
+  }
+
+  function _persist(opts, type) {
+    const uid = getCurrentUser()?.id;
+    if (!uid) return;
+    if (!Array.isArray(LumioState.notifications)) LumioState.notifications = [];
+    const meta = _TYPE_META[type] || _TYPE_META.info;
+    LumioState.notifications.unshift({
+      id: generateUniqueId('n'), userId: uid,
+      message: opts.message,
+      detail: opts.detail || null,
+      icon: opts.icon || meta.icon,
+      type,
+      projectId: opts.projectId || null,
+      dest: opts.dest || null,
+      createdAt: Date.now(), read: false,
+    });
+    scheduleLumioSave();
+    _refreshBadge();
+  }
+
+  function _leave(id) {
+    const entry = _active.get(id);
+    if (!entry) return;
+    const { el, timer } = entry;
+    if (timer) clearTimeout(timer);
+    el.classList.add('notify-leaving');
+    el.addEventListener('animationend', () => {
+      el.remove();
+      _active.delete(id);
+      _processQueue();
+    }, { once: true });
+  }
+
+  function _processQueue() {
+    while (_active.size < MAX_VISIBLE && _queue.length > 0) {
+      const next = _queue.shift();
+      _render(next.id, next.opts);
+    }
+  }
+
+  function _render(id, opts) {
+    const type  = opts.type || 'info';
+    const meta  = _TYPE_META[type] || _TYPE_META.info;
+    const icon  = opts.icon !== undefined ? opts.icon : meta.icon;
+    const dur   = opts.duration !== undefined ? opts.duration : meta.duration;
+    const isErr = type === 'error';
+
+    const div = document.createElement('div');
+    div.className = `notify-item notify-${type}`;
+    div.dataset.notifyId = id;
+    if (isErr) div.setAttribute('role', 'alert');
+
+    const actionsHtml = (opts.actions || []).map((a, i) =>
+      `<button class="notify-action" data-action-idx="${i}">${escapeHtml(a.label)}</button>`
+    ).join('');
+
+    div.innerHTML = `
+      ${icon ? `<span class="notify-icon">${icon}</span>` : ''}
+      <div class="notify-body">
+        <span class="notify-msg">${escapeHtml(opts.message)}</span>
+        ${opts.detail ? `<span class="notify-detail">${escapeHtml(opts.detail)}</span>` : ''}
+        ${type === 'progress' ? '<div class="notify-progress-bar"><div class="notify-progress-fill"></div></div>' : ''}
+        ${actionsHtml}
+      </div>
+      ${dur === null ? '<button class="notify-close" aria-label="Dismiss">×</button>' : ''}
+    `;
+
+    (opts.actions || []).forEach((action, i) => {
+      div.querySelector(`[data-action-idx="${i}"]`)?.addEventListener('click', () => {
+        action.onClick();
+        _leave(id);
+      });
+    });
+    div.querySelector('.notify-close')?.addEventListener('click', () => _leave(id));
+
+    _stack().appendChild(div);
+
+    let timer = null;
+    if (dur !== null) timer = setTimeout(() => _leave(id), dur);
+    _active.set(id, { el: div, timer, opts });
+
+    if (opts.persist !== false && _PERSIST_TYPES.has(type)) _persist(opts, type);
+  }
+
+  function notify(opts) {
+    const id = generateUniqueId('ntf');
+    if (_active.size >= MAX_VISIBLE) {
+      _queue.push({ id, opts });
+    } else {
+      _render(id, opts);
+    }
+    return id;
+  }
+
+  function progress(msg, opts = {}) {
+    return notify({ ...opts, message: msg, type: 'progress', duration: null });
+  }
+
+  function updateProgress(id, pct, msg) {
+    const entry = _active.get(id);
+    if (!entry) return;
+    const fill = entry.el.querySelector('.notify-progress-fill');
+    if (fill) fill.style.width = `${Math.min(100, pct)}%`;
+    if (msg) {
+      const msgEl = entry.el.querySelector('.notify-msg');
+      if (msgEl) msgEl.textContent = msg;
+    }
+  }
+
+  function complete(id, msg, type = 'success') {
+    const entry = _active.get(id);
+    if (!entry) return;
+    const { el, timer, opts } = entry;
+    if (timer) clearTimeout(timer);
+
+    el.className = `notify-item notify-${type}`;
+    const meta = _TYPE_META[type] || _TYPE_META.success;
+    const newIcon = meta.icon;
+
+    const iconEl = el.querySelector('.notify-icon');
+    if (iconEl) iconEl.textContent = newIcon;
+
+    const msgEl = el.querySelector('.notify-msg');
+    if (msgEl) msgEl.textContent = msg || opts.message;
+
+    el.querySelector('.notify-progress-bar')?.remove();
+    if (!el.querySelector('.notify-close')) {
+      const btn = document.createElement('button');
+      btn.className = 'notify-close';
+      btn.setAttribute('aria-label', 'Dismiss');
+      btn.textContent = '×';
+      btn.addEventListener('click', () => _leave(id));
+      el.appendChild(btn);
+    }
+
+    const newDur = meta.duration;
+    if (newDur !== null) {
+      entry.timer = setTimeout(() => _leave(id), newDur);
+    }
+    if (_PERSIST_TYPES.has(type)) {
+      _persist({ message: msg || opts.message, projectId: opts.projectId, icon: newIcon, dest: opts.dest }, type);
+    }
+  }
+
+  function dismiss(id) { _leave(id); }
+
+  function toast(msg, icon) {
+    const type = _ICON_TYPE[icon] || 'info';
+    return notify({ message: msg, type, icon: icon || undefined });
+  }
+
+  return { notify, progress, updateProgress, complete, dismiss, toast };
+})();
+
+// Backward-compatible global — all 93 existing call sites unchanged
+function toast(msg, icon) { return NotifySystem.toast(msg, icon); }
 
 // Applies a course's theme CSS variables to the #app root so that global
 // styles (.btn, .card, nav, tabs, headings, etc.) inherit them via the
@@ -2072,24 +2305,198 @@ function renderShell(activeId, contentHtml, opts = {}) {
   });
 }
 
-// Phase 7 notification bell dropdown — lists this user's notifications
-// (newest first), marks them all read on open (the bell itself re-renders
-// on next navigation/shell paint, clearing the unread badge).
-function openNotificationsPanel(anchorEl) {
-  document.querySelectorAll('.popover-menu').forEach(m => m.remove());
-  const items = myNotifications().slice(0, 15);
-  const html = items.length
-    ? items.map(n => `
-        <div style="padding:10px 12px; border-bottom:1px solid var(--border); ${n.read ? '' : 'background:var(--pastel-lavender);'}">
-          <div class="text-sm" style="color:var(--ink-900);">${escapeHtml(n.message)}</div>
-          <div class="text-muted" style="font-size:11px; margin-top:2px;">${formatDateLong(n.createdAt)}</div>
-        </div>`).join('')
-    : `<div style="padding:16px; text-align:center;" class="text-sm text-muted">No notifications yet.</div>`;
-  const menu = popoverAt(anchorEl, html, { width: 280 });
-  menu.style.maxHeight = '360px';
-  menu.style.overflowY = 'auto';
-  myNotifications().forEach(n => { n.read = true; });
-  scheduleLumioSave();
+// Resolves a notification `dest` object into a full navigation action.
+// Navigates to the target route then executes any deferred secondary action
+// (open modal, select block, etc.) after the render cycle settles.
+function _navTo(dest) {
+  if (!dest) return;
+  const route = dest.route || 'projects';
+
+  if (route === 'workspace-settings') {
+    navigate('#/workspace-settings');
+    return;
+  }
+  if (route === 'projects') {
+    navigate('#/projects');
+    return;
+  }
+  if (route === 'course' && dest.courseId) {
+    LumioState.currentCourseId = dest.courseId;
+    navigate('#/course/' + dest.courseId);
+    if (dest.openPublish) {
+      // Wait for renderCourseLanding to paint before clicking Publish
+      setTimeout(() => {
+        document.querySelector('#course-publish')?.click();
+      }, 200);
+    }
+    return;
+  }
+  if (route === 'lesson' && dest.lessonId) {
+    LumioState.currentLessonId = dest.lessonId;
+    navigate('#/lesson/' + dest.lessonId);
+    if (dest.blockIndex !== undefined && dest.blockIndex !== null) {
+      setTimeout(() => {
+        // Select the target block and re-render with it focused
+        if (typeof BuilderUI !== 'undefined') {
+          BuilderUI.selected = dest.blockIndex;
+          BuilderUI.expandedBlocks = new Set([dest.blockIndex]);
+          BuilderUI.rightTab = dest.rightTab || 'content';
+          renderLessonBuilder(dest.lessonId);
+          setTimeout(() => {
+            document.querySelector(`.canvas-block[data-index="${dest.blockIndex}"]`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 80);
+        }
+      }, 200);
+    }
+    return;
+  }
+}
+
+// Notification centre — slide-in panel, per-item read marking.
+// Replaces the old popover approach (Sprint 9).
+function openNotificationsPanel() {
+  if (document.querySelector('.notif-centre')) return;
+
+  const _TYPE_ICONS = {
+    review: '👀', error: '❌', warning: '⚠️', success: '✅',
+    ai: '✨', export: '📦', publish: '📤', system: '🔔', info: 'ℹ️',
+  };
+
+  function _timeAgo(ts) {
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 1)  return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 7)  return `${d}d ago`;
+    return formatDateLong(ts);
+  }
+
+  const TABS = [
+    { id: 'all',    label: 'All' },
+    { id: 'review', label: 'Review' },
+    { id: 'export', label: 'Exports' },
+    { id: 'system', label: 'System' },
+  ];
+
+  let activeTab = 'all';
+
+  function _filtered() {
+    const all = myNotifications();
+    if (activeTab === 'all')    return all;
+    if (activeTab === 'export') return all.filter(n => n.type === 'export' || n.type === 'publish');
+    if (activeTab === 'system') return all.filter(n => n.type === 'system' || n.type === 'error' || n.type === 'ai');
+    return all.filter(n => (n.type || 'review') === activeTab);
+  }
+
+  function _renderList(list$) {
+    const items = _filtered();
+    if (!items.length) {
+      list$.innerHTML = `<div class="notif-centre-empty">No notifications here yet.</div>`;
+      return;
+    }
+    list$.innerHTML = items.map(n => {
+      const icon = n.icon || _TYPE_ICONS[n.type] || '🔔';
+      const canNav = !!(n.dest || n.projectId);
+      return `
+        <div class="notif-centre-item ${n.read ? '' : 'unread'} ${canNav ? 'clickable' : ''}"
+             data-nid="${n.id}" data-pid="${n.projectId || ''}">
+          <span class="nc-icon">${icon}</span>
+          <div class="nc-body">
+            <div class="nc-msg">${escapeHtml(n.message)}</div>
+            ${n.detail ? `<div class="nc-detail">${escapeHtml(n.detail)}</div>` : ''}
+            <div class="nc-time">${_timeAgo(n.createdAt)}</div>
+          </div>
+          ${n.read ? '' : '<span class="nc-dot"></span>'}
+        </div>`;
+    }).join('');
+
+    list$.querySelectorAll('.notif-centre-item').forEach(row => {
+      row.addEventListener('click', () => {
+        const nid = row.dataset.nid;
+        const n = (LumioState.notifications || []).find(x => x.id === nid);
+        if (n && !n.read) {
+          n.read = true;
+          row.classList.remove('unread');
+          row.querySelector('.nc-dot')?.remove();
+          const msgEl = row.querySelector('.nc-msg');
+          if (msgEl) msgEl.style.fontWeight = '500';
+          scheduleLumioSave();
+          const count = myUnreadNotificationCount();
+          const badge = document.querySelector('#notif-bell-trigger .pill');
+          if (badge) { badge.textContent = count; if (!count) badge.remove(); }
+        }
+        // Resolve navigation destination: prefer explicit dest, fall back to
+        // legacy projectId → course landing for older notifications.
+        const dest = n?.dest || (n?.projectId ? { route: 'course', courseId: n.projectId } : null);
+        if (dest) { _close(); _navTo(dest); }
+      });
+    });
+  }
+
+  function _close() {
+    const panel = document.querySelector('.notif-centre');
+    const backdrop = document.querySelector('.notif-centre-backdrop');
+    panel?.classList.add('notif-centre-leaving');
+    panel?.addEventListener('animationend', () => { panel.remove(); backdrop?.remove(); }, { once: true });
+  }
+
+  // Build panel
+  const backdrop = document.createElement('div');
+  backdrop.className = 'notif-centre-backdrop';
+  backdrop.addEventListener('click', _close);
+
+  const panel = document.createElement('div');
+  panel.className = 'notif-centre';
+  panel.innerHTML = `
+    <div class="notif-centre-header">
+      <h2>Notifications</h2>
+      <div class="notif-centre-header-actions">
+        <button id="nc-mark-all">Mark all read</button>
+        <button id="nc-clear-all">Clear all</button>
+        <button id="nc-close" aria-label="Close" style="font-size:20px; color:var(--ink-400);">×</button>
+      </div>
+    </div>
+    <div class="notif-centre-tabs">
+      ${TABS.map(t => `<button class="notif-tab ${t.id === activeTab ? 'active' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}
+    </div>
+    <div class="notif-centre-list" id="nc-list"></div>
+  `;
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(panel);
+
+  const list$ = panel.querySelector('#nc-list');
+  _renderList(list$);
+
+  panel.querySelectorAll('.notif-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.dataset.tab;
+      panel.querySelectorAll('.notif-tab').forEach(b => b.classList.toggle('active', b === btn));
+      _renderList(list$);
+    });
+  });
+
+  panel.querySelector('#nc-close').addEventListener('click', _close);
+
+  panel.querySelector('#nc-mark-all').addEventListener('click', () => {
+    myNotifications().forEach(n => { n.read = true; });
+    scheduleLumioSave();
+    _renderList(list$);
+    const badge = document.querySelector('#notif-bell-trigger .pill');
+    badge?.remove();
+  });
+
+  panel.querySelector('#nc-clear-all').addEventListener('click', () => {
+    const uid = getCurrentUser()?.id;
+    LumioState.notifications = (LumioState.notifications || []).filter(n => n.userId !== uid);
+    scheduleLumioSave();
+    _renderList(list$);
+    document.querySelector('#notif-bell-trigger .pill')?.remove();
+  });
 }
 
 /* ---------------- MAIN RENDER DISPATCH ---------------- */

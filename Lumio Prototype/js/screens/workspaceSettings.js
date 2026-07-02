@@ -337,7 +337,9 @@ function acceptInvitation(token, password) {
 
   const workspace = (LumioState.workspaces || []).find(w => w.id === workspaceId);
   if (workspace) {
-    addNotification(workspace.ownerId, `${canonicalUser.displayName || canonicalUser.email} accepted your invitation and joined as Administrator.`, null);
+    addNotification(workspace.ownerId, `${canonicalUser.displayName || canonicalUser.email} accepted your invitation and joined as Administrator.`, null, {
+      type: 'system', dest: { route: 'workspace-settings' },
+    });
   }
 
   scheduleLumioSave();
@@ -501,7 +503,9 @@ function bindWorkspaceUsersTab() {
     };
     LumioState.invitations.push(invitation);
     sendInvitationEmail(invitation);
-    addNotification(invitation.invitedBy, `Invitation sent to ${email} as ${ROLE_LABELS[role]}.`, null);
+    addNotification(invitation.invitedBy, `Invitation sent to ${email} as ${ROLE_LABELS[role]}.`, null, {
+      type: 'system', dest: { route: 'workspace-settings' },
+    });
 
     app.querySelector('#ws-invite-first-name').value = '';
     app.querySelector('#ws-invite-last-name').value = '';

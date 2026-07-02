@@ -1046,39 +1046,168 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .seg-control button.active:hover { color: #fff; }
 
-/* toast */
-.toast {
+/* ============================================================
+   NOTIFICATION SYSTEM — Sprint 9
+   Unified notification stack (top-right) + slide-in centre panel.
+   All toasts go through NotifySystem; the old toast() is a wrapper.
+   ============================================================ */
+
+/* Stack container — fixed top-right, stacks downward */
+#notify-stack {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  background: var(--ink-900);
-  color: #fff;
-  padding: 12px 22px;
-  border-radius: var(--r-pill);
-  font-size: 13px;
-  font-weight: 500;
+  top: 20px;
+  right: 20px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  pointer-events: none;
+}
+
+.notify-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
-  z-index: 200;
-  display: flex; align-items: center; gap: 10px;
-  max-width: calc(100vw - 32px);
-  animation: toastIn 0.3s ease-out forwards;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  pointer-events: all;
+  animation: notifyIn 0.25s ease-out forwards;
 }
-.toast.toast-leaving {
-  animation: toastOut 0.22s ease-in forwards;
+.notify-item.notify-leaving {
+  animation: notifyOut 0.2s ease-in forwards;
 }
-/* The horizontal centering transform (translateX(-50%)) is baked into every
-   keyframe stop, not just the resting state — a plain CSS `transform`
-   animation replaces the whole property for its duration, so leaving it out
-   of the keyframes (as a fadeInUp reuse previously did) causes the toast to
-   render flush-left against `left:50%` for the entire entrance animation,
-   only snapping to centred once the animation finishes. */
-@keyframes toastIn {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+
+.notify-success { border-left-color: var(--color-success); }
+.notify-info    { border-left-color: var(--indigo); }
+.notify-warning { border-left-color: var(--orange); }
+.notify-error   { border-left-color: var(--color-destructive); background: var(--color-destructive-tint); }
+.notify-ai      { border-left-color: var(--violet); }
+.notify-export  { border-left-color: var(--indigo); }
+.notify-publish { border-left-color: var(--indigo); }
+.notify-system  { border-left-color: var(--ink-400); }
+.notify-review  { border-left-color: var(--indigo); }
+.notify-progress { border-left-color: var(--indigo); }
+
+.notify-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.notify-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
 }
-@keyframes toastOut {
-  from { opacity: 1; transform: translate(-50%, 0); }
-  to   { opacity: 0; transform: translate(-50%, 10px); }
+.notify-msg  { font-size: 13px; font-weight: 500; color: var(--ink-900); line-height: 1.4; }
+.notify-detail { font-size: 12px; color: var(--ink-400); line-height: 1.3; }
+.notify-progress-bar {
+  height: 4px; background: var(--border); border-radius: 2px;
+  overflow: hidden; margin-top: 4px;
+}
+.notify-progress-fill {
+  height: 100%; background: var(--indigo); border-radius: 2px;
+  transition: width 0.3s ease; width: 0%;
+}
+.notify-action {
+  align-self: flex-start;
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--r-sm); font-size: 12px; font-weight: 500;
+  padding: 3px 10px; cursor: pointer; color: var(--ink-700);
+  margin-top: 2px; transition: background 0.1s;
+}
+.notify-action:hover { background: var(--surface-50); }
+.notify-close {
+  flex-shrink: 0; background: none; border: none;
+  cursor: pointer; font-size: 18px; color: var(--ink-400);
+  padding: 0 2px; line-height: 1; margin-top: -1px;
+  opacity: 0.6; transition: opacity 0.1s;
+}
+.notify-close:hover { opacity: 1; }
+
+@keyframes notifyIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes notifyOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+/* ── Notification Centre Panel ── */
+.notif-centre-backdrop {
+  position: fixed; inset: 0; z-index: 8000;
+  background: rgba(0,0,0,0.15); animation: fadeIn 0.2s ease-out;
+}
+.notif-centre {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 360px; max-width: 100vw;
+  background: var(--surface-0);
+  box-shadow: -4px 0 24px rgba(31,27,58,0.12);
+  z-index: 8001; display: flex; flex-direction: column;
+  animation: notifCentreIn 0.22s ease-out;
+}
+.notif-centre.notif-centre-leaving {
+  animation: notifCentreOut 0.18s ease-in forwards;
+}
+@keyframes notifCentreIn {
+  from { transform: translateX(100%); } to { transform: translateX(0); }
+}
+@keyframes notifCentreOut {
+  from { transform: translateX(0); } to { transform: translateX(100%); }
+}
+.notif-centre-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 18px 0; flex-shrink: 0;
+}
+.notif-centre-header h2 {
+  font-size: 15px; font-weight: 700; color: var(--ink-900); margin: 0;
+}
+.notif-centre-header-actions { display: flex; gap: 4px; align-items: center; }
+.notif-centre-header-actions button {
+  background: none; border: none; font-size: 12px;
+  color: var(--ink-400); cursor: pointer; padding: 4px 8px;
+  border-radius: var(--r-sm); transition: color 0.1s;
+}
+.notif-centre-header-actions button:hover { color: var(--ink-700); background: var(--surface-50); }
+.notif-centre-tabs {
+  display: flex; padding: 8px 18px 0;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.notif-tab {
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px; font-size: 13px; font-weight: 500;
+  color: var(--ink-400); cursor: pointer; margin-bottom: -1px;
+  transition: color 0.1s;
+}
+.notif-tab.active {
+  color: var(--ink-900);
+  border-bottom-color: var(--theme-primary, var(--indigo));
+}
+.notif-centre-list { flex: 1; overflow-y: auto; }
+.notif-centre-empty {
+  padding: 48px 24px; text-align: center;
+  color: var(--ink-400); font-size: 13px;
+}
+.notif-centre-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  transition: background 0.1s; position: relative;
+}
+.notif-centre-item.unread  { background: var(--pastel-lavender); }
+.notif-centre-item.clickable { cursor: pointer; }
+.notif-centre-item:hover { background: var(--surface-50); }
+.notif-centre-item.unread:hover { background: #EDE9F7; }
+.nc-icon  { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.nc-body  { flex: 1; min-width: 0; }
+.nc-msg   { font-size: 13px; color: var(--ink-900); font-weight: 500; line-height: 1.4; }
+.notif-centre-item.unread .nc-msg { font-weight: 600; }
+.nc-detail { font-size: 12px; color: var(--ink-400); margin-top: 2px; line-height: 1.3; }
+.nc-time   { font-size: 11px; color: var(--ink-400); margin-top: 4px; }
+.nc-dot {
+  width: 7px; height: 7px; background: var(--indigo);
+  border-radius: 50%; flex-shrink: 0; margin-top: 6px;
 }
 
 @media (max-width: 640px) {
