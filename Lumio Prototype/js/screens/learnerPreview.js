@@ -72,6 +72,7 @@ function ensureLearnerProgress(courseId) {
       kcAnswers: {},
       score: { correct: 0, total: 0 },
       blockProgress: {},
+      revealedContinues: {},           // lessonId -> [blockIndex, ...] — persisted so reload restores layout
       courseStatus: 'not_started',     // 'not_started' | 'in_progress' | 'completed'
       courseCompletedAt: null,
       lessonCompletedAt: {},            // lessonId -> Unix timestamp
@@ -82,6 +83,7 @@ function ensureLearnerProgress(courseId) {
   }
   const p = LumioState.learnerProgress[courseId];
   if (!p.blockProgress) p.blockProgress = {};
+  if (!p.revealedContinues) p.revealedContinues = {};
   if (p.courseStatus === undefined) p.courseStatus = p.completedLessons.length ? 'in_progress' : 'not_started';
   if (p.courseCompletedAt === undefined) p.courseCompletedAt = null;
   if (p.lessonCompletedAt === undefined) p.lessonCompletedAt = {};
@@ -760,6 +762,14 @@ function renderLearnerLesson(course, lessonId) {
     ? (assessmentIdx > 0 ? course.assessments[assessmentIdx - 1].id : (course.lessons.length ? course.lessons[course.lessons.length - 1].id : null))
     : (lessonIdx > 0 ? course.lessons[lessonIdx - 1].id : null);
 
+  // Restore Continue-reveal state from persisted progress on the first render
+  // of this lesson — ensures the lesson layout (blocks visible after each
+  // clicked Continue) survives a page reload or resume navigation.
+  if (!LearnerUI.revealedContinues[lessonId]) {
+    const saved = (progress.revealedContinues || {})[lessonId] || [];
+    LearnerUI.revealedContinues[lessonId] = new Set(saved);
+  }
+
   // Next is disabled until every required block in THIS lesson is complete —
   // a lesson-wide gate, separate from (and additional to) any Continue-block
   // gating the author has configured within the lesson itself.
@@ -836,6 +846,7 @@ function renderLearnerLesson(course, lessonId) {
       progress.completedLessons.push(lessonId);
       progress.lessonCompletedAt[lessonId] = Date.now();
     }
+    saveLumioState(); // immediate — navigation checkpoint must be on disk before hash changes
     if (isAssessment) {
       recordAssessmentAttempt(lesson, lessonId, blocks, progress, course.id);
       if (isLastAssessment) {
@@ -1694,7 +1705,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
       viewedObserver.unobserve(entry.target);
       changed = true;
     });
-    if (changed) refreshNextButtonState(ctx);
+    if (changed) { scheduleLumioSave(); refreshNextButtonState(ctx); }
   }, { threshold: 0.1 });
   app.querySelectorAll(`[data-lp-lesson="${ctx.lessonId}"][data-lp-index]`).forEach(node => {
     const index = parseInt(node.dataset.lpIndex, 10);
@@ -1715,6 +1726,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const index = parseInt(wrapper.dataset.lpIndex, 10);
     videoEl.addEventListener('ended', () => {
       CompletionEngine.markWatched(ctx, index);
+      scheduleLumioSave();
       refreshNextButtonState(ctx);
     });
     // Real playback-position tracking for the 'watched_50/75/100' rules —
@@ -1723,6 +1735,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     videoEl.addEventListener('timeupdate', () => {
       if (!videoEl.duration) return;
       CompletionEngine.markProgressPercent(ctx, index, 'watchedPercent', (videoEl.currentTime / videoEl.duration) * 100);
+      scheduleLumioSave();
       refreshNextButtonState(ctx);
     });
   });
@@ -1732,6 +1745,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
   app.querySelectorAll('.lp-mark-watched').forEach(btn => btn.addEventListener('click', () => {
     const index = parseInt(btn.dataset.blockIndex, 10);
     CompletionEngine.markWatched(ctx, index);
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -1742,11 +1756,13 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const index = parseInt(wrapper.dataset.lpIndex, 10);
     audioEl.addEventListener('ended', () => {
       CompletionEngine.markPlayed(ctx, index);
+      scheduleLumioSave();
       refreshNextButtonState(ctx);
     });
     audioEl.addEventListener('timeupdate', () => {
       if (!audioEl.duration) return;
       CompletionEngine.markProgressPercent(ctx, index, 'playedPercent', (audioEl.currentTime / audioEl.duration) * 100);
+      scheduleLumioSave();
       refreshNextButtonState(ctx);
     });
   });
@@ -1837,6 +1853,10 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     if (CompletionEngine.isContinueLocked(blocks, idx, ctx)) return;
     if (!LearnerUI.revealedContinues[lessonId]) LearnerUI.revealedContinues[lessonId] = new Set();
     LearnerUI.revealedContinues[lessonId].add(idx);
+    // Persist so the lesson layout survives a reload or resume.
+    if (!ctx.progress.revealedContinues) ctx.progress.revealedContinues = {};
+    ctx.progress.revealedContinues[lessonId] = [...LearnerUI.revealedContinues[lessonId]];
+    saveLumioState(); // immediate — must be on disk before the DOM re-renders
     rerender();
     scrollContinueTargetIntoView(lessonId, idx + 1);
   }));
@@ -1963,12 +1983,14 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const key = btn.dataset.key;
     LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) - 1;
     markCarouselVisited(key, normalizeCarouselItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
+    scheduleLumioSave();
     rerender();
   }));
   app.querySelectorAll('.lp-carousel-next').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.carouselIndex[key] = (LearnerUI.carouselIndex[key] || 0) + 1;
     markCarouselVisited(key, normalizeCarouselItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -1982,12 +2004,14 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     const key = btn.dataset.key;
     LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) - 1;
     markQuoteVisited(key, normalizeQuoteItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
+    scheduleLumioSave();
     rerender();
   }));
   app.querySelectorAll('.lp-quote-next').forEach(btn => btn.addEventListener('click', () => {
     const key = btn.dataset.key;
     LearnerUI.quoteCarouselIndex[key] = (LearnerUI.quoteCarouselIndex[key] || 0) + 1;
     markQuoteVisited(key, normalizeQuoteItems((blocks[parseInt(key.split(':')[1], 10)] || {}).data || {}));
+    scheduleLumioSave();
     rerender();
   }));
 
@@ -2004,6 +2028,7 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     LearnerUI.listChecked[key] = set;
     CompletionEngine.setChecklistItem(ctx, blockIndex, i, nowChecked);
     CompletionEngine.markCompleted(ctx, blockIndex);
+    scheduleLumioSave();
     rerender();
   };
   app.querySelectorAll('.list-checkbox-marker[data-key]').forEach(marker => {
@@ -2011,6 +2036,28 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     if (!key) return;
     marker.addEventListener('click', () => toggleListChecked(key, i));
     marker.addEventListener('keydown', (e) => onActivateKey(e, () => toggleListChecked(key, i)));
+  });
+
+  // Restore flashcard flip visual state from persisted blockProgress so a
+  // returning learner sees the same face orientation they left on. The flip
+  // CSS class and aria-pressed are presentational only — they are not set
+  // during HTML generation (renderBlockContent returns a static string) and
+  // must be applied to the live DOM after each render.
+  app.querySelectorAll('[data-lp-index] .flip-card').forEach(fc => {
+    const wrapper = fc.closest('[data-lp-index]');
+    if (!wrapper) return;
+    const bIndex = parseInt(wrapper.dataset.lpIndex, 10);
+    const block = blocks[bIndex];
+    if (!block || (block.type !== 'flashcard_grid' && block.type !== 'flashcard_stack')) return;
+    const colEl = fc.querySelector('[data-col]');
+    const cardIdx = colEl ? parseInt(colEl.dataset.col, 10) : 0;
+    const bKey = ctx.lessonId + ':' + ((block.id) || bIndex);
+    const bProg = (ctx.progress.blockProgress || {})[bKey] || {};
+    if ((bProg.flipped || []).includes(cardIdx)) {
+      fc.classList.add('flipped');
+      const icon = fc.querySelector('.flip-card-flipicon');
+      if (icon) icon.setAttribute('aria-pressed', 'true');
+    }
   });
 
   app.querySelectorAll('.image-zoom-trigger').forEach(img => img.addEventListener('click', (e) => {

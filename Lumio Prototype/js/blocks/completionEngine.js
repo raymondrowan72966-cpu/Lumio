@@ -199,7 +199,7 @@ const CompletionEngine = (function () {
     labelled_graphic: ['any_hotspot', 'all_hotspots'],
     flashcard_grid: ['any_card', 'all_cards'],
     flashcard_stack: ['any_card', 'all_cards'],
-    list_checkbox: ['interacted'],
+    list_checkbox: ['interacted', 'any_item', 'all_items'],
     scenario: ['interacted'],
     // Action / assessment.
     continue: ['click'],
@@ -294,6 +294,14 @@ const CompletionEngine = (function () {
     }
     if (block.type === 'flashcard_grid' || block.type === 'flashcard_stack') {
       return itemRuleCount(rule, bp.flipped || [], itemCount(block, d));
+    }
+    if (block.type === 'list_checkbox') {
+      // 'interacted' (default): any toggle — derived from bp.completed set on first interaction.
+      // 'any_item': at least one box currently checked.
+      // 'all_items': every item currently checked.
+      if (rule === 'any_item') return (bp.checkedItems || []).length >= 1;
+      if (rule === 'all_items') return (bp.checkedItems || []).length >= ((d.items || []).length);
+      return !!bp.completed;
     }
     if (cap.strategy === 'assessed') {
       // Sprint 2, Phase 1 fix: this used to branch on `rule` (effectiveRule(),

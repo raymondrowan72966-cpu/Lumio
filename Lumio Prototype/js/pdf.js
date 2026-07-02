@@ -697,7 +697,7 @@ async function renderCoursePdf(course, lessonData, assetEntries, opts) {
       case 'quote_image': {
         const txt=_stripHtml(d.quote||d.text||'');
         const auth=_stripHtml(d.author||d.attribution||'');
-        if(d.image) await drawImageBlock(d.image,80,80);
+        if(d.image||d.avatar) await drawImageBlock(d.image||d.avatar,contentW*0.45,180);
         if(txt) drawRichText(`“${txt}”`,{size:12,italic:true});
         if(auth) drawParagraph(`— ${auth}`,{size:10,color:INK.muted});
         blockGap(); return;
@@ -756,6 +756,15 @@ async function renderCoursePdf(course, lessonData, assetEntries, opts) {
       }
 
       /* ── Column grid ── */
+      case 'columns': {
+        const cols = d.cols || [];
+        for(const [i, col] of cols.entries()){
+          if(i > 0){ cursorY -= 4; pdf.line(margin, cursorY, margin + contentW, cursorY, {color:[0.85,0.85,0.9],lineWidth:0.5}); cursorY -= 8; }
+          const colHtml = (typeof richTextOut === 'function') ? richTextOut(col) : (typeof col === 'string' ? col : '');
+          if(colHtml) drawRichText(colHtml);
+        }
+        blockGap(); return;
+      }
       case 'column_grid': {
         const items=(typeof normalizeColumnGridItems==='function')?normalizeColumnGridItems(d):(d.items||[]);
         for(const item of items){
@@ -924,6 +933,7 @@ async function renderCoursePdf(course, lessonData, assetEntries, opts) {
           const t=_stripHtml(scene.title||'');
           if(t) drawHeading(t,{size:12});
           if(scene.backgroundImage) await drawImageBlock(scene.backgroundImage,contentW,160);
+          if(scene.characterImage) await drawImageBlock(scene.characterImage,60,80);
           if(scene.characterName) drawParagraph(_stripHtml(scene.characterName),{bold:true,size:11,color:accentColor});
           if(scene.dialogue) drawRichText(scene.dialogue,{indent:10});
           if(scene.choices&&scene.choices.length){

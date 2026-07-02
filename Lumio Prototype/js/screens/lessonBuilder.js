@@ -432,7 +432,7 @@ function renderCanvasBlocks(blocks) {
   return html;
 }
 
-const RADIUS_MAP = { sharp: '4px', soft: 'var(--r-lg)', round: 'var(--r-xl)' };
+const RADIUS_MAP = { sharp: '4px', soft: 'var(--r-lg)', round: 'var(--r-xl)', pill: 'var(--r-pill)' };
 
 // Icon glyphs available for Labelled Graphic hotspot markers (Marker Style: Icons).
 const MARKER_ICONS = {
@@ -608,6 +608,7 @@ function lumioRecordProgress(el, kind, itemIndex) {
   else if (kind === 'completed') CompletionEngine.markCompleted(ctx, index);
   refreshContinueLocks(ctx);
   if (typeof refreshNextButtonState === 'function') refreshNextButtonState(ctx);
+  if (typeof scheduleLumioSave === 'function') scheduleLumioSave();
 }
 
 /* Full-size image lightbox — a Learner Preview-only interaction, opened by
@@ -3688,7 +3689,8 @@ function completionRequirementPanel(block) {
     any_step: 'View Any Step', all_steps: 'View All Steps',
     any_hotspot: 'Open Any Hotspot', all_hotspots: 'Open All Hotspots',
     any_card: 'Flip Any Card', all_cards: 'Flip All Cards',
-    interacted: 'Interacted', click: 'Click Continue',
+    interacted: 'Interacted', any_item: 'Check Any Item', all_items: 'Check All Items',
+    click: 'Click Continue',
     submitted: 'Submitted', correct: 'Correct',
   };
   // Reuses the existing generic .settings-field / .settings-select-str
@@ -5211,7 +5213,7 @@ function continueWrapperStyle(ds) {
 function continueButtonStyle(ds) {
   const widthStyle = ds.btnWidth === 'full' ? 'width:100%;' : '';
   const height = ds.btnHeight ?? 44;
-  const radius = RADIUS_MAP[ds.btnRadius] || RADIUS_MAP.soft;
+  const radius = ds.btnRadius ? (RADIUS_MAP[ds.btnRadius] || RADIUS_MAP.soft) : 'var(--theme-button-style, var(--r-lg))';
   const fill = ds.btnFillColor || 'var(--theme-primary, var(--indigo))';
   const textColor = ds.btnTextColor || '#ffffff';
   const border = ds.btnBorder ? `2px solid ${ds.btnBorderColor || '#000000'}` : 'none';
