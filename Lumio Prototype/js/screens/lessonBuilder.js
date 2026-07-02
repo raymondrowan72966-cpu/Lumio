@@ -833,7 +833,7 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
 function textBlockExtraStyle(block) {
   if (blockCategory(block.type) !== 'Text') return '';
   const ds = block.design || {};
-  const defaultPad = block.type === 'table' ? 22 : undefined;
+  const defaultPad = 22;
   let style = '';
   const padTop = ds.paddingTop !== undefined ? ds.paddingTop : defaultPad;
   const padBottom = ds.paddingBottom !== undefined ? ds.paddingBottom : defaultPad;
@@ -1135,6 +1135,13 @@ function applyImageStylesToDom(block, index) {
     const overlayOpacity = ds.overlayOpacity ?? 40;
     overlay.style.background = `rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)})`;
   }
+  // Patch padding live so slider drags match every other block type.
+  // interactiveSpacingStyle() is the canonical renderer — mirror its defaults.
+  const outerDiv = wrapper.querySelector('.block-content-area > div');
+  if (outerDiv) {
+    outerDiv.style.paddingTop = `${ds.paddingTop ?? 0}px`;
+    outerDiv.style.paddingBottom = `${ds.paddingBottom ?? 0}px`;
+  }
 }
 
 /* Block types that render directly on the canvas as page content, without
@@ -1328,6 +1335,7 @@ const RichTextToolbar = {
   activeField: null, // { block, elx }
   savedRange: null,
   pendingFontSize: null,
+  colorPickerActive: false, // true while native colour picker is open; suppresses toolbar hide/reposition
 };
 
 function ensureRichTextToolbar() {
@@ -1381,7 +1389,10 @@ function ensureRichTextToolbar() {
     syncRichTextField(active.block, active.elx);
     const sel = window.getSelection();
     if (sel.rangeCount) RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
-    positionRichTextToolbar();
+    // Skip toolbar repositioning during a colour-pick session — positionRichTextToolbar
+    // checks sel.isCollapsed and calls hideRichTextToolbar() if the selection collapsed
+    // after execCommand, which permanently destroys the active picker session.
+    if (!RichTextToolbar.colorPickerActive) positionRichTextToolbar();
   };
 
   el.querySelectorAll('.rt-btn[data-cmd]').forEach(btn => btn.addEventListener('click', () => {
@@ -1442,7 +1453,10 @@ function ensureRichTextToolbar() {
   // Reset liveColorEl before each new colour-picker session so that selecting
   // different text between sessions always runs applyAndSync on the first tick
   // rather than reusing a still-connected element from the previous session.
-  el.querySelector('.rt-color').addEventListener('mousedown', () => { liveColorEl = null; });
+  el.querySelector('.rt-color').addEventListener('mousedown', () => {
+    RichTextToolbar.colorPickerActive = true;
+    liveColorEl = null;
+  });
   el.querySelector('.rt-color').addEventListener('input', (e) => {
     if (liveColorEl && liveColorEl.isConnected) {
       liveColorEl.style.color = e.target.value;
@@ -1470,6 +1484,7 @@ function ensureRichTextToolbar() {
     // actually released on. This is the one persistence step that must run
     // on release to carry the final dragged-to colour into saved state.
     const active = RichTextToolbar.activeField;
+    RichTextToolbar.colorPickerActive = false;
     if (active) {
       syncRichTextField(active.block, active.elx);
       flashSaveStatus();
@@ -1507,8 +1522,10 @@ function ensureRichTextToolbar() {
 
     if (!elx || sel.isCollapsed) {
       // Don't hide while the user is interacting with the toolbar itself
-      // (e.g. the colour picker or size dropdown can shift focus/selection).
-      if (!(RichTextToolbar.el && RichTextToolbar.el.contains(document.activeElement))) {
+      // (e.g. the colour picker or size dropdown can shift focus/selection),
+      // or while a colour-pick session is active (focus/selection changes are
+      // expected during OS picker interaction).
+      if (!RichTextToolbar.colorPickerActive && !(RichTextToolbar.el && RichTextToolbar.el.contains(document.activeElement))) {
         hideRichTextToolbar();
       }
       return;
@@ -1647,7 +1664,7 @@ function bindEditableTextField(elx, blocks) {
     elx.addEventListener('keyup', () => setTimeout(showToolbar, 0));
     elx.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement !== elx && !RichTextToolbar.el.contains(document.activeElement)) {
+        if (!RichTextToolbar.colorPickerActive && document.activeElement !== elx && !RichTextToolbar.el.contains(document.activeElement)) {
           hideRichTextToolbar();
         }
       }, 0);
@@ -1662,12 +1679,12 @@ function positionRichTextToolbar() {
   const toolbar = RichTextToolbar.el;
   if (!toolbar) return;
   const active = RichTextToolbar.activeField;
-  if (!active) { hideRichTextToolbar(); return; }
+  if (!active) { if (!RichTextToolbar.colorPickerActive) hideRichTextToolbar(); return; }
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hideRichTextToolbar(); return; }
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { if (!RichTextToolbar.colorPickerActive) hideRichTextToolbar(); return; }
   RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
   const blockEl = active.elx.closest('.canvas-block');
-  if (!blockEl) { hideRichTextToolbar(); return; }
+  if (!blockEl) { if (!RichTextToolbar.colorPickerActive) hideRichTextToolbar(); return; }
   // Workstream 4 fix: this anchored to the whole .canvas-block's bottom
   // edge, not the actual selection — on any multi-row/tall block (Table,
   // Accordion, Tabs, Quote Carousel, Process, Flashcard Grid) selecting
@@ -2169,7 +2186,7 @@ function renderBlockContent(block, editable) {
         ${items.map((item, i) => {
           const open = editable ? openRows.has(i) : (expandFirst && i === 0);
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
-            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(${open?'true':'false'} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
+            <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(this.closest('.lumio-accordion-row').classList.contains('open') && event.target.closest('.editable-text[contenteditable=true]')) return; lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
               <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px;">${richTextOut(item.title || '')}</${headingTag}></span>
               <span class="lumio-accordion-chevron" data-style="${ds.chevronStyle || 'chevron'}"></span>
             </div>
@@ -2204,7 +2221,7 @@ function renderBlockContent(block, editable) {
       const animate = settings.animation !== false;
       return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}" style="${interactiveSpacingStyle(ds)}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
-          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(${i}===${active} && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
+          ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(this.classList.contains('active') && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
         <div class="lumio-tabs-panels" style="${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-tab-panel ${i === active ? 'active' : ''}" role="tabpanel">
@@ -2287,11 +2304,11 @@ function renderBlockContent(block, editable) {
           </div>`).join('')}
         </div>
         <div class="lumio-process-nav flex items-center justify-between mt-12">
-          <button class="btn btn-secondary btn-sm lumio-process-prev" ${items.length <= 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), -1)" disabled>← Back</button>
+          <button class="btn btn-secondary btn-sm lumio-process-prev" ${items.length <= 1 || currentStep === 0 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), -1)">← Back</button>
           <div class="lumio-process-indicators flex items-center gap-6" data-style="${indicatorStyle}">
-            ${items.map((item, i) => `<span class="lumio-process-dot ${i === 0 ? 'active' : ''}" data-step="${i}" onclick="event.stopPropagation(); lumioProcessGoto(this.closest('.lumio-process'), ${i})">${indicatorStyle === 'numbers' ? (i + 1) : ''}</span>`).join('')}
+            ${items.map((item, i) => `<span class="lumio-process-dot ${i === currentStep ? 'active' : ''}" data-step="${i}" onclick="event.stopPropagation(); lumioProcessGoto(this.closest('.lumio-process'), ${i})">${indicatorStyle === 'numbers' ? (i + 1) : ''}</span>`).join('')}
           </div>
-          <button class="btn btn-secondary btn-sm lumio-process-next" ${items.length <= 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), 1)">Next →</button>
+          <button class="btn btn-secondary btn-sm lumio-process-next" ${items.length <= 1 || currentStep === items.length - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), 1)">Next →</button>
         </div>
       </div>`;
     }
@@ -3475,13 +3492,13 @@ function renderListBlockPanel(block, index) {
       <div class="prop-section-title">Spacing</div>
       <p class="text-sm text-muted mb-8">Top Padding</p>
       <div class="flex items-center gap-8">
-        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="60" value="${ds.paddingTop ?? 4}" style="flex:1;" />
-        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 4}px</span>
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="60" value="${ds.paddingTop ?? 12}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 12}px</span>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
       <div class="flex items-center gap-8">
-        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="60" value="${ds.paddingBottom ?? 4}" style="flex:1;" />
-        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 4}px</span>
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="60" value="${ds.paddingBottom ?? 12}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 12}px</span>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Indent</p>
       <div class="flex items-center gap-8">
@@ -3621,7 +3638,8 @@ function renderImageFamilyPanel(block, index) {
    generic accordion/tabs/flashcard/scenario/fallback branch further down). */
 function renderRightTabContent(block, index, course) {
   const inner = renderRightTabContentInner(block, index, course);
-  if (BuilderUI.rightTab !== 'settings' || !CompletionEngine.isRequirable(block.type)) return inner;
+  // Continue blocks are unconditional checkpoints — no "Required" toggle needed.
+  if (BuilderUI.rightTab !== 'settings' || !CompletionEngine.isRequirable(block.type) || block.type === 'continue') return inner;
   return inner + completionRequirementPanel(block);
 }
 
@@ -6151,14 +6169,21 @@ function bindBuilderEvents(course, lesson, blocks) {
   }
 
   // ESC deselects the currently selected block and cancels any active insertion zone.
-  document.addEventListener('keydown', (e) => {
+  // Handler stored on BuilderUI so it can be removed before re-adding on every render,
+  // preventing N handlers accumulating after N renderLessonBuilder() calls.
+  if (BuilderUI._keydownHandler) {
+    document.removeEventListener('keydown', BuilderUI._keydownHandler);
+    BuilderUI._keydownHandler = null;
+  }
+  BuilderUI._keydownHandler = (e) => {
     if (e.key !== 'Escape') return;
     if (BuilderUI.selected === null && BuilderUI.expandedBlocks.size === 0 && BuilderUI.insertZoneIndex === null) return;
     BuilderUI.selected = null;
     BuilderUI.expandedBlocks = new Set();
     BuilderUI.insertZoneIndex = null;
     renderLessonBuilder(lesson.id);
-  });
+  };
+  document.addEventListener('keydown', BuilderUI._keydownHandler);
 
   // Explicit Cancel button on an active insertion zone — closes it without inserting a block.
   app.querySelectorAll('.insertion-zone-cancel').forEach(btn => btn.addEventListener('click', (e) => {
@@ -8093,10 +8118,21 @@ function bindDragAndDrop(lesson, blocks) {
 
   // While any block is being dragged, faintly reveal every insertion line
   // so placement options stay obvious without a permanent heavy outline.
+  // Handlers stored on BuilderUI to allow cleanup before re-adding each render.
+  if (BuilderUI._dragstartHandler) {
+    document.removeEventListener('dragstart', BuilderUI._dragstartHandler);
+    BuilderUI._dragstartHandler = null;
+  }
+  if (BuilderUI._dragendHandler) {
+    document.removeEventListener('dragend', BuilderUI._dragendHandler);
+    BuilderUI._dragendHandler = null;
+  }
   const canvasEl = app.querySelector('#lesson-canvas');
   if (canvasEl) {
-    document.addEventListener('dragstart', () => canvasEl.classList.add('dragging-block'));
-    document.addEventListener('dragend', () => canvasEl.classList.remove('dragging-block'));
+    BuilderUI._dragstartHandler = () => canvasEl.classList.add('dragging-block');
+    BuilderUI._dragendHandler = () => canvasEl.classList.remove('dragging-block');
+    document.addEventListener('dragstart', BuilderUI._dragstartHandler);
+    document.addEventListener('dragend', BuilderUI._dragendHandler);
   }
 
   // Click "+" on an insertion line to open an insertion zone at that

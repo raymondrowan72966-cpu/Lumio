@@ -313,15 +313,23 @@ const CompletionEngine = (function () {
   // Full lesson check. `revealedContinues` is the Set<blockIndex> of
   // continue blocks the learner has clicked in this lesson (caller-owned
   // UI state, e.g. LearnerUI.revealedContinues[lessonId]).
+  //
+  // Continue blocks are unconditional checkpoints — every Continue in a
+  // lesson must be clicked before Next is enabled, regardless of the
+  // author's completionRequired setting. They are checked first, before
+  // the isRequiredForNext guard, because their strategy ('none') would
+  // otherwise cause that guard to skip them (strategy: 'none' is correct
+  // for isContinueLocked so Continue can't prerequisite-gate another
+  // Continue, but that default must not suppress the Next-button gate here).
   function isLessonReadyForNext(blocks, ctx, revealedContinues) {
     const revealed = revealedContinues || new Set();
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      if (!isRequiredForNext(block)) continue;
       if (block.type === 'continue') {
         if (!revealed.has(i)) return false;
         continue;
       }
+      if (!isRequiredForNext(block)) continue;
       if (!isNextRequirementMet(block, i, ctx)) return false;
     }
     return true;
