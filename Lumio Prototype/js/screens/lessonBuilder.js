@@ -2174,18 +2174,19 @@ function renderBlockContent(block, editable) {
         : variant === 'boxed'
           ? `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; box-shadow:${editable ? 'var(--elevation-1)' : 'none'}; border:${interactiveBorderStyle(ds)};`
           : `${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius};`;
-      // Editable canvas only: which rows are open persists across
-      // re-renders (keyed by stable block.id), so attaching media to a
-      // collapsed-by-default row doesn't immediately hide it again.
-      // Preview/published output keeps the original expandFirst-only rule.
-      let openRows = editable ? BuilderUI.openItemState[block.id] : null;
-      if (editable && !openRows) {
+      // Which rows are open persists across re-renders (keyed by stable
+      // block.id) in both Builder and Learner, so attaching media to a
+      // collapsed row or submitting a KC below doesn't silently re-collapse
+      // it. lumioAccordionToggle writes here unconditionally when the Set
+      // exists, so initialising it here makes the mirror-write always fire.
+      let openRows = BuilderUI.openItemState[block.id];
+      if (!openRows) {
         openRows = new Set(expandFirst ? [0] : []);
         BuilderUI.openItemState[block.id] = openRows;
       }
-      return `<div class="lumio-accordion" style="${interactiveSpacingStyle(ds)} display:flex; flex-direction:column; gap:${rowSpacing}px;">
+      return `<div class="lumio-accordion" data-block-id="${block.id}" style="${interactiveSpacingStyle(ds)} display:flex; flex-direction:column; gap:${rowSpacing}px;">
         ${items.map((item, i) => {
-          const open = editable ? openRows.has(i) : (expandFirst && i === 0);
+          const open = openRows.has(i);
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
             <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(this.closest('.lumio-accordion-row').classList.contains('open') && event.target.closest('.editable-text[contenteditable=true]')) return; lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
               <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px;">${richTextOut(item.title || '')}</${headingTag}></span>
@@ -2209,9 +2210,11 @@ function renderBlockContent(block, editable) {
         { title: 'FAQ', body: 'FAQ content...' },
       ]);
       const settings = block.settings || {};
-      // Builder-only: prefer the persisted active tab (see lumioTabSwitch)
-      // over the author's default so re-renders don't jump back to tab 0.
-      const persistedActive = editable ? BuilderUI.openItemState[block.id] : undefined;
+      // Prefer the persisted active tab (see lumioTabSwitch) over the
+      // author's default so re-renders — in both Builder and Learner — don't
+      // jump back to tab 0. lumioTabSwitch always writes here regardless of
+      // context, so removing the editable guard makes the read consistent.
+      const persistedActive = BuilderUI.openItemState[block.id];
       let active = typeof persistedActive === 'number' ? persistedActive : (settings.defaultTab || 0);
       if (active < 0 || active >= items.length) active = 0;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
@@ -2220,7 +2223,7 @@ function renderBlockContent(block, editable) {
       const textColor = archATextColor(ds);
       const tabStyle = ds.tabStyle || 'underline';
       const animate = settings.animation !== false;
-      return `<div class="lumio-tabs" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}" style="${interactiveSpacingStyle(ds)}">
+      return `<div class="lumio-tabs" data-block-id="${block.id}" data-tabstyle="${tabStyle}" data-animate="${animate ? '1' : '0'}" style="${interactiveSpacingStyle(ds)}">
         <div class="lumio-tabs-strip" role="tablist" style="justify-content:${alignMap[ds.align] || 'flex-start'};">
           ${items.map((item, i) => `<button class="lumio-tab-btn ${i === active ? 'active' : ''}" role="tab" aria-selected="${i === active}" onclick="if(this.classList.contains('active') && event.target.closest('.editable-text[contenteditable=true]')) return; lumioTabSwitch(this, ${i})"><span class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Tab ${i + 1}">${richTextOut(item.title || (editable ? '' : 'Tab ' + (i + 1)))}</span></button>`).join('')}
         </div>
@@ -2288,11 +2291,11 @@ function renderBlockContent(block, editable) {
       const textColor = archATextColor(ds);
       const indicatorStyle = ds.indicatorStyle || 'dots';
       const swipe = settings.enableSwipe !== false;
-      // Builder-only: prefer the persisted current step (see
-      // lumioProcessGoto) so re-renders don't jump back to step 0.
-      const persistedStep = editable ? BuilderUI.openItemState[block.id] : undefined;
+      // Prefer the persisted current step (see lumioProcessGoto) so
+      // re-renders — in both Builder and Learner — don't jump back to step 0.
+      const persistedStep = BuilderUI.openItemState[block.id];
       const currentStep = (typeof persistedStep === 'number' && persistedStep < items.length) ? persistedStep : 0;
-      return `<div class="lumio-process" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0" style="${interactiveSpacingStyle(ds)}"
+      return `<div class="lumio-process" data-block-id="${block.id}" data-current="${currentStep}" data-swipe="${swipe ? '1' : '0'}" tabindex="0" style="${interactiveSpacingStyle(ds)}"
           onkeydown="if(event.key==='ArrowLeft')lumioProcessNav(this,-1); if(event.key==='ArrowRight')lumioProcessNav(this,1);"
           ontouchstart="lumioProcessTouchStart(event,this)" ontouchend="lumioProcessTouchEnd(event,this)">
         <div class="lumio-process-panel" style="${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
@@ -2332,8 +2335,13 @@ function renderBlockContent(block, editable) {
       const bg = surfaceBg(Object.assign({}, ds, { bgStyle: ds.bgStyle || 'theme' }));
       const dialogueStyle = ds.dialoguePanelStyle || 'card';
       const completionMessage = settings.completionMessage || 'Scenario complete!';
-      return `<div class="lumio-scenario" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="0" style="border-radius:${radius}; overflow:hidden; border:${interactiveBorderStyle(ds)}; ${interactiveSpacingStyle(ds)}">
-        ${scenes.map((scene, i) => `<div class="lumio-scenario-scene ${i === 0 ? 'active' : ''}" data-scene="${i}">
+      // Restore the learner's current scene across re-renders (KC submission,
+      // Continue click, etc.) — same BuilderUI.openItemState pattern as
+      // Tabs/Process/Accordion. lumioScenarioGoto mirrors the index here.
+      const persistedScene = BuilderUI.openItemState[block.id];
+      const initialScene = (typeof persistedScene === 'number' && persistedScene < scenes.length) ? persistedScene : 0;
+      return `<div class="lumio-scenario" data-block-id="${block.id}" data-scoring="${settings.enableScoring ? '1' : '0'}" data-completion="${escapeHtml(completionMessage)}" data-correct="0" data-total="0" data-current="${initialScene}" style="border-radius:${radius}; overflow:hidden; border:${interactiveBorderStyle(ds)}; ${interactiveSpacingStyle(ds)}">
+        ${scenes.map((scene, i) => `<div class="lumio-scenario-scene ${i === initialScene ? 'active' : ''}" data-scene="${i}">
           <div class="lumio-scenario-bg" style="${scene.backgroundImage ? `background-image:url('${AssetStore.resolveMediaSrc(scene.backgroundImage)}'); background-size:cover; background-position:center;` : `background:${bg};`}">
             ${scene.backgroundVideo ? `<video class="lumio-scenario-bgvideo" autoplay muted loop playsinline src="${AssetStore.resolveMediaSrc(scene.backgroundVideo)}"></video>` : ''}
             <div class="lumio-scenario-overlay" style="background:rgba(0,0,0,${overlay / 100});"></div>
@@ -5028,17 +5036,17 @@ function flashcardContentPanel(block, d) {
     { id: 'center', label: 'Center' },
     { id: 'full', label: 'Full Card' },
   ];
-  const iconBtn = (cls, findex, title, disabled, label) =>
-    `<button class="btn-icon ${cls}" data-findex="${findex}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
+  const iconBtn = (cls, iindex, title, disabled, label) =>
+    `<button class="btn-icon ${cls}" data-list="items" data-iindex="${iindex}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   return items.map((item, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
         <div class="prop-section-title" style="margin:0;">Card ${i + 1}</div>
         <div class="flex gap-4">
-          ${iconBtn('flashcard-move-up', i, 'Move up', i === 0, '↑')}
-          ${iconBtn('flashcard-move-down', i, 'Move down', i === items.length - 1, '↓')}
-          ${iconBtn('flashcard-duplicate', i, 'Duplicate card', false, '⧉')}
-          ${iconBtn('flashcard-remove', i, 'Delete card', items.length <= 1, '×')}
+          ${iconBtn('lumio-item-move-up', i, 'Move up', i === 0, '↑')}
+          ${iconBtn('lumio-item-move-down', i, 'Move down', i === items.length - 1, '↓')}
+          ${iconBtn('lumio-item-duplicate', i, 'Duplicate card', false, '⧉')}
+          ${iconBtn('lumio-item-remove', i, 'Delete card', items.length <= 1, '×')}
         </div>
       </div>
       ${['front', 'back'].map(face => `
@@ -5057,7 +5065,7 @@ function flashcardContentPanel(block, d) {
         </div>
       `).join('')}
     </div>
-  `).join('') + `<button class="btn btn-secondary w-full mt-8 flashcard-add">+ Add Card</button>` + aiActions();
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="items">+ Add Card</button>` + aiActions();
 }
 
 /* Flashcard Grid / Flashcard Stack — Format design-tab fields. */
@@ -5238,6 +5246,9 @@ function defaultListItem(blockType, listKey) {
   }
   if (blockType === 'carousel' && listKey === 'items') {
     return { src: null, title: '', description: '', imageFit: 'cover' };
+  }
+  if ((blockType === 'flashcard_grid' || blockType === 'flashcard_stack') && listKey === 'items') {
+    return { front: { text: '', image: null, imageFit: 'cover' }, back: { text: '', image: null, imageFit: 'cover' } };
   }
   return { title: '', body: '' };
 }
@@ -5572,12 +5583,7 @@ function scenarioContentPanel(block, d) {
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
         <div class="prop-section-title" style="margin:0;">Scene ${i + 1}</div>
-        <div class="flex gap-4">
-          ${iconBtn('lumio-scene-move-up', i, 'Move up', i === 0, '↑')}
-          ${iconBtn('lumio-scene-move-down', i, 'Move down', i === scenes.length - 1, '↓')}
-          ${iconBtn('lumio-scene-duplicate', i, 'Duplicate', false, '⧉')}
-          ${iconBtn('lumio-scene-remove', i, 'Delete', scenes.length <= 1, '×')}
-        </div>
+        ${itemManageToolbar('scenes', i, scenes.length)}
       </div>
       <div class="field"><label>Scene Title (internal)</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="title" value="${escapeHtml(scene.title || '')}" /></div>
       <div class="field"><label>Character Name</label><input class="input lumio-scene-text" data-sindex="${i}" data-field="characterName" value="${escapeHtml(scene.characterName || '')}" /></div>
@@ -5615,7 +5621,7 @@ function scenarioContentPanel(block, d) {
         `).join('')}
       </div>
     </div>
-  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-scene-add">+ Add Scene</button>` + aiActions();
+  `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="scenes">+ Add Scene</button>` + aiActions();
 }
 
 function scenarioDesignFields(block, ds) {
@@ -5661,12 +5667,12 @@ function lumioAccordionToggle(header, single, animate) {
   const body = row.querySelector('.lumio-accordion-body');
   const willOpen = !row.classList.contains('open');
   const canvasBlock = row.closest('.canvas-block');
-  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  const blockId = (canvasBlock && canvasBlock.dataset.blockId) || wrap.dataset.blockId;
   const rowIndex = Array.from(wrap.children).indexOf(row);
-  // Builder-only: mirror open/closed state into BuilderUI.openItemState so
-  // the NEXT full re-render (e.g. triggered by attaching an image via the
-  // media picker) doesn't silently re-collapse this row — see the
-  // 'accordion' render case and BuilderUI.openItemState's definition.
+  // Mirror open/closed state into BuilderUI.openItemState so the next
+  // re-render (media picker, KC submission, Continue click) doesn't
+  // silently re-collapse this row. .canvas-block exists in Builder;
+  // data-block-id on the .lumio-accordion element covers Learner mode.
   if (blockId && BuilderUI.openItemState[blockId]) {
     if (single && willOpen) BuilderUI.openItemState[blockId].clear();
     if (willOpen) BuilderUI.openItemState[blockId].add(rowIndex);
@@ -5712,10 +5718,11 @@ function lumioTabSwitch(btn, i) {
   });
   wrap.querySelectorAll('.lumio-tab-panel').forEach((p, idx) => p.classList.toggle('active', idx === i));
   lumioRecordProgress(wrap, 'visited', i);
-  // Builder-only: persist which tab is active so re-rendering after a
-  // media-picker upload doesn't snap back to the default tab and hide it.
+  // Persist active tab across re-renders (media-picker, KC submission,
+  // Continue click). .canvas-block covers Builder; data-block-id on the
+  // .lumio-tabs element covers Learner mode.
   const canvasBlock = wrap.closest('.canvas-block');
-  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  const blockId = (canvasBlock && canvasBlock.dataset.blockId) || wrap.dataset.blockId;
   if (blockId) BuilderUI.openItemState[blockId] = i;
 }
 
@@ -5733,10 +5740,11 @@ function lumioProcessGoto(wrap, idx) {
   if (prev) prev.disabled = idx === 0;
   if (next) next.disabled = idx === steps.length - 1;
   lumioRecordProgress(wrap, 'visited', idx);
-  // Builder-only: persist current step so re-rendering after a media-picker
-  // upload doesn't snap back to step 0 and hide it.
+  // Persist current step across re-renders (media-picker, KC submission,
+  // Continue click). .canvas-block covers Builder; data-block-id on the
+  // .lumio-process element covers Learner mode.
   const canvasBlock = wrap.closest('.canvas-block');
-  const blockId = canvasBlock && canvasBlock.dataset.blockId;
+  const blockId = (canvasBlock && canvasBlock.dataset.blockId) || wrap.dataset.blockId;
   if (blockId) BuilderUI.openItemState[blockId] = idx;
 }
 function lumioProcessNav(wrap, dir) {
@@ -5934,6 +5942,10 @@ function lumioScenarioGoto(wrap, idx) {
   if (idx < 0 || idx >= scenes.length) return;
   scenes.forEach((s, i) => s.classList.toggle('active', i === idx));
   wrap.dataset.current = String(idx);
+  // Mirror current scene into BuilderUI.openItemState so a re-render
+  // (e.g. KC submission below the scenario) restores the correct scene.
+  const blockId = wrap.dataset.blockId;
+  if (blockId) BuilderUI.openItemState[blockId] = idx;
 }
 
 function contentFields(fields) {
@@ -7265,6 +7277,16 @@ function bindBuilderEvents(course, lesson, blocks) {
   });
 
   // Item list — add / duplicate / remove / reorder
+  // Helper: re-render after an item-list mutation. Flashcard blocks need
+  // rerenderFlashcardBlock to preserve flip state; all others do a full rebuild.
+  function reRenderAfterItemChange(block) {
+    if (block.type === 'flashcard_grid' || block.type === 'flashcard_stack') {
+      rerenderFlashcardBlock(block);
+    } else {
+      renderLessonBuilder(lesson.id);
+    }
+  }
+
   app.querySelectorAll('.lumio-item-add').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const block = blocks[BuilderUI.selected];
@@ -7272,7 +7294,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const listKey = btn.dataset.list;
     const items = block.data[listKey] || (block.data[listKey] = []);
     items.push(defaultListItem(block.type, listKey));
-    renderLessonBuilder(lesson.id);
+    reRenderAfterItemChange(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.lumio-item-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7282,7 +7304,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = block.data[btn.dataset.list] || [];
     const i = parseInt(btn.dataset.iindex, 10);
     items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
-    renderLessonBuilder(lesson.id);
+    reRenderAfterItemChange(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.lumio-item-remove').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7292,7 +7314,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const items = block.data[btn.dataset.list] || [];
     if (items.length <= 1) return;
     items.splice(parseInt(btn.dataset.iindex, 10), 1);
-    renderLessonBuilder(lesson.id);
+    reRenderAfterItemChange(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.lumio-item-move-up').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7303,7 +7325,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const i = parseInt(btn.dataset.iindex, 10);
     if (i <= 0) return;
     [items[i - 1], items[i]] = [items[i], items[i - 1]];
-    renderLessonBuilder(lesson.id);
+    reRenderAfterItemChange(block);
     flashSaveStatus();
   }));
   app.querySelectorAll('.lumio-item-move-down').forEach(btn => btn.addEventListener('click', (e) => {
@@ -7314,7 +7336,7 @@ function bindBuilderEvents(course, lesson, blocks) {
     const i = parseInt(btn.dataset.iindex, 10);
     if (i >= items.length - 1) return;
     [items[i + 1], items[i]] = [items[i], items[i + 1]];
-    renderLessonBuilder(lesson.id);
+    reRenderAfterItemChange(block);
     flashSaveStatus();
   }));
 
@@ -7394,58 +7416,6 @@ function bindBuilderEvents(course, lesson, blocks) {
     const scene = scenes[parseInt(btn.dataset.sindex, 10)];
     if (!scene) return;
     delete scene[btn.dataset.field];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-
-  app.querySelectorAll('.lumio-scene-add').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const scenes = block.data.scenes || (block.data.scenes = []);
-    scenes.push(defaultListItem('scenario', 'scenes'));
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.lumio-scene-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const scenes = block.data.scenes || [];
-    const i = parseInt(btn.dataset.sindex, 10);
-    scenes.splice(i + 1, 0, JSON.parse(JSON.stringify(scenes[i])));
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.lumio-scene-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const scenes = block.data.scenes || [];
-    if (scenes.length <= 1) return;
-    scenes.splice(parseInt(btn.dataset.sindex, 10), 1);
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.lumio-scene-move-up').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const scenes = block.data.scenes || [];
-    const i = parseInt(btn.dataset.sindex, 10);
-    if (i <= 0) return;
-    [scenes[i - 1], scenes[i]] = [scenes[i], scenes[i - 1]];
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.lumio-scene-move-down').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const scenes = block.data.scenes || [];
-    const i = parseInt(btn.dataset.sindex, 10);
-    if (i >= scenes.length - 1) return;
-    [scenes[i + 1], scenes[i]] = [scenes[i], scenes[i + 1]];
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
@@ -7698,59 +7668,6 @@ function bindBuilderEvents(course, lesson, blocks) {
       flashSaveStatus();
     }));
   });
-
-  // Flashcards — Content panel: add / duplicate / remove / reorder cards
-  app.querySelectorAll('.flashcard-add').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    items.push({ front: { text: '', image: null, imageFit: 'cover' }, back: { text: '', image: null, imageFit: 'cover' } });
-    rerenderFlashcardBlock(block);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.flashcard-duplicate').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    const i = parseInt(btn.dataset.findex);
-    items.splice(i + 1, 0, JSON.parse(JSON.stringify(items[i])));
-    rerenderFlashcardBlock(block);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.flashcard-remove').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    if (items.length <= 1) return;
-    items.splice(parseInt(btn.dataset.findex), 1);
-    rerenderFlashcardBlock(block);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.flashcard-move-up').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    const i = parseInt(btn.dataset.findex);
-    if (i <= 0) return;
-    [items[i - 1], items[i]] = [items[i], items[i - 1]];
-    rerenderFlashcardBlock(block);
-    flashSaveStatus();
-  }));
-  app.querySelectorAll('.flashcard-move-down').forEach(btn => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeFlashcardItems(block.data);
-    const i = parseInt(btn.dataset.findex);
-    if (i >= items.length - 1) return;
-    [items[i + 1], items[i]] = [items[i], items[i + 1]];
-    rerenderFlashcardBlock(block);
-    flashSaveStatus();
-  }));
 
   // Statement blocks — icon controls
   app.querySelector('.stmt-icon-remove-toggle')?.addEventListener('change', (e) => {
