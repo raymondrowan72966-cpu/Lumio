@@ -2638,6 +2638,14 @@ function openLearnerPreviewFor(courseId, returnTo, lessonId) {
   LearnerUI.carouselIndex = {};
   LearnerUI.quoteCarouselIndex = {};
   LearnerUI.listChecked = {};
+  // Architectural boundary: Builder interaction state (which accordion rows
+  // are open, which tab is active, which process/scenario step the author
+  // navigated to) must never become the learner's starting state. Resetting
+  // here ensures every Preview session begins from the block's authored
+  // default, not from wherever the author happened to leave the UI.
+  // Covers all four consumers: accordion open rows (Set), tabs active index,
+  // process current step, scenario current scene.
+  BuilderUI.openItemState = {};
   LumioState.learnerPreview = { returnTo: returnTo || '#/projects' };
   navigate('#/learner/' + courseId + (lessonId ? '/' + lessonId : ''));
 }

@@ -834,7 +834,7 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
 function textBlockExtraStyle(block) {
   if (blockCategory(block.type) !== 'Text') return '';
   const ds = block.design || {};
-  const defaultPad = 22;
+  const defaultPad = 0;
   let style = '';
   const padTop = ds.paddingTop !== undefined ? ds.paddingTop : defaultPad;
   const padBottom = ds.paddingBottom !== undefined ? ds.paddingBottom : defaultPad;
@@ -1315,6 +1315,14 @@ function richTextOut(value) {
   return sanitizeRichHtml(value);
 }
 
+/* Convert computed "rgb(r, g, b)" colour string to "#rrggbb" hex for use as
+   <input type="color"> value. Returns null if the input is not a plain rgb(). */
+function rgbToHex(rgb) {
+  const m = rgb && rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (!m) return null;
+  return '#' + [m[1], m[2], m[3]].map(n => parseInt(n, 10).toString(16).padStart(2, '0')).join('');
+}
+
 /* execCommand (with styleWithCSS) can still emit legacy <font> tags for
    fontSize/foreColor — convert those to sanitizer-safe <span style="..."> */
 function normalizeLegacyFontTags(root, pendingFontSize) {
@@ -1451,31 +1459,76 @@ function ensureRichTextToolbar() {
   // picker keeps the OS-level drag session uninterrupted while the text
   // colour still updates live.
   let liveColorEl = null;
-  // Reset liveColorEl before each new colour-picker session so that selecting
-  // different text between sessions always runs applyAndSync on the first tick
-  // rather than reusing a still-connected element from the previous session.
+  // Pre-apply the current colour on mousedown — before the OS picker opens —
+  // so liveColorEl is always captured while the page still has focus.
+  // Every subsequent input tick (drag and RGB typing alike) then takes the
+  // direct-mutation fast path and never calls focus() or execCommand, which
+  // is the root cause of cursor jumping in the picker's RGB text fields.
   el.querySelector('.rt-color').addEventListener('mousedown', () => {
     RichTextToolbar.colorPickerActive = true;
     liveColorEl = null;
+    const colorEl = el.querySelector('.rt-color');
+
+    // Stage 1: try execCommand — fast, handles complex multi-element selections.
+    applyAndSync((active) => {
+      document.execCommand('foreColor', false, colorEl.value || '#000000');
+      normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
+      // Acquire liveColorEl from the browser selection, not DOM order.
+      // execCommand('foreColor') guarantees the new/modified element contains
+      // the active selection; .closest('[style*="color"]') anchors to it
+      // precisely regardless of how many other coloured spans exist in the field.
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        let node = sel.getRangeAt(0).commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        liveColorEl = node ? node.closest('[style*="color"]') : null;
+      }
+    });
+
+    // Stage 2 fallback: execCommand is a no-op when the colour matches the
+    // element's computed colour (browser skips the redundant wrap). In that
+    // case use Range.surroundContents() to create a span directly so
+    // liveColorEl is guaranteed to be set for any simple (single-root) range.
+    if (!liveColorEl) {
+      const range = RichTextToolbar.savedRange?.cloneRange();
+      if (range && !range.collapsed) {
+        const span = document.createElement('span');
+        span.style.color = colorEl.value || '#000000';
+        try {
+          range.surroundContents(span);
+          liveColorEl = span;
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          RichTextToolbar.savedRange = newRange;
+          const active = RichTextToolbar.activeField;
+          if (active) syncRichTextField(active.block, active.elx);
+        } catch (e) {
+          // Selection crosses element boundaries (e.g. partially bold text) —
+          // liveColorEl stays null; the input handler's applyAndSync fallback
+          // handles it. This is the same path as before this fix for that case.
+        }
+      }
+    }
   });
   el.querySelector('.rt-color').addEventListener('input', (e) => {
     if (liveColorEl && liveColorEl.isConnected) {
+      // Fast path: mutate the pre-created span directly — no focus(), no
+      // execCommand(), no cursor stealing from the picker's RGB fields.
       liveColorEl.style.color = e.target.value;
       return;
     }
+    // Fallback for the rare case where mousedown couldn't capture liveColorEl
+    // (e.g., the selection was collapsed when the picker opened).
     applyAndSync((active) => {
       document.execCommand('foreColor', false, e.target.value);
-      // execCommand may produce a <font> element — normalize it to a <span>
-      // immediately (rather than waiting for applyAndSync's own call further
-      // down) so the reference captured below points at the element that
-      // will actually still be in the tree on the next tick, instead of one
-      // that's about to be replaced out from under it.
       normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
-      // Scoped strictly to this field (not the whole page/ancestor chain)
-      // to avoid matching an unrelated element that happens to have
-      // "color" somewhere in its own inline style — e.g. background-color.
-      const matches = active.elx.querySelectorAll('font,[style*="color"]');
-      liveColorEl = matches[matches.length - 1] || null;
+      // Same selection-anchored acquisition as Stage 1 in mousedown.
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        let node = sel.getRangeAt(0).commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        liveColorEl = node ? node.closest('[style*="color"]') : null;
+      }
     });
   });
   el.querySelector('.rt-color').addEventListener('change', () => {
@@ -1706,6 +1759,18 @@ function positionRichTextToolbar() {
   if (top + toolbar.offsetHeight > window.innerHeight - 8) top = Math.max(8, rect.top - toolbar.offsetHeight - 8); // flip above if no room below
   toolbar.style.left = `${left}px`;
   toolbar.style.top = `${top}px`;
+
+  // Sync the colour swatch to the colour of the text at the start of the
+  // selection, so the picker opens at the right hue instead of always black.
+  const colorInput = toolbar.querySelector('.rt-color');
+  if (colorInput && !RichTextToolbar.colorPickerActive) {
+    let node = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    if (node) {
+      const hex = rgbToHex(getComputedStyle(node).color);
+      if (hex) colorInput.value = hex;
+    }
+  }
 }
 
 function hideRichTextToolbar() {
@@ -2189,7 +2254,7 @@ function renderBlockContent(block, editable) {
           const open = openRows.has(i);
           return `<div class="lumio-accordion-row ${open ? 'open' : ''}">
             <div class="lumio-accordion-header" tabindex="0" role="button" aria-expanded="${open}" style="${rowStyle}" onclick="if(this.closest('.lumio-accordion-row').classList.contains('open') && event.target.closest('.editable-text[contenteditable=true]')) return; lumioAccordionToggle(this, ${single}, ${animate})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); lumioAccordionToggle(this, ${single}, ${animate});}">
-              <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px;">${richTextOut(item.title || '')}</${headingTag}></span>
+              <span class="lumio-accordion-title">${markerStyle === 'number' ? `<span class="lumio-accordion-marker">${i + 1}.</span>` : ''}<${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Section title" style="margin:0; font-size:15px; color:${textColor};">${richTextOut(item.title || '')}</${headingTag}></span>
               <span class="lumio-accordion-chevron" data-style="${ds.chevronStyle || 'chevron'}"></span>
             </div>
             <div class="lumio-accordion-body" style="max-height:${open ? 'none' : '0px'};">
@@ -2302,7 +2367,7 @@ function renderBlockContent(block, editable) {
           ${items.map((item, i) => `<div class="lumio-process-step ${i === currentStep ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
             ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
-            <${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step ${i + 1}" style="margin:4px 0 6px;">${richTextOut(item.title || (editable ? '' : 'Step ' + (i + 1)))}</${headingTag}>
+            <${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step ${i + 1}" style="margin:4px 0 6px; color:${textColor};">${richTextOut(item.title || (editable ? '' : 'Step ' + (i + 1)))}</${headingTag}>
             <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step description...">${richTextOut(item.body || '')}</div>
             ${itemMediaExtrasHtml(item)}
           </div>`).join('')}
@@ -3174,13 +3239,13 @@ function renderTextBlockPanel(block, index) {
       <div class="prop-section-title">Spacing</div>
       <p class="text-sm text-muted mb-8">Top Padding</p>
       <div class="flex items-center gap-8">
-        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 22}" style="flex:1;" />
-        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 22}px</span>
+        <input type="range" class="design-range" data-prop="paddingTop" min="0" max="100" value="${ds.paddingTop ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingTop ?? 0}px</span>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Bottom Padding</p>
       <div class="flex items-center gap-8">
-        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 22}" style="flex:1;" />
-        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 22}px</span>
+        <input type="range" class="design-range" data-prop="paddingBottom" min="0" max="100" value="${ds.paddingBottom ?? 0}" style="flex:1;" />
+        <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds.paddingBottom ?? 0}px</span>
       </div>
     </div>
     <div class="prop-section">
@@ -5417,7 +5482,7 @@ function accordionDesignFields(block, ds) {
     <div class="prop-section">
       <div class="prop-section-title">Text Colour</div>
       <p class="text-sm text-muted mb-8">Title, numbering, and chevron always share this one colour.</p>
-      <input type="color" class="input design-color-input" data-prop="textColor" data-preview-target=".lumio-accordion-header" data-preview-prop="color" value="${(ds.textColor && ds.textColor.startsWith('#')) ? ds.textColor : (ds.bgType === 'dark' ? '#ffffff' : '#1F1B3A')}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+      <input type="color" class="input design-color-input" data-prop="textColor" value="${(ds.textColor && ds.textColor.startsWith('#')) ? ds.textColor : (ds.bgType === 'dark' ? '#ffffff' : '#1F1B3A')}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
     </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker Style</div>
@@ -5758,7 +5823,10 @@ function lumioProcessTouchEnd(e, wrap) {
   if (wrap.dataset.swipe === '0') return;
   const endX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
   const dx = endX - (wrap._touchX == null ? endX : wrap._touchX);
-  if (Math.abs(dx) > 40) lumioProcessNav(wrap, dx < 0 ? 1 : -1);
+  if (Math.abs(dx) > 40) {
+    e.preventDefault(); // suppress the synthesised click so only one navigation fires per swipe
+    lumioProcessNav(wrap, dx < 0 ? 1 : -1);
+  }
 }
 
 /* Labelled Graphic — open a hotspot's info panel, honouring "Auto Close
@@ -6434,16 +6502,27 @@ function bindBuilderEvents(course, lesson, blocks) {
   }));
 
   // Charts — Design panel: per-segment colour overrides (Pie)
-  app.querySelectorAll('.chart-segment-color').forEach(inp => inp.addEventListener('change', (e) => {
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    const items = normalizeChartItems(block.data, 'pie');
-    const item = items[parseInt(inp.dataset.iindex)];
-    if (!item) return;
-    item.color = e.target.value;
-    renderLessonBuilder(lesson.id);
-    flashSaveStatus();
-  }));
+  app.querySelectorAll('.chart-segment-color').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      const items = normalizeChartItems(block.data, 'pie');
+      const item = items[parseInt(inp.dataset.iindex)];
+      if (!item) return;
+      item.color = e.target.value;
+      applyLivePreview(block, BuilderUI.selected);
+    });
+    inp.addEventListener('change', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      const items = normalizeChartItems(block.data, 'pie');
+      const item = items[parseInt(inp.dataset.iindex)];
+      if (!item) return;
+      item.color = e.target.value;
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    });
+  });
   app.querySelectorAll('.chart-segment-color-reset').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const block = blocks[BuilderUI.selected];
@@ -6529,15 +6608,20 @@ function bindBuilderEvents(course, lesson, blocks) {
   // the one native <input type="color"> every picker in the app already
   // uses, just with one shared, opt-in live-preview behaviour added.
   app.querySelectorAll('.design-color-input[data-prop]').forEach(inp => {
-    if (inp.dataset.previewTarget) {
-      inp.addEventListener('input', () => {
+    inp.addEventListener('input', () => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design[inp.dataset.prop] = inp.value;
+      if (inp.dataset.previewTarget) {
         const scope = document.querySelector(`.canvas-block[data-index="${BuilderUI.selected}"]`);
-        if (!scope) return;
-        scope.querySelectorAll(inp.dataset.previewTarget).forEach(targetEl => {
-          targetEl.style[inp.dataset.previewProp || 'color'] = inp.value;
+        if (scope) scope.querySelectorAll(inp.dataset.previewTarget).forEach(el => {
+          el.style[inp.dataset.previewProp || 'color'] = inp.value;
         });
-      });
-    }
+      } else {
+        applyLivePreview(block, BuilderUI.selected);
+      }
+    });
     inp.addEventListener('change', () => {
       const block = blocks[BuilderUI.selected];
       if (!block) return;
@@ -6703,22 +6787,27 @@ function bindBuilderEvents(course, lesson, blocks) {
   });
 
   // Numbered list — Number Colour live update
-  app.querySelectorAll('.list-number-color').forEach(input => input.addEventListener('input', (e) => {
-    const block = blocks[BuilderUI.selected];
-    if (!block) return;
-    block.design = block.design || {};
-    block.design.numberColor = e.target.value;
-    const ms = block.design.numberMarkerStyle || 'plain';
-    const color = e.target.value;
-    const selBlock = document.querySelector(`.canvas-block[data-index="${BuilderUI.selected}"]`);
-    if (selBlock) {
-      selBlock.querySelectorAll('.list-num-marker').forEach(m => {
-        if (ms === 'filled') { m.style.background = color; m.style.color = '#fff'; m.style.borderColor = ''; }
-        else { m.style.color = color; m.style.borderColor = color; m.style.background = ''; }
-      });
-    }
-    flashSaveStatus();
-  }));
+  app.querySelectorAll('.list-number-color').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const block = blocks[BuilderUI.selected];
+      if (!block) return;
+      block.design = block.design || {};
+      block.design.numberColor = e.target.value;
+      const ms = block.design.numberMarkerStyle || 'plain';
+      const color = e.target.value;
+      const selBlock = document.querySelector(`.canvas-block[data-index="${BuilderUI.selected}"]`);
+      if (selBlock) {
+        selBlock.querySelectorAll('.list-num-marker').forEach(m => {
+          if (ms === 'filled') { m.style.background = color; m.style.color = '#fff'; m.style.borderColor = ''; }
+          else { m.style.color = color; m.style.borderColor = color; m.style.background = ''; }
+        });
+      }
+    });
+    input.addEventListener('change', () => {
+      renderLessonBuilder(lesson.id);
+      flashSaveStatus();
+    });
+  });
 
   // Checkbox list — toggle an item's default (authored) checked state on canvas
   app.querySelectorAll('.list-checkbox-marker').forEach(marker => {

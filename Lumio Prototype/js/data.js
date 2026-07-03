@@ -758,9 +758,9 @@ const LumioData = {
   blockLibrary: [
     { category: 'Recommended', dynamic: true, icon: '✨', blocks: [] },
     { category: 'Text', icon: '📝', blocks: [
-      { id: 'paragraph', name: 'Paragraph', icon: '¶' },
-      { id: 'heading_paragraph', name: 'Heading & Paragraph', icon: 'H¶' },
       { id: 'heading', name: 'Heading', icon: 'H' },
+      { id: 'heading_paragraph', name: 'Heading & Paragraph', icon: 'H¶' },
+      { id: 'paragraph', name: 'Paragraph', icon: '¶' },
       { id: 'columns', name: 'Columns', icon: '▥' },
       { id: 'table', name: 'Table', icon: '▦' },
     ]},
