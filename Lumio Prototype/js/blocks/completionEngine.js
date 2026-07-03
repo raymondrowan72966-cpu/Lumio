@@ -102,8 +102,13 @@ const CompletionEngine = (function () {
         const flipped = (bp.flipped || []).length;
         return rule === 'any_card' ? flipped >= 1 : flipped >= itemCount(block, d);
       }
+      case 'list_checkbox': {
+        const rule = effectiveRule(block);
+        if (rule === 'any_item') return (bp.checkedItems || []).length >= 1;
+        if (rule === 'all_items') return (bp.checkedItems || []).length >= (d.items || []).length;
+        return !!bp.completed; // 'interacted': any toggle satisfies
+      }
       case 'scenario':
-      case 'list_checkbox':
       default:
         return !!bp.completed;
     }

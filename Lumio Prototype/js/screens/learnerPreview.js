@@ -1817,20 +1817,19 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         if (scrollParent) {
           // In-frame scroll: mobile/tablet preview (<main> is the scroll owner).
+          // Always scroll — newly revealed content must be drawn to the learner's
+          // attention on every Continue click, regardless of viewport position.
           const parentRect = scrollParent.getBoundingClientRect();
           const targetRect = target.getBoundingClientRect();
-          const fullyVisible = targetRect.top >= parentRect.top && targetRect.bottom <= parentRect.bottom;
-          if (!fullyVisible) {
-            const relTop = targetRect.top - parentRect.top + scrollParent.scrollTop;
-            scrollParent.scrollTo({ top: Math.max(0, relTop - 100), behavior: 'smooth' });
-          }
+          const relTop = targetRect.top - parentRect.top + scrollParent.scrollTop;
+          scrollParent.scrollTo({ top: Math.max(0, relTop - 100), behavior: 'smooth' });
         } else {
           // Window scroll: desktop preview and all published formats (HTML/SCORM/xAPI).
+          // Always scroll — never suppress with a fullyVisible guard. The target
+          // may be technically in the viewport (at the bottom edge) but the learner
+          // needs it near the top to read it comfortably.
           const rect = target.getBoundingClientRect();
-          const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-          if (!fullyVisible) {
-            window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
-          }
+          window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 100), behavior: 'smooth' });
         }
       }));
     };

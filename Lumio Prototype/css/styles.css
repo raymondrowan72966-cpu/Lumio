@@ -136,6 +136,15 @@ h1, h2, h3, h4 {
   font-family: var(--theme-font-body, var(--font-body));
   font-size: var(--theme-font-size, 16px);
 }
+
+/* Page background follows the authored Course Theme background.
+   --theme-bg-style is set on .lumio-learner-root (and its ancestors in the
+   builder) by themeVarStyle() — this rule ensures that variable is actually
+   consumed as the visible background rather than the platform's default
+   --surface-50 grey bleeding through from #app. */
+.lumio-learner-root {
+  background: var(--theme-bg-style, var(--surface-50));
+}
 #lesson-canvas h1, #lesson-canvas h2, #lesson-canvas h3, #lesson-canvas h4,
 .lumio-learner-root h1, .lumio-learner-root h2, .lumio-learner-root h3, .lumio-learner-root h4,
 .course-landing-root h1, .course-landing-root h2, .course-landing-root h3, .course-landing-root h4 {

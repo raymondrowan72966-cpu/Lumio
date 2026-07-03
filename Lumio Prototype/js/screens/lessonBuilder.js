@@ -111,7 +111,7 @@ function renderLessonBuilder(lessonId) {
       ${renderBuilderTopbar(course, lesson)}
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
-        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--surface-0); position:relative;" id="lesson-canvas-wrap">
+        <div style="flex:1; min-width:0; overflow-y:auto; background:var(--theme-bg-style, var(--surface-0)); position:relative;" id="lesson-canvas-wrap">
           <div style="max-width:860px; margin:0 auto; padding:40px 24px 200px; position:relative; z-index:1; container-type:inline-size;" id="lesson-canvas">
             ${renderCanvasBlocks(blocks)}
           </div>
@@ -164,8 +164,9 @@ function renderBuilderTopbar(course, lesson) {
    LEFT SIDEBAR — BLOCK LIBRARY
    ============================================================ */
 function recommendedBlocks(lesson, course) {
-  const objIdx = lesson ? lesson.objectiveIndex : null;
-  const obj = (course && objIdx !== null && objIdx !== undefined) ? course.objectives[objIdx] : null;
+  const objIndices0 = lesson ? (Array.isArray(lesson.objectiveIndices) ? lesson.objectiveIndices : lesson.objectiveIndex != null ? [lesson.objectiveIndex] : []) : [];
+  const objIdx = objIndices0[0] ?? null;
+  const obj = (course && objIdx !== null) ? course.objectives[objIdx] : null;
   const verb = obj ? obj.verb : null;
   const applyVerbs = ['Demonstrate','Use','Solve','Implement','Compare','Differentiate','Organize','Examine','Justify','Critique','Assess','Recommend','Design','Develop','Construct','Compose'];
 
@@ -3095,7 +3096,8 @@ function lessonInsights(blocks, course, lesson) {
   const kcCount = blocks.filter(b => b.type.startsWith('kc_')).length;
   const imgCount = blocks.filter(b => ['image','image_text','text_on_image','carousel'].includes(b.type)).length;
   const wordEstimate = blocks.length * 35;
-  const obj = lesson && lesson.objectiveIndex !== null && course ? course.objectives[lesson.objectiveIndex] : null;
+  const objIndices = lesson ? (Array.isArray(lesson.objectiveIndices) ? lesson.objectiveIndices : lesson.objectiveIndex != null ? [lesson.objectiveIndex] : []) : [];
+  const courseObjs = course ? (course.objectives || []) : [];
 
   return `
     <div class="card card-pad mt-16" style="background:var(--pastel-lavender); border:none;">
@@ -3103,9 +3105,9 @@ function lessonInsights(blocks, course, lesson) {
       <div style="height:6px; background:#fff; border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
     </div>
     <div class="card card-pad mt-12">
-      <div class="flex justify-between items-center text-sm"><span>🎯 Objective</span></div>
-      <p class="text-sm mt-8">${obj ? `${obj.verb} ${obj.text}` : 'Not linked to an objective yet'}</p>
-      ${!obj ? `<button class="btn btn-secondary btn-sm mt-8 w-full" id="link-objective">Link an objective</button>` : ''}
+      <div class="flex justify-between items-center text-sm"><span>🎯 ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>
+      <p class="text-sm mt-8">${objIndices.length > 0 ? `${objIndices.length} objective${objIndices.length > 1 ? 's' : ''} linked` : 'Not linked to an objective yet'}</p>
+      <button class="btn btn-secondary btn-sm mt-8 w-full" id="link-objective">${objIndices.length > 0 ? 'Link objectives' : 'Link an objective'}</button>
     </div>
     <div class="card card-pad mt-12">
       <div class="text-sm flex justify-between"><span>📖 Estimated read time</span><span>~${Math.max(1,Math.round(wordEstimate/130))} min</span></div>
@@ -7917,20 +7919,28 @@ function bindBuilderEvents(course, lesson, blocks) {
   });
   app.querySelector('#link-objective')?.addEventListener('click', () => {
     if (!course) return;
+    const current = Array.isArray(lesson.objectiveIndices) ? lesson.objectiveIndices : lesson.objectiveIndex != null ? [lesson.objectiveIndex] : [];
     const overlay = el(`
       <div class="overlay"><div class="modal" style="width:420px; padding:24px;">
-        <h3 style="font-size:16px;">Link to an objective</h3>
-        <select class="input mt-16" id="obj-select">
-          ${course.objectives.map((o,i)=>`<option value="${i}">Objective ${i+1}: ${o.verb} ${o.text}</option>`).join('')}
-        </select>
-        <div class="flex justify-end gap-12 mt-16"><button class="btn btn-ghost" id="cancel-link">Cancel</button><button class="btn btn-primary" id="save-link">Link</button></div>
+        <h3 style="font-size:16px;">Link objectives</h3>
+        <div class="flex-col gap-4 mt-16">
+          ${course.objectives.map((o, i) => `
+            <label class="flex items-start gap-8 text-sm mt-8" style="cursor:pointer; user-select:none;">
+              <input type="checkbox" class="obj-modal-check" data-obj-idx="${i}" ${current.includes(i) ? 'checked' : ''} style="margin-top:2px; flex-shrink:0; accent-color:var(--theme-primary,var(--purple));">
+              <span>${o.verb} ${o.text}</span>
+            </label>`).join('')}
+        </div>
+        <div class="flex justify-end gap-12 mt-16">
+          <button class="btn btn-ghost" id="cancel-link">Cancel</button>
+          <button class="btn btn-primary" id="save-link">Link</button>
+        </div>
       </div></div>
     `);
     document.body.appendChild(overlay);
     overlay.querySelector('#cancel-link').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', e => { if (e.target===overlay) overlay.remove(); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     overlay.querySelector('#save-link').addEventListener('click', () => {
-      lesson.objectiveIndex = parseInt(overlay.querySelector('#obj-select').value);
+      lesson.objectiveIndices = [...overlay.querySelectorAll('.obj-modal-check:checked')].map(cb => parseInt(cb.dataset.objIdx));
       overlay.remove();
       renderLessonBuilder(lesson.id);
     });

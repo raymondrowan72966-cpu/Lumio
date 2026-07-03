@@ -529,6 +529,25 @@ function isProjectViewOnly(project) {
 }
 
 function canSubmitForReview(project) { return canEditProject(project); }
+
+// Returns { ready: bool, uncovered: [{verb,text}] }.
+// Single source of truth for content readiness — consumed by both the
+// Projects menu (to disable the action before it is clicked) and by
+// transitionProjectStatus (as the final authority before state mutation).
+function courseSubmissionReadiness(project) {
+  if (!project) return { ready: true, uncovered: [] };
+  const courseData = LumioState.courses && LumioState.courses[project.id];
+  if (!courseData || !Array.isArray(courseData.objectives) || courseData.objectives.length === 0) {
+    return { ready: true, uncovered: [] };
+  }
+  const covered = new Set(
+    (courseData.lessons || []).flatMap(l =>
+      Array.isArray(l.objectiveIndices) ? l.objectiveIndices : []
+    )
+  );
+  const uncovered = courseData.objectives.filter((_, i) => !covered.has(i));
+  return { ready: uncovered.length === 0, uncovered };
+}
 function canApproveReject() { return isWorkspaceOwner(); }
 function canArchiveProject() { return isWorkspaceOwner(); }
 function canRestoreProject() { return isWorkspaceOwner(); }
@@ -590,6 +609,16 @@ function transitionProjectStatus(project, action, comment) {
   if (!toStatus) return { ok: false, reason: `Cannot ${action.replace(/_/g, ' ')} from status "${PROJECT_STATUS_LABELS[project.status] || project.status}".` };
 
   if (action === 'submit_for_review' && !canSubmitForReview(project)) return { ok: false, reason: 'You do not have permission to submit this project for review.' };
+  if (action === 'submit_for_review') {
+    const readiness = courseSubmissionReadiness(project);
+    if (!readiness.ready) {
+      return {
+        ok: false,
+        modal: true,
+        reason: `Cannot submit course for review.\n\nThe following learning objectives are not linked to any lesson:\n\n${readiness.uncovered.map(o => `• ${o.verb} ${o.text}`).join('\n')}\n\nLink every Course Objective to at least one lesson before submitting for review.`,
+      };
+    }
+  }
   if ((action === 'approve' || action === 'reject') && !canApproveReject()) return { ok: false, reason: 'Only the Workspace Owner can approve or reject submissions.' };
   if (action === 'reject' && !(comment && comment.trim())) return { ok: false, reason: 'A comment is required when rejecting a submission.' };
   if (action === 'archive' && !canArchiveProject()) return { ok: false, reason: 'Only the Workspace Owner can archive projects.' };

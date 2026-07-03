@@ -527,8 +527,8 @@ function popoverAt(btn, itemsHtml, opts) {
   return menu;
 }
 
-function menuItem(label, icon, danger) {
-  return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ink-700);'}">
+function menuItem(label, icon, danger, disabled) {
+  return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? '0.45' : '1'}; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ink-700);'}">
     <span>${icon}</span><span>${label}</span></div>`;
 }
 
@@ -542,7 +542,9 @@ function openProjectMenu(btn, id) {
   // 'rejected' is now a first-class status (Phase 1) — resubmitting from
   // it follows the exact same action/permission as a fresh draft.
   if (!viewOnly && (p.status === 'draft' || p.status === 'rejected') && canSubmitForReview(p)) {
-    workflowItems.push(`<div data-action="submit_for_review">${menuItem(p.status === 'rejected' ? 'Resubmit For Review' : 'Submit For Review', '📤')}</div>`);
+    const ready = courseSubmissionReadiness(p).ready;
+    const label = p.status === 'rejected' ? 'Resubmit For Review' : 'Submit For Review';
+    workflowItems.push(`<div data-action="submit_for_review"${!ready ? ' data-disabled="1"' : ''}>${menuItem(label, '📤', false, !ready)}</div>`);
   }
   if (p.status === 'in_review' && canApproveReject()) {
     workflowItems.push(`<div data-action="approve">${menuItem('Approve', '✅')}</div>`);
@@ -571,7 +573,13 @@ function openProjectMenu(btn, id) {
   `);
 
   ['submit_for_review', 'approve', 'reject', 'archive', 'restore'].forEach(action => {
-    menu.querySelector(`[data-action="${action}"]`)?.addEventListener('click', async () => {
+    const actionEl = menu.querySelector(`[data-action="${action}"]`);
+    actionEl?.addEventListener('click', async () => {
+      if (actionEl.dataset.disabled) {
+        closePopovers();
+        await alertModal('Cannot submit for review\n\nLink every course objective to at least one lesson before submitting this course for review.');
+        return;
+      }
       closePopovers();
       // Phase 2: approval comments are optional, rejection comments are
       // mandatory — transitionProjectStatus() itself refuses a reject with
@@ -589,7 +597,7 @@ function openProjectMenu(btn, id) {
         }
       }
       const result = transitionProjectStatus(p, action, comment);
-      if (!result.ok) { toast(result.reason, '⚠️'); return; }
+      if (!result.ok) { if (result.modal) { await alertModal(result.reason); } else { toast(result.reason, '⚠️'); } return; }
       renderProjects();
       toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, '✅');
     });
@@ -649,16 +657,59 @@ function renameProjectInline(id) {
 
 function duplicateProject(id) {
   const p = LumioState.projects.find(x => x.id === id);
+  if (!p) return;
+
+  const baseTitle = projectDisplayTitle(p);
+  const existingTitles = new Set(LumioState.projects.map(x => projectDisplayTitle(x)));
+  let newTitle = `${baseTitle} (Duplicate)`;
+  if (existingTitles.has(newTitle)) {
+    let n = 2;
+    while (existingTitles.has(`${baseTitle} (Duplicate ${n})`)) n++;
+    newTitle = `${baseTitle} (Duplicate ${n})`;
+  }
+
+  const newId = generateUniqueId('p');
   const copy = JSON.parse(JSON.stringify(p));
-  copy.id = 'p' + Date.now();
-  copy.title = projectDisplayTitle(p) + ' (Copy)';
+  copy.id = newId;
+  copy.title = newTitle;
   copy.lastAccessed = Date.now();
   copy.deleted = false;
   copy.deletedAt = null;
+  copy.status = 'draft';
+  copy.reviewStatus = null;
+  copy.submittedBy = null;
+  copy.submittedAt = null;
+  copy.reviewComments = null;
+  copy.reviewHistory = [];
+
+  const srcCourse = LumioState.courses && LumioState.courses[id];
+  if (srcCourse) {
+    const idMap = {};
+    const remap = (oldId, prefix) => {
+      if (!idMap[oldId]) idMap[oldId] = generateUniqueId(prefix);
+      return idMap[oldId];
+    };
+
+    const course = JSON.parse(JSON.stringify(srcCourse));
+    course.id = newId;
+    course.title = newTitle;
+    (course.lessons || []).forEach(l => { l.id = remap(l.id, 'l'); });
+    (course.assessments || []).forEach(a => { a.id = remap(a.id, 'a'); });
+
+    const newLessons = {};
+    Object.entries(LumioState.lessons || {}).forEach(([oldId, blocks]) => {
+      if (idMap[oldId]) newLessons[idMap[oldId]] = JSON.parse(JSON.stringify(blocks));
+    });
+
+    LumioState.courses[newId] = course;
+    Object.assign(LumioState.lessons, newLessons);
+  }
+
   const idx = LumioState.projects.findIndex(x => x.id === id);
   LumioState.projects.splice(idx + 1, 0, copy);
+  saveLumioState();
   renderProjects();
-  toast(`Duplicated "${projectDisplayTitle(p)}"`, '⧉');
+  toast(`Duplicated "${baseTitle}"`, '⧉');
 }
 
 function confirmDeleteProject(id) {
@@ -828,6 +879,35 @@ function promptModal(title, value) {
     overlay.querySelector('#prompt-ok').addEventListener('click', () => close(input.value));
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') close(input.value); });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+  });
+}
+
+/* ---------------- VALIDATION ALERT MODAL ---------------- */
+function alertModal(message) {
+  return new Promise((resolve) => {
+    const lines = message.split('\n').filter(l => l.trim());
+    const bodyHtml = lines.map(line => {
+      if (line.startsWith('•')) {
+        return `<div class="flex items-start gap-8 mt-8" style="font-size:14px;"><span style="color:var(--ink-400); flex-shrink:0;">•</span><span>${line.slice(1).trim()}</span></div>`;
+      }
+      const isHeading = line.startsWith('Cannot');
+      const isFooter = line.startsWith('Link every');
+      return `<p style="margin:${isHeading ? '0 0 12px' : '12px 0 0'}; font-size:${isHeading ? 16 : 14}px; font-weight:${isHeading ? 600 : 400}; color:${isFooter ? 'var(--ink-500)' : 'var(--ink-900)'};">${line}</p>`;
+    }).join('');
+    const overlay = el(`
+      <div class="overlay">
+        <div class="modal" style="width:480px; padding:28px;">
+          ${bodyHtml}
+          <div class="flex justify-end mt-24">
+            <button class="btn btn-primary" id="alert-ok">OK</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); resolve(); };
+    overlay.querySelector('#alert-ok').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   });
 }
 
