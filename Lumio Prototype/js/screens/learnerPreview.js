@@ -62,6 +62,9 @@ const LearnerUI = {
   fullScreen: false,         // full-screen learner preview — preview-only, not persisted
   activeCtx: null,        // the { courseId, lessonId, progress } of the currently-rendered lesson —
                           // read by the global lumioXxx interaction handlers to record completion progress
+  _mcSelectedCard: null,  // { key, cardIdx } — matching-cards click-to-place selection
+  _mcDragOverCat: null,   // { key, catIdx } — matching-cards drag-over highlight
+  _mcFeedback: null,      // { key, catIdx, correct, text } — transient zone feedback state
 };
 
 function ensureLearnerProgress(courseId) {
@@ -928,6 +931,7 @@ function renderLearnerBlock(block, index, ctx) {
     case 'kc_matching': return learnerKcMatching(block, index, ctx);
     case 'kc_ordering': return learnerKcOrdering(block, index, ctx);
     case 'kc_fill_gap': return learnerKcFillGap(block, index, ctx);
+    case 'kc_matching_cards': return learnerKcMatchingCards(block, index, ctx);
     case 'file': return learnerFileBlock(block, index, ctx);
     case 'video': return learnerVideoBlock(block, index, ctx);
     case 'audio': return learnerAudioBlock(block, index, ctx);
@@ -1410,6 +1414,124 @@ function learnerKcFillGap(block, index, ctx) {
   `);
 }
 
+function learnerKcMatchingCards(block, index, ctx) {
+  const d = block.data || {};
+  const ds = block.design || {};
+  const key = ctx.lessonId + ':' + (block.id || index);
+  const settings = normalizeKcSettings(block.settings);
+  const ans = ctx.progress.kcAnswers[key] || {};
+  const submitted = !!(ans.submitted);
+
+  const categories = normalizeKcCategories(d);
+  const allCards = normalizeKcCards(d);
+
+  // Shuffle card display order on first render (stored in ans.cardOrder)
+  if (!ans.cardOrder) {
+    ans.cardOrder = shuffleArray(allCards.map((_, i) => i));
+    ctx.progress.kcAnswers[key] = ans;
+  }
+  const cardOrder = ans.cardOrder;
+  const placed = ans.placed || {};
+
+  const placedCount = Object.keys(placed).length;
+  const totalCount = allCards.length;
+
+  // ── Shared deck dimensions — fixed at max-stack size so layout never shifts ──
+  const CARD_SZ = 180;
+  const STACK_OFF = 6;
+  const MAX_LAYERS = 4; // max ghost layers shown
+  const DECK_W = CARD_SZ + STACK_OFF * (MAX_LAYERS - 1); // 198px
+  const DECK_H = CARD_SZ + STACK_OFF * (MAX_LAYERS - 1); // 198px
+
+  // ── Submitted — results card replaces deck content, identical footprint ──
+  if (submitted) {
+    const deckContent = `<div class="kc-mc-card kc-mc-top kc-mc-results-card"
+      style="position:absolute; top:0; left:0; z-index:1; width:${CARD_SZ}px; height:${CARD_SZ}px; cursor:default;">
+      <div class="kc-mc-score-headline">${placedCount} / ${totalCount} Correct</div>
+      <button class="kc-mc-replay-btn" data-kc-key="${key}">
+        <span class="kc-mc-replay-icon">↺</span>
+        REPLAY
+      </button>
+    </div>`;
+
+    return learnerKcWrap(ds, `
+      <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
+      <p class="text-sm text-muted mb-4" style="visibility:hidden;">Drag each card to its correct category.</p>
+      <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
+    `);
+  }
+
+  // ── Active interaction ─────────────────────────────────────────────────
+  const dismissed = ans.dismissed || [];
+  const feedback = LearnerUI._mcFeedback && LearnerUI._mcFeedback.key === key ? LearnerUI._mcFeedback : null;
+
+  // Cards still in the deck (not yet evaluated — neither correctly placed nor dismissed)
+  const evaluatedSet = new Set([...Object.keys(placed).map(Number), ...dismissed]);
+  const pileCardIndices = cardOrder.filter(ki => !evaluatedSet.has(ki));
+  const selectedCard = LearnerUI._mcSelectedCard && LearnerUI._mcSelectedCard.key === key
+    ? LearnerUI._mcSelectedCard.cardIdx : null;
+
+  // Stacked deck — always rendered at DECK_W × DECK_H so position never shifts.
+  // Only the top card (i=0) is interactive; ghosts sit behind it.
+  const visibleLayers = Math.min(pileCardIndices.length, MAX_LAYERS);
+
+  const deckCards = pileCardIndices.slice(0, visibleLayers).map((ki, i) => {
+    const isTop = i === 0;
+    const card = allCards[ki];
+    const isSel = isTop && ki === selectedCard;
+    const offsetY = STACK_OFF * i;
+    const offsetX = STACK_OFF * i;
+    const zIdx = MAX_LAYERS - i;
+    if (isTop) {
+      return `<div class="kc-mc-card kc-mc-top${isSel ? ' selected' : ''}" draggable="true"
+        data-kc-mc-key="${key}" data-kc-mc-card="${ki}"
+        tabindex="0" role="button" aria-label="${escapeHtml(card.text || '')}${isSel ? ' (selected)' : ''}"
+        style="position:absolute; top:${offsetY}px; left:${offsetX}px; z-index:${zIdx};">
+        ${escapeHtml(card.text || '')}
+      </div>`;
+    }
+    return `<div class="kc-mc-card kc-mc-ghost"
+      style="position:absolute; top:${offsetY}px; left:${offsetX}px; z-index:${zIdx};">
+    </div>`;
+  }).join('');
+
+  // Deck div always present at fixed DECK_W × DECK_H
+  const deckHtml = `<div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckCards}</div>`;
+
+  const zonesHtml = `<div class="kc-mc-cats">
+    ${categories.map((cat, ci) => {
+      const isOver = LearnerUI._mcDragOverCat && LearnerUI._mcDragOverCat.key === key && LearnerUI._mcDragOverCat.catIdx === ci;
+      const isFeedback = feedback && feedback.catIdx === ci;
+      let zoneContent;
+      if (isFeedback) {
+        const fbClass = feedback.correct ? 'kc-mc-feedback-correct' : 'kc-mc-feedback-incorrect';
+        const fbIcon = feedback.correct ? '✓' : '✕';
+        zoneContent = `<div class="kc-mc-feedback-card ${fbClass}">
+          <span class="kc-mc-feedback-icon">${fbIcon}</span>
+          <span>${escapeHtml(feedback.text || '')}</span>
+        </div>`;
+      } else {
+        zoneContent = `<div class="kc-mc-zone-empty">Drop here</div>`;
+      }
+      return `<div class="kc-mc-cat-wrap">
+        <div class="kc-mc-zone${isOver ? ' drag-over' : ''}${isFeedback ? (feedback.correct ? ' kc-mc-zone-correct' : ' kc-mc-zone-incorrect') : ''}" data-kc-mc-zone-key="${key}" data-kc-mc-zone-cat="${ci}">
+          ${zoneContent}
+        </div>
+        <div class="kc-mc-zone-label">${escapeHtml(cat)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  const hint = selectedCard !== null ? ' — or tap a category to place the selected card' : '';
+
+  return learnerKcWrap(ds, `
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
+    <p class="text-sm text-muted mb-4">Drag each card to its correct category${hint}.</p>
+    ${deckHtml}
+    ${zonesHtml}
+  `);
+}
+
 /* ---------------- SCORING ---------------- */
 function computeKcScore(type, ans, d) {
   if (type === 'mc') {
@@ -1448,6 +1570,13 @@ function computeKcScore(type, ans, d) {
     const normAcc = accepted.map(a => d.caseSensitive ? a : a.toLowerCase());
     const c = normAcc.includes(norm);
     return { correct: c, score: c ? 1 : 0, total: 1 };
+  }
+  if (type === 'matching_cards') {
+    const cards = normalizeKcCards(d);
+    const placed = ans.placed || {};
+    const score = cards.filter((card, ki) => placed[ki] === card.category).length;
+    const c = score === cards.length;
+    return { correct: c, score, total: cards.length };
   }
   return { correct: null, score: 0, total: 0 };
 }
@@ -1524,6 +1653,7 @@ function _mapInteractionType(rawType, d) {
   if (rawType === 'response') return 'multiple_choice';
   if (rawType === 'matching') return 'matching';
   if (rawType === 'fill_gap') return 'fill_in';
+  if (rawType === 'matching_cards') return 'matching';
   return rawType; // 'ordering', or any future type, passes through as-is
 }
 
@@ -1549,6 +1679,12 @@ function _snapshotResponse(rawType, ans, d) {
     return (ans.order || []).map(i => items[i]);
   }
   if (rawType === 'fill_gap') return ans.response ?? '';
+  if (rawType === 'matching_cards') {
+    const cards = normalizeKcCards(d);
+    const cats = normalizeKcCategories(d);
+    const placed = ans.placed || {};
+    return cards.map((card, ki) => ({ card: card.text, placedIn: cats[placed[ki]] ?? null }));
+  }
   return null;
 }
 
@@ -1569,6 +1705,11 @@ function _snapshotCorrectResponse(rawType, d) {
   if (rawType === 'fill_gap') {
     const answers = normalizeKcAnswers(d);
     return answers[0] || '';
+  }
+  if (rawType === 'matching_cards') {
+    const cards = normalizeKcCards(d);
+    const cats = normalizeKcCategories(d);
+    return cards.map(card => ({ card: card.text, correctCategory: cats[card.category] ?? null }));
   }
   return null;
 }
@@ -1913,6 +2054,36 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
       const itemCount = ((b.data || {}).items || []).length;
       ans.order = shuffleArray(Array.from({ length: itemCount }, (_, i) => i));
     }
+    // Matching cards: clear placed/dismissed and re-shuffle card order
+    if (b && b.type === 'kc_matching_cards') {
+      delete ans.placed;
+      delete ans.dismissed;
+      const cardCount = normalizeKcCards((b.data || {})).length;
+      ans.cardOrder = shuffleArray(Array.from({ length: cardCount }, (_, i) => i));
+      LearnerUI._mcSelectedCard = null;
+      LearnerUI._mcFeedback = null;
+    }
+    ctx.progress.kcAnswers[key] = ans;
+    scheduleLumioSave();
+    rerender();
+  }));
+
+  // Matching Cards replay — always resets regardless of locked state (pass locks immediately on correct completion)
+  app.querySelectorAll('.kc-mc-replay-btn').forEach(btn => btn.addEventListener('click', () => {
+    const key = btn.dataset.kcKey;
+    const blockIndex = blocks.findIndex((b, i) => (ctx.lessonId + ':' + (b.id || i)) === key);
+    const ans = ctx.progress.kcAnswers[key];
+    if (!ans) return;
+    const b = blockIndex !== -1 ? blocks[blockIndex] : null;
+    delete ans.placed;
+    delete ans.dismissed;
+    delete ans.submitted;
+    ans.locked = false;
+    ans.lastCorrect = null;
+    const cardCount = normalizeKcCards((b && b.data) || {}).length;
+    ans.cardOrder = shuffleArray(Array.from({ length: cardCount }, (_, i) => i));
+    LearnerUI._mcSelectedCard = null;
+    LearnerUI._mcFeedback = null;
     ctx.progress.kcAnswers[key] = ans;
     scheduleLumioSave();
     rerender();
@@ -1971,6 +2142,114 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     scheduleLumioSave();
     rerender();
   }));
+
+  // Matching Cards — drag + click-to-place
+  // Shared placement logic: called when a card is dropped or tapped onto a category zone.
+  const placeMcCard = (key, cardIdx, catIdx) => {
+    const ans = ctx.progress.kcAnswers[key] || {};
+    if (ans.submitted) return;
+    if (LearnerUI._mcFeedback && LearnerUI._mcFeedback.key === key) return; // feedback in progress
+    const blockIndex = blocks.findIndex((b, i) => (ctx.lessonId + ':' + (b.id || i)) === key);
+    const block = blockIndex !== -1 ? blocks[blockIndex] : null;
+    const cards = normalizeKcCards((block && block.data) || {});
+    const isCorrect = cards[cardIdx] && cards[cardIdx].category === catIdx;
+    const cardText = (cards[cardIdx] && cards[cardIdx].text) || '';
+
+    // Record outcome
+    if (isCorrect) {
+      if (!ans.placed) ans.placed = {};
+      ans.placed[cardIdx] = catIdx;
+    } else {
+      if (!ans.dismissed) ans.dismissed = [];
+      ans.dismissed.push(cardIdx);
+    }
+    ctx.progress.kcAnswers[key] = ans;
+    LearnerUI._mcSelectedCard = null;
+    LearnerUI._mcDragOverCat = null;
+
+    // Show brief feedback on the zone
+    LearnerUI._mcFeedback = { key, catIdx, correct: isCorrect, text: cardText };
+    rerender();
+
+    const evaluatedCount = Object.keys(ans.placed || {}).length + (ans.dismissed || []).length;
+    const allDone = evaluatedCount === cards.length;
+
+    setTimeout(() => {
+      LearnerUI._mcFeedback = null;
+      if (allDone) {
+        submitKc(ctx, key, 'matching_cards', blocks);
+        scheduleLumioSave();
+      }
+      rerender();
+    }, 700);
+
+    scheduleLumioSave();
+  };
+
+  // Click/tap: select card in pile, then tap zone to place
+  app.querySelectorAll('.kc-mc-card[data-kc-mc-key]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.kcMcKey;
+      const cardIdx = parseInt(el.dataset.kcMcCard, 10);
+      const ans = ctx.progress.kcAnswers[key] || {};
+      if (ans.submitted) return;
+      const current = LearnerUI._mcSelectedCard;
+      // Tap same card deselects; tap different card selects
+      if (current && current.key === key && current.cardIdx === cardIdx) {
+        LearnerUI._mcSelectedCard = null;
+      } else {
+        LearnerUI._mcSelectedCard = { key, cardIdx };
+      }
+      rerender();
+    });
+    el.addEventListener('keydown', (e) => onActivateKey(e, () => el.click()));
+  });
+
+  app.querySelectorAll('.kc-mc-zone[data-kc-mc-zone-key]').forEach(zone => {
+    const key = zone.dataset.kcMcZoneKey;
+    const catIdx = parseInt(zone.dataset.kcMcZoneCat, 10);
+
+    // Click-to-place: only fires when a card is selected
+    zone.addEventListener('click', () => {
+      const sel = LearnerUI._mcSelectedCard;
+      if (!sel || sel.key !== key) return;
+      placeMcCard(key, sel.cardIdx, catIdx);
+    });
+
+    // HTML5 drag: dragover
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      LearnerUI._mcDragOverCat = { key, catIdx };
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', () => {
+      if (LearnerUI._mcDragOverCat && LearnerUI._mcDragOverCat.key === key && LearnerUI._mcDragOverCat.catIdx === catIdx) {
+        LearnerUI._mcDragOverCat = null;
+      }
+      zone.classList.remove('drag-over');
+    });
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      LearnerUI._mcDragOverCat = null;
+      const cardIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (!isNaN(cardIdx)) placeMcCard(key, cardIdx, catIdx);
+    });
+  });
+
+  // HTML5 drag: dragstart on cards
+  app.querySelectorAll('.kc-mc-card[data-kc-mc-key][draggable="true"]').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', el.dataset.kcMcCard);
+      e.dataTransfer.effectAllowed = 'move';
+      el.classList.add('dragging');
+      LearnerUI._mcSelectedCard = null;
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      LearnerUI._mcDragOverCat = null;
+    });
+  });
 
   // Carousel nav
   const markCarouselVisited = (key, items) => {

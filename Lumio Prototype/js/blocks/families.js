@@ -63,12 +63,13 @@ const BlockFamilies = {
     flashcard_grid: 'flashcards',
     flashcard_stack: 'flashcards',
 
-    // Assessment (5)
+    // Assessment (6)
     kc_multiple_choice: 'assessment',
     kc_multiple_response: 'assessment',
     kc_matching: 'assessment',
     kc_fill_gap: 'assessment',
     kc_ordering: 'assessment',
+    kc_matching_cards: 'assessment',
 
     // Scenario (1)
     scenario: 'scenario',

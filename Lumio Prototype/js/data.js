@@ -824,6 +824,7 @@ const LumioData = {
       { id: 'kc_multiple_choice', name: 'Multiple Choice', icon: '◉' },
       { id: 'kc_multiple_response', name: 'Multiple Response', icon: '☑' },
       { id: 'kc_matching', name: 'Matching', icon: '⇄' },
+      { id: 'kc_matching_cards', name: 'Matching Cards', icon: '⊞' },
       { id: 'kc_fill_gap', name: 'Fill the Gap', icon: '▭' },
       { id: 'kc_ordering', name: 'Ordering', icon: '↕' },
     ]},

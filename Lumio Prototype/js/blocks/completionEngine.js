@@ -213,6 +213,7 @@ const CompletionEngine = (function () {
     kc_matching: ['submitted', 'correct'],
     kc_fill_gap: ['submitted', 'correct'],
     kc_ordering: ['submitted', 'correct'],
+    kc_matching_cards: ['submitted', 'correct'],
   };
   const DEFAULT_RULE_BY_TYPE = {}; // first option is always the default for each type
   Object.keys(RULE_OPTIONS_BY_TYPE).forEach(t => { DEFAULT_RULE_BY_TYPE[t] = RULE_OPTIONS_BY_TYPE[t][0]; });

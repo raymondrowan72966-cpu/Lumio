@@ -67,6 +67,7 @@ const BlockCapabilities = (function () {
     list_checkbox: { primitives: ['toggle'] },
     kc_matching: { primitives: ['reorder'] },
     kc_ordering: { primitives: ['reorder'] },
+    kc_matching_cards: { primitives: ['drag'] },
     kc_multiple_choice: { primitives: ['click'] },
     kc_multiple_response: { primitives: ['toggle'] },
     kc_fill_gap: { primitives: ['click'] },

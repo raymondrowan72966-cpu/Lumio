@@ -486,6 +486,231 @@ button { font-family: var(--font-body); cursor: pointer; }
 .kc-option.wrong    { border-color: var(--color-destructive); }
 
 /* ============================================================
+   MATCHING CARDS KNOWLEDGE CHECK
+   ============================================================ */
+
+/* ── Shared card size — matches Flip Card medium (≈180×180px) ── */
+:root { --kc-mc-sz: 180px; }
+
+/* Base card — active top card and stacked ghost cards */
+.kc-mc-card {
+  width: var(--kc-mc-sz);
+  height: var(--kc-mc-sz);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--surface-0);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.08);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+  text-align: center;
+  line-height: 1.4;
+  transition: box-shadow 0.18s, transform 0.18s, opacity 0.18s, background 0.15s;
+}
+
+/* Active top card — hover lifts */
+.kc-mc-card.kc-mc-top:hover {
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.09);
+  transform: translateY(-3px);
+}
+
+/* Selected via click-to-place */
+.kc-mc-card.selected {
+  box-shadow: 0 0 0 2.5px var(--theme-primary, var(--indigo)), 0 6px 16px rgba(0,0,0,0.12);
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 6%, var(--surface-0));
+}
+
+/* Non-top stacked ghost — passive card-back shape */
+.kc-mc-card.kc-mc-ghost {
+  cursor: default;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  background: var(--surface-1, #f4f4f5);
+}
+
+/* Dragging */
+.kc-mc-card.dragging {
+  opacity: 0.3;
+  cursor: grabbing;
+  transform: scale(1.03);
+}
+
+/* Correctly placed card fills its zone — same square shape */
+.kc-mc-card.correct {
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  box-shadow: none;
+  background: var(--surface-0);
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: calc(var(--r-md) - 4px);
+}
+
+/* ── Deck container ─────────────────────────────────────────── */
+.kc-mc-deck {
+  position: relative;
+  margin: 0 auto 40px;
+  /* width/height set inline based on card count */
+}
+
+/* ── Category grid ──────────────────────────────────────────── */
+.kc-mc-cats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+/* Each category tile wrapper — zone + label below */
+.kc-mc-cat-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Square drop zone — same dimensions as a card */
+.kc-mc-zone {
+  width: var(--kc-mc-sz);
+  height: var(--kc-mc-sz);
+  border: 2px dashed var(--border);
+  border-radius: var(--r-md);
+  padding: 10px;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.kc-mc-zone.drag-over {
+  border-color: var(--theme-primary, var(--indigo));
+  border-style: solid;
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, var(--indigo)) 20%, transparent);
+}
+
+/* Category label — sits below the zone tile */
+.kc-mc-zone-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-600);
+  text-align: center;
+  letter-spacing: 0.01em;
+  max-width: var(--kc-mc-sz);
+}
+
+/* Empty-state hint inside an unoccupied zone */
+.kc-mc-zone-empty {
+  font-size: 12px;
+  color: var(--ink-300);
+  text-align: center;
+  pointer-events: none;
+}
+
+.kc-mc-correct-tick {
+  color: var(--teal);
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ── Completion — results card replaces deck, same footprint ── */
+.kc-mc-results-card {
+  flex-direction: column;
+  gap: 14px;
+  cursor: default !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.08);
+}
+.kc-mc-results-card:hover {
+  transform: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
+.kc-mc-score-headline {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-bottom: 16px;
+}
+
+.kc-mc-replay-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-500);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  transition: color 0.15s;
+}
+.kc-mc-replay-btn:hover { color: var(--ink-900); }
+.kc-mc-replay-btn .kc-mc-replay-icon { font-size: 22px; line-height: 1; }
+
+/* Matching Cards — zone feedback states */
+.kc-mc-zone-correct {
+  border-color: var(--teal, #0d9488) !important;
+  border-style: solid !important;
+  background: color-mix(in srgb, var(--teal, #0d9488) 8%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal, #0d9488) 20%, transparent);
+}
+.kc-mc-zone-incorrect {
+  border-color: var(--red, #ef4444) !important;
+  border-style: solid !important;
+  background: color-mix(in srgb, var(--red, #ef4444) 8%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red, #ef4444) 20%, transparent);
+}
+.kc-mc-feedback-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
+  padding: 12px;
+  pointer-events: none;
+  animation: kc-mc-feedback-in 0.15s ease;
+}
+.kc-mc-feedback-correct { color: var(--teal, #0d9488); }
+.kc-mc-feedback-incorrect { color: var(--red, #ef4444); }
+.kc-mc-feedback-icon { font-size: 22px; line-height: 1; }
+
+@keyframes kc-mc-feedback-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes kc-card-shake {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  20%       { transform: translateX(-9px) translateY(0); }
+  40%       { transform: translateX(9px) translateY(0); }
+  60%       { transform: translateX(-6px) translateY(0); }
+  80%       { transform: translateX(6px) translateY(0); }
+}
+.kc-mc-card-shake { animation: kc-card-shake 0.42s ease; }
+
+/* ============================================================
    PILLS / BADGES
    ============================================================ */
 .pill {

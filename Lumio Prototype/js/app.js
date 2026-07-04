@@ -838,6 +838,15 @@ function normalizeKcAnswers(d) {
   if (d.answer) return d.answer.split('|').map(s => s.trim()).filter(Boolean);
   return [''];
 }
+function normalizeKcCategories(d) {
+  return Array.isArray(d.categories) && d.categories.length ? d.categories : ['Category A', 'Category B'];
+}
+function normalizeKcCards(d) {
+  return Array.isArray(d.cards) && d.cards.length ? d.cards : [
+    { text: 'Card 1', category: 0 },
+    { text: 'Card 2', category: 1 },
+  ];
+}
 
 /* ---------------- ID GENERATION ---------------- */
 // Generates a globally-unique id with the given prefix (e.g. 'l' for lessons,

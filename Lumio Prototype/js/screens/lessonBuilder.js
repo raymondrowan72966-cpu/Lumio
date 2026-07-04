@@ -1210,7 +1210,7 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   // Text-authoring blocks (Heading, Paragraph, Heading & Paragraph, Columns) use a
   // subtle, low-contrast selection indicator so canvas editing feels inline/native
   // rather than boxed — matching the Rise-style "minimal selection" requirement.
-  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file', 'kc_multiple_choice', 'kc_multiple_response', 'kc_matching', 'kc_fill_gap', 'kc_ordering'].includes(block.type);
+  const isTextAuthoringBlock = ['heading', 'paragraph', 'heading_paragraph', 'columns', 'table', 'stmt_info', 'stmt_tip', 'stmt_success', 'stmt_warning', 'stmt_error', 'stmt_note', 'quote1', 'quote2', 'quote3', 'quote4', 'quote_image', 'quote_carousel', 'list_numbered', 'list_checkbox', 'list_bullet', 'image', 'image_text', 'text_on_image', 'carousel', 'column_grid', 'audio', 'video', 'file', 'kc_multiple_choice', 'kc_multiple_response', 'kc_matching', 'kc_fill_gap', 'kc_ordering', 'kc_matching_cards'].includes(block.type);
   // Selection is a subtle neutral indicator (Notion/Figma-style focus ring),
   // not an accent-coloured frame — kept consistent across card and cardless blocks.
   const SELECTION_OUTLINE_COLOR = 'rgba(20,20,30,0.14)';
@@ -2618,6 +2618,8 @@ function renderBlockContent(block, editable) {
       return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable, ds)}</div>`;
     case 'kc_ordering':
       return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable, ds)}</div>`;
+    case 'kc_matching_cards':
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatchingCards(d, editable, ds)}</div>`;
 
     default:
       return `<div class="text-center" style="padding:24px; color:var(--ink-400);">
@@ -3035,6 +3037,52 @@ function knowledgeCheckOrdering(d, editable, ds) {
         </div>
       `).join('')}
     </div>
+  `;
+}
+
+function knowledgeCheckMatchingCards(d, editable, ds) {
+  const categories = normalizeKcCategories(d);
+  const cards = normalizeKcCards(d);
+
+  // Mirror the learner's stacked deck layout exactly — same constants, same CSS classes.
+  const CARD_SZ = 180;
+  const STACK_OFF = 6;
+  const visibleLayers = Math.min(cards.length, 4);
+  const deckW = CARD_SZ + STACK_OFF * (visibleLayers - 1);
+  const deckH = CARD_SZ + STACK_OFF * (visibleLayers - 1);
+
+  // Top card shows first card text; ghost layers are blank — same stacking as learner.
+  const deckHtml = cards.length > 0 ? (() => {
+    const layers = cards.slice(0, visibleLayers).map((card, i) => {
+      const isTop = i === 0;
+      const offsetY = STACK_OFF * i;
+      const offsetX = STACK_OFF * i;
+      const zIdx = visibleLayers - i;
+      if (isTop) {
+        return `<div class="kc-mc-card kc-mc-top" style="position:absolute; top:${offsetY}px; left:${offsetX}px; z-index:${zIdx}; cursor:default;">
+          ${escapeHtml(card.text || '')}
+        </div>`;
+      }
+      return `<div class="kc-mc-card kc-mc-ghost" style="position:absolute; top:${offsetY}px; left:${offsetX}px; z-index:${zIdx};"></div>`;
+    }).join('');
+    return `<div class="kc-mc-deck" style="width:${deckW}px; height:${deckH}px;">${layers}</div>`;
+  })() : '';
+
+  const zonesHtml = `<div class="kc-mc-cats">
+    ${categories.map(cat => `<div class="kc-mc-cat-wrap">
+      <div class="kc-mc-zone">
+        <div class="kc-mc-zone-empty">Drop here</div>
+      </div>
+      <div class="kc-mc-zone-label">${escapeHtml(cat)}</div>
+    </div>`).join('')}
+  </div>`;
+
+  return `
+    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
+    <p class="text-sm text-muted mb-4">Drag each card to its correct category.</p>
+    ${deckHtml}
+    ${zonesHtml}
+    <div class="text-xs text-muted mt-12" style="text-align:center;">0 / ${cards.length} placed</div>
   `;
 }
 
@@ -3953,6 +4001,8 @@ function renderRightTabContentInner(block, index, course) {
       return kcFillGapContentPanel(block, d);
     case 'kc_ordering':
       return kcOrderingContentPanel(block, d);
+    case 'kc_matching_cards':
+      return kcMatchingCardsContentPanel(block, d);
     case 'button': {
       const destType = d.destType || 'url';
       const lessonBlocks = LumioState.lessons[LumioState.currentLessonId] || [];
@@ -4273,6 +4323,42 @@ function kcOrderingContentPanel(block, d) {
       </div>
       <button class="btn btn-secondary btn-sm w-full mt-8 kc-item-add">+ Add Item</button>
       <p class="text-xs text-muted mt-8">Learners see these items in a shuffled order and must rearrange them into the correct sequence.</p>
+    </div>
+  `;
+}
+
+function kcMatchingCardsContentPanel(block, d) {
+  const categories = normalizeKcCategories(d);
+  const cards = normalizeKcCards(d);
+  return `
+    <div class="prop-section">
+      <div class="prop-section-title">Categories</div>
+      <p class="text-xs text-muted mb-8">Each category is a drop zone the learner must fill.</p>
+      <div class="flex-col gap-6" id="kc-mc-categories">
+        ${categories.map((cat, ci) => `
+          <div class="flex items-center gap-6" data-ci="${ci}">
+            <input class="input kc-mc-cat-text" data-ci="${ci}" value="${escapeHtml(cat)}" placeholder="Category name…" style="flex:1; font-size:13px;" />
+            <button class="btn-icon kc-mc-cat-delete" data-ci="${ci}" title="Remove" ${categories.length <= 1 ? 'disabled' : ''}>✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm w-full mt-8 kc-mc-cat-add">+ Add Category</button>
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Cards</div>
+      <p class="text-xs text-muted mb-8">Each card belongs to one category.</p>
+      <div class="flex-col gap-6" id="kc-mc-cards">
+        ${cards.map((card, ki) => `
+          <div class="flex items-center gap-6" data-ki="${ki}">
+            <input class="input kc-mc-card-text" data-ki="${ki}" value="${escapeHtml(card.text || '')}" placeholder="Card text…" style="flex:1; font-size:13px;" />
+            <select class="input kc-mc-card-cat" data-ki="${ki}" style="width:110px; font-size:12px;">
+              ${categories.map((cat, ci) => `<option value="${ci}" ${card.category === ci ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
+            </select>
+            <button class="btn-icon kc-mc-card-delete" data-ki="${ki}" title="Remove" ${cards.length <= 1 ? 'disabled' : ''}>✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-secondary btn-sm w-full mt-8 kc-mc-card-add">+ Add Card</button>
     </div>
   `;
 }
@@ -7233,6 +7319,70 @@ function bindBuilderEvents(course, lesson, blocks) {
     const i = parseInt(btn.dataset.i, 10);
     if (i >= items.length - 1) return;
     [items[i], items[i + 1]] = [items[i + 1], items[i]];
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Matching Cards: category name
+  app.querySelectorAll('.kc-mc-cat-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.categories)) block.data.categories = normalizeKcCategories(block.data).slice();
+    block.data.categories[parseInt(inp.dataset.ci, 10)] = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Matching Cards: add category
+  app.querySelector('.kc-mc-cat-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    block.data.categories = normalizeKcCategories(block.data).slice();
+    block.data.categories.push('New Category');
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // Matching Cards: delete category
+  app.querySelectorAll('.kc-mc-cat-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const ci = parseInt(btn.dataset.ci, 10);
+    const cats = block.data.categories || [];
+    if (cats.length <= 1) return;
+    cats.splice(ci, 1);
+    // Clamp card categories to valid range
+    const cards = normalizeKcCards(block.data);
+    cards.forEach(c => { if (c.category >= cats.length) c.category = cats.length - 1; });
+    block.data.categories = cats;
+    block.data.cards = cards;
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Matching Cards: card text
+  app.querySelectorAll('.kc-mc-card-text').forEach(inp => inp.addEventListener('input', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.cards)) block.data.cards = normalizeKcCards(block.data).slice();
+    block.data.cards[parseInt(inp.dataset.ki, 10)].text = inp.value;
+    flashSaveStatus();
+  }));
+
+  // Matching Cards: card category select
+  app.querySelectorAll('.kc-mc-card-cat').forEach(sel => sel.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.cards)) block.data.cards = normalizeKcCards(block.data).slice();
+    block.data.cards[parseInt(sel.dataset.ki, 10)].category = parseInt(sel.value, 10);
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  }));
+
+  // Matching Cards: add card
+  app.querySelector('.kc-mc-card-add')?.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    if (!Array.isArray(block.data.cards)) block.data.cards = normalizeKcCards(block.data).slice();
+    block.data.cards.push({ text: '', category: 0 });
+    renderLessonBuilder(lesson.id); flashSaveStatus();
+  });
+
+  // Matching Cards: delete card
+  app.querySelectorAll('.kc-mc-card-delete').forEach(btn => btn.addEventListener('click', () => {
+    const block = blocks[BuilderUI.selected]; if (!block) return;
+    const cards = block.data.cards || [];
+    if (cards.length <= 1) return;
+    cards.splice(parseInt(btn.dataset.ki, 10), 1);
     renderLessonBuilder(lesson.id); flashSaveStatus();
   }));
 
