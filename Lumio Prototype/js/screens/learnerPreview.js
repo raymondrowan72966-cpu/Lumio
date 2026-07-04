@@ -65,6 +65,7 @@ const LearnerUI = {
   _mcSelectedCard: null,  // { key, cardIdx } — matching-cards click-to-place selection
   _mcDragOverCat: null,   // { key, catIdx } — matching-cards drag-over highlight
   _mcFeedback: null,      // { key, catIdx, correct, text } — transient zone feedback state
+  _scrollEl: null,        // scroll container for lesson scroll tracking (window | <main>)
 };
 
 function ensureLearnerProgress(courseId) {
@@ -312,43 +313,47 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
   const activeLessonId = opts.activeLessonId || null;
   const isOverview = !!(opts.isOverview);
 
-  // Same-lesson scroll restoration (KC answers, Continue reveals, etc.)
+  // Same-lesson scroll restoration: scroll is on <main>, not window, in production layout.
   const sameLesson = activeLessonId !== null && LearnerUI.lastLessonId === activeLessonId;
-  const prevScrollY = (sameLesson) ? window.scrollY : 0;
+  const prevMainScroll = sameLesson ? (app.querySelector('main')?.scrollTop || 0) : 0;
   LearnerUI.lastLessonId = activeLessonId;
 
   // Single sidebar rendered as drawer (gets id="lp-mobile-sidebar"); CSS makes it
-  // sticky on wide viewports and an off-screen drawer on narrow ones.
+  // fill the viewport row on wide viewports and an off-screen drawer on narrow ones.
   const sidebarHtml = isOverview ? '' : courseNavSidebar(course, progress, activeLessonId, false, true);
 
   const prodHeader = `
-    <header style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+    <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
       ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="Open navigation">☰</button>` : ''}
       ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Back</button>` : ''}
       <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
       ${progressBarHtml(course, progress)}
     </header>`;
 
+  // Production layout is a self-contained viewport: height:100vh with <main> as the
+  // scroll container. This ensures the LMS iframe sees a fixed-height unit (no
+  // auto-resize confusion) and position:sticky on the bottom nav always works correctly.
   app.innerHTML = `
-    <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
+    <div class="lumio-learner-root" style="height:100vh; overflow:hidden; display:flex; flex-direction:column; ${themeVarStyle(course.themeDesign)}">
       ${prodHeader}
-      <div style="display:flex; position:relative;">
+      <div style="flex:1; min-height:0; display:flex; overflow:hidden; position:relative;">
         ${!isOverview ? `<div id="lp-sidebar-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>` : ''}
         ${sidebarHtml}
-        <main style="flex:1; min-width:0; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
+        <main style="flex:1; min-width:0; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
       </div>
     </div>
     <style>
-      /* Wide viewport: sidebar is sticky beside content */
+      /* Wide viewport: sidebar occupies full row height beside content */
       @media (min-width: 769px) {
         #lp-mobile-sidebar {
-          position: sticky !important;
+          position: static !important;
+          overflow-y: auto;
+          align-self: stretch;
+          flex-shrink: 0;
           transform: none !important;
           box-shadow: none !important;
           transition: none !important;
           z-index: auto !important;
-          top: 0;
-          align-self: flex-start;
         }
       }
       /* Narrow viewport: sidebar becomes an off-screen drawer, hamburger visible */
@@ -370,19 +375,10 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
   });
   if (!isOverview) wireMobileSidebar(app);
 
-  // Sync sticky sidebar top offset to actual header height on wide viewports
-  requestAnimationFrame(() => {
-    const hdr = app.querySelector('header');
-    const sidebar = app.querySelector('#lp-mobile-sidebar');
-    if (hdr && sidebar && window.innerWidth >= 769) {
-      const h = hdr.offsetHeight;
-      sidebar.style.top = h + 'px';
-      sidebar.style.maxHeight = `calc(100vh - ${h}px)`;
-    }
-  });
-
-  if (sameLesson && prevScrollY > 0) {
-    requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
+  // Restore same-lesson scroll position within <main>
+  if (sameLesson && prevMainScroll > 0) {
+    const mainEl = app.querySelector('main');
+    if (mainEl) mainEl.scrollTop = prevMainScroll;
   }
 }
 
@@ -809,13 +805,29 @@ function renderLearnerLesson(course, lessonId) {
   const isResumeTarget = LumioState.resume && LumioState.resume.courseId === course.id && LumioState.resume.lessonId === lessonId;
   if (isResumeTarget && LumioState.resume.scrollY) {
     const targetY = LumioState.resume.scrollY;
-    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, targetY)));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (LearnerUI.publishedMode) {
+        const mainEl = document.querySelector('#app main');
+        if (mainEl) mainEl.scrollTop = targetY;
+      } else {
+        window.scrollTo(0, targetY);
+      }
+    }));
   }
 
   // Block-level bookmarking: track the actual rendered block closest to the
   // top of the viewport as the learner scrolls (debounced), using the real
   // data-lp-index DOM positions — never estimated.
-  if (LearnerUI._scrollHandler) window.removeEventListener('scroll', LearnerUI._scrollHandler);
+  // In published mode <main> is the scroll container; in preview it is window.
+  const scrollEl = LearnerUI.publishedMode ? (document.querySelector('#app main') || window) : window;
+  const getScrollY = () => LearnerUI.publishedMode
+    ? (document.querySelector('#app main')?.scrollTop || 0)
+    : window.scrollY;
+
+  if (LearnerUI._scrollHandler) {
+    (LearnerUI._scrollEl || window).removeEventListener('scroll', LearnerUI._scrollHandler);
+  }
+  LearnerUI._scrollEl = scrollEl;
   let resumeScrollTimer = null;
   function captureScrollPosition() {
     const nodes = document.querySelectorAll(`[data-lp-lesson="${lessonId}"][data-lp-index]`);
@@ -825,16 +837,16 @@ function renderLearnerLesson(course, lessonId) {
       const dist = Math.abs(node.getBoundingClientRect().top);
       if (dist < closestDist) { closestDist = dist; closestIndex = parseInt(node.dataset.lpIndex, 10); }
     });
-    recordResume(course.id, lessonId, closestIndex, window.scrollY);
+    recordResume(course.id, lessonId, closestIndex, getScrollY());
   }
   LearnerUI._scrollHandler = () => {
     if (resumeScrollTimer) clearTimeout(resumeScrollTimer);
     resumeScrollTimer = setTimeout(captureScrollPosition, 400);
   };
-  window.addEventListener('scroll', LearnerUI._scrollHandler, { passive: true });
+  scrollEl.addEventListener('scroll', LearnerUI._scrollHandler, { passive: true });
   // Record the entry position immediately so a resume exists even if the
   // learner never scrolls (e.g. a short lesson).
-  recordResume(course.id, lessonId, 0, window.scrollY);
+  recordResume(course.id, lessonId, 0, getScrollY());
 
   document.getElementById('lp-prev')?.addEventListener('click', () => {
     if (prevId) navigate('#/learner/' + course.id + '/' + prevId);
