@@ -9,9 +9,11 @@
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
     "check": "node --check src/index.js",
-    "db:migrate:local": "wrangler d1 migrations apply lumio-db-dev --local",
-    "db:migrate:staging": "wrangler d1 migrations apply lumio-db-staging --env staging",
-    "db:migrate:production": "wrangler d1 migrations apply lumio-db-production --env production"
+    "db:migrate:local": "wrangler d1 migrations apply lumio-dev --local",
+    "db:migrate:dev": "wrangler d1 migrations apply lumio-dev --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply lumio-staging --env staging",
+    "db:migrate:production": "wrangler d1 migrations apply lumio-production --env production",
+    "db:tables:local": "wrangler d1 execute lumio-dev --local --command=\"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;\""
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

@@ -1,6 +1,21 @@
 # Copy this file to `.dev.vars` (already gitignored) for local `wrangler dev`
-# secrets. Never commit the real `.dev.vars` file. No secrets are needed yet
-# for Sprint 1 (Cloud Foundation) — this file exists so the convention is in
-# place before the Authentication sprint actually needs one.
+# secrets. Never commit the real `.dev.vars` file.
+#
+# Phase 1 (Cloud Infrastructure) — no secrets are required locally because
+# D1 and R2 are emulated by Wrangler without credentials.
+#
+# Phase 2 (Authentication) — uncomment and fill in:
+# SESSION_SECRET=replace-with-at-least-32-random-characters
 
-# SESSION_SECRET=replace-with-a-long-random-value
+# Phase 3 (OAuth) — uncomment and fill in per provider:
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+# MICROSOFT_CLIENT_ID=
+# MICROSOFT_CLIENT_SECRET=
+# APPLE_CLIENT_ID=
+# APPLE_TEAM_ID=
+# APPLE_KEY_ID=
+# APPLE_PRIVATE_KEY=
+
+# Email delivery (invitations, password reset):
+# RESEND_API_KEY=

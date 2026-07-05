@@ -13,7 +13,11 @@ import { loadSecurityConfig } from './security.js';
  * binding fails fast with a clear ConfigurationError instead of a confusing
  * "undefined is not a function" three calls deep into a service.
  */
-const REQUIRED_BINDINGS = ['DB']; // D1 database binding name, set in wrangler.toml
+// Both bindings are required for the Worker to start — DB for all data
+// operations, ASSETS_BUCKET for media storage (R2). A missing binding means
+// the deployment is misconfigured and should fail fast with a clear error
+// rather than crashing somewhere deep inside a route handler.
+const REQUIRED_BINDINGS = ['DB', 'ASSETS_BUCKET'];
 
 export function loadConfig(env) {
   if (!env || typeof env !== 'object') {
@@ -36,9 +40,7 @@ export function loadConfig(env) {
     logLevel: env.LOG_LEVEL || (environment === 'production' ? 'INFO' : 'DEBUG'),
     db: env.DB,
     security: loadSecurityConfig(env),
-    // Placeholders for bindings later sprints will require — intentionally
-    // not validated as REQUIRED yet, since Sprint 1 does not use them:
-    assetsBucket: env.ASSETS_BUCKET, // R2 — Phase: Assets sprint
-    sessionSecret: env.SESSION_SECRET, // secret — Phase: Authentication sprint
+    assetsBucket: env.ASSETS_BUCKET,    // R2 binding — validated above
+    sessionSecret: env.SESSION_SECRET, // secret — set via `wrangler secret put`
   };
 }

@@ -2,22 +2,25 @@ name = "lumio-api"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
-# Default (no --env flag) = local development. `wrangler dev` uses this
-# block directly; nothing here is a secret, only non-sensitive identifiers.
+# ---------------------------------------------------------------------------
+# Development (default — no --env flag)
+# `wrangler dev` and `wrangler d1 migrations apply lumio-dev --local` use
+# this block directly. database_id is the real UUID assigned by Cloudflare
+# when the database was created; it is NOT a secret (D1 ids are not
+# sensitive) so it is committed here. Run `wrangler d1 list` to retrieve it.
+# ---------------------------------------------------------------------------
 [vars]
 ENVIRONMENT = "development"
 LOG_LEVEL = "DEBUG"
 
-# Local D1 database for `wrangler dev`/`wrangler d1 migrations apply --local`.
-# `database_id` is a placeholder — replace it by running:
-#   npx wrangler d1 create lumio-db-dev
-# and pasting the id it prints back here. Never a secret; D1 ids are not
-# sensitive, but a real id can't be invented ahead of actually creating the
-# database, so this is left as an explicit placeholder rather than guessed.
 [[d1_databases]]
 binding = "DB"
-database_name = "lumio-db-dev"
-database_id = "REPLACE_WITH_DEV_DATABASE_ID"
+database_name = "lumio-dev"
+database_id = "REPLACE_WITH_LUMIO_DEV_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "lumio-assets-dev"
 
 # ---------------------------------------------------------------------------
 # Staging
@@ -29,8 +32,12 @@ LOG_LEVEL = "INFO"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "lumio-db-staging"
-database_id = "REPLACE_WITH_STAGING_DATABASE_ID"
+database_name = "lumio-staging"
+database_id = "REPLACE_WITH_LUMIO_STAGING_DATABASE_ID"
+
+[[env.staging.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "lumio-assets-staging"
 
 # ---------------------------------------------------------------------------
 # Production
@@ -42,11 +49,16 @@ LOG_LEVEL = "INFO"
 
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "lumio-db-production"
-database_id = "REPLACE_WITH_PRODUCTION_DATABASE_ID"
+database_name = "lumio-production"
+database_id = "REPLACE_WITH_LUMIO_PRODUCTION_DATABASE_ID"
 
-# Secrets (SESSION_SECRET, OAuth client secrets, email-provider API keys,
-# etc.) are never declared here — they are set per-environment via:
+[[env.production.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "lumio-assets-production"
+
+# ---------------------------------------------------------------------------
+# Secrets
+# Never declared here — set per-environment via:
 #   npx wrangler secret put SESSION_SECRET --env production
-# and are not committed to the repository in any form. See .dev.vars.example
-# for the equivalent local-development mechanism.
+# See .dev.vars.example for the local-development equivalent.
+# ---------------------------------------------------------------------------
