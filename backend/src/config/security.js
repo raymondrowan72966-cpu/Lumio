@@ -28,10 +28,16 @@ export function loadSecurityConfig(env = {}) {
       minLength: intFromEnv(env, 'PASSWORD_MIN_LENGTH', 8),
       requireMixedCase: true,
       requireDigit: true,
-      // PBKDF2 iteration count — OWASP's current (2023+) PBKDF2-SHA256
-      // recommendation is >= 600,000; kept env-overridable so it can be
-      // raised over time without a code change as hardware gets faster.
-      pbkdf2Iterations: intFromEnv(env, 'PASSWORD_PBKDF2_ITERATIONS', 600_000),
+      // PBKDF2 iteration count — the Cloudflare Workers Web Crypto
+      // implementation enforces a hard platform maximum of 100,000 iterations
+      // for PBKDF2 (any higher value throws NotSupportedError at runtime,
+      // regardless of CPU budget). 100,000 is therefore both the default and
+      // the effective ceiling for any Workers deployment. OWASP's 2023+
+      // recommendation for PBKDF2-SHA256 is >= 600,000, which exceeds this
+      // platform limit; the trade-off is documented in DECISIONS.md ADR-019.
+      // Kept env-overridable so the value can be adjusted if Cloudflare ever
+      // raises the cap, without requiring a code change.
+      pbkdf2Iterations: intFromEnv(env, 'PASSWORD_PBKDF2_ITERATIONS', 100_000),
     },
     tokens: {
       // Access token: short-lived, per SAAS_AUTHENTICATION_SPECIFICATION.md

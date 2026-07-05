@@ -4,6 +4,25 @@ One entry per significant decision. Newest first.
 
 ---
 
+## ADR-019: PBKDF2 iteration count capped at 100,000 — Cloudflare Workers Web Crypto platform limit
+
+**Decision:** the default `PASSWORD_PBKDF2_ITERATIONS` value is set to **100,000** in `wrangler.toml` and in `src/config/security.js`. This is the maximum iteration count the Cloudflare Workers Web Crypto implementation supports for PBKDF2; requesting a higher value (e.g. 600,000) throws `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported` at runtime, before any hashing work begins.
+
+**Why:** confirmed empirically via `wrangler tail` during live registration testing (2026-07-05). The Worker returned `cpuTime: 1` ms and a `NotSupportedError` stack trace originating in `PasswordService._deriveBits → crypto.subtle.deriveBits`. This is a hard platform constraint in the Workers Web Crypto subsystem, not a CPU budget issue — changing the Workers plan or the `[limits]` config has no effect on it.
+
+**Security trade-off:** OWASP's current (2023+) minimum for PBKDF2-HMAC-SHA256 is 600,000 iterations. 100,000 iterations is below that threshold, which means brute-force attacks on leaked hashes are marginally cheaper than they would be on a platform that supports higher counts. The residual risk is accepted as a known platform constraint for the duration of the Cloudflare Workers deployment. Mitigations in place: (a) the Workers Web Crypto PBKDF2 is still far stronger than the prototype's non-cryptographic `_hashPassword` (djb2 variant) it replaces; (b) salts are 16 bytes of `crypto.getRandomValues` randomness, preventing rainbow-table attacks; (c) timing-safe comparison prevents timing oracle attacks on verification.
+
+**Local vs. deployed behaviour:** `wrangler dev` runs on Node.js, which uses OpenSSL and has no PBKDF2 iteration cap. Registration at 600,000 iterations succeeds locally but fails on the deployed Worker. 100,000 iterations succeeds in both environments. The `PASSWORD_PBKDF2_ITERATIONS` env var is read in both, so the same `wrangler.toml` value governs both paths once the dev server reloads.
+
+**Env-overridable:** `PASSWORD_PBKDF2_ITERATIONS` remains an env var so the value can be raised in a future migration if Cloudflare ever increases the platform limit, without requiring a code change.
+
+**Alternatives considered:**
+- Offload hashing to a Durable Object or external service. Rejected — significant architectural complexity for marginal security gain at this product stage.
+- Use a different algorithm (Argon2id, scrypt). Not natively supported by the Workers Web Crypto API at this time.
+- Accept the NotSupportedError and expose a structured error. Rejected — the correct response is to stay within the platform's supported parameters, not paper over a misconfiguration.
+
+---
+
 ## ADR-018: Bearer token transport for session authentication
 
 **Decision:** the `Authorization: Bearer <rawToken>` header is the mechanism for delivering the session refresh token from client to server on authenticated requests. The middleware (`loadAuthContext`) extracts the token via a case-insensitive `^Bearer\s+(.+)$` regex, then passes it to `SessionService.validateSession()` for hash-comparison and expiry/revocation checking against D1.
