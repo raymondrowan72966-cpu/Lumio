@@ -1743,6 +1743,171 @@ function scheduleLumioSave() {
   lumioSaveTimer = setTimeout(saveLumioState, 400);
 }
 
+/* ============================================================
+   CLOUD PROJECT PERSISTENCE — Step 7
+   All functions below operate only when the user is authenticated
+   via the real backend (LumioSession.get().isAuthenticated === true).
+   Legacy demo / localStorage users are completely unaffected.
+   ============================================================ */
+
+/** True when the user has a live server session (real backend auth). */
+function isCloudUser() {
+  return LumioSession.get().isAuthenticated;
+}
+
+/**
+ * Map a project row returned by GET /projects (camelCase backend shape)
+ * to the frontend LumioState.projects element shape.
+ */
+function _cloudProjectToState(p) {
+  return {
+    id:               p.id,
+    title:            p.title,
+    type:             p.type,
+    status:           p.status || 'draft',
+    health:           p.health != null ? p.health : 0,
+    folder:           p.folderId || null,         // frontend uses `folder`
+    lastAccessed:     p.lastAccessedAt || 0,      // frontend uses `lastAccessed`
+    deleted:          !!p.deletedAt,
+    deletedAt:        p.deletedAt || null,
+    ownerId:          p.ownerId,
+    workspaceId:      p.workspaceId,
+    sharedWith:       [],
+    sharedScope:      p.sharedScope || null,
+    sharedPermission: p.sharedPermission || 'view',
+    reviewStatus: null, reviewedBy: null, reviewedAt: null,
+    reviewComments: null, submittedBy: null, submittedAt: null,
+    _cloud: true,
+  };
+}
+
+/**
+ * Map a course object returned by GET /projects/:id to the shape that
+ * LumioState.courses[id] expects (camelCase → camelCase, mostly a pass-through,
+ * but some field names differ between D1 response and legacy frontend).
+ */
+function _cloudCourseToState(c) {
+  if (!c) return null;
+  return Object.assign({}, c);
+}
+
+/**
+ * Replace LumioState.projects with the workspace's projects from D1.
+ * Courses and lessons are NOT loaded here — they're lazy-loaded when a
+ * project is opened (openProject calls _cloudLoadCourse when needed).
+ * Silently no-ops on network error — keeps localStorage cache as fallback.
+ */
+async function _loadCloudProjects() {
+  try {
+    const cloudProjects = await LumioAPI.projects.list();
+    if (!Array.isArray(cloudProjects)) return;
+    LumioState.projects = cloudProjects.map(_cloudProjectToState);
+    saveLumioState();
+  } catch (err) {
+    console.warn('[Lumio] Cloud project list failed — using local cache:', err);
+  }
+}
+
+/**
+ * Fetch course + lessons for a project from D1 and populate the in-memory cache.
+ * Called by openProject() when a cloud project's course hasn't been loaded yet.
+ *
+ * @param {string} id  — project id
+ */
+async function _cloudLoadCourse(id) {
+  try {
+    const full = await LumioAPI.projects.get(id);
+    if (full && full.course) {
+      LumioState.courses[id] = _cloudCourseToState(full.course);
+      Object.assign(LumioState.lessons, full.lessons || {});
+    }
+  } catch (err) {
+    console.warn('[Lumio] Could not load course from cloud for project', id, err);
+  }
+}
+
+/**
+ * Build the body for POST /projects or PUT /projects/:id from a project +
+ * its course and lesson content that currently live in LumioState.
+ *
+ * @param {object} p  — project entry from LumioState.projects
+ * @returns {{ project, course, lessons }}
+ */
+function _buildCloudPayload(p) {
+  const course = LumioState.courses[p.id] || null;
+  const lessonsMap = {};
+  if (course) {
+    [...(course.lessons || []), ...(course.assessments || [])].forEach(function (l) {
+      lessonsMap[l.id] = LumioState.lessons[l.id] || [];
+    });
+  }
+  return {
+    id:       p.id,          // client-assigned; server uses it if provided
+    title:    p.title,
+    type:     p.type,
+    status:   p.status,
+    health:   p.health,
+    folderId: p.folder || null,
+    course:   course,
+    lessons:  lessonsMap,
+  };
+}
+
+/**
+ * Persist a single project (+ its course and lessons) to D1.
+ * Uses POST for new projects, PUT for ones that are already cloud-backed.
+ * Always silently no-ops when the user is not cloud-authenticated.
+ *
+ * @param {string} id  — project id
+ */
+async function cloudPersistProject(id) {
+  if (!isCloudUser()) return;
+  const p = LumioState.projects.find(function (x) { return x.id === id; });
+  if (!p || p.deleted) return;
+
+  const payload = _buildCloudPayload(p);
+
+  try {
+    if (p._cloud) {
+      await LumioAPI.projects.update(id, {
+        project: {
+          title:          payload.title,
+          status:         payload.status,
+          health:         payload.health,
+          folderId:       payload.folderId,
+          lastAccessedAt: p.lastAccessed || Date.now(),
+        },
+        course:  payload.course,
+        lessons: payload.lessons,
+      });
+    } else {
+      await LumioAPI.projects.create(payload);
+      p._cloud = true;
+    }
+    saveLumioState();
+  } catch (err) {
+    console.warn('[Lumio] Cloud persist failed for project', id, err);
+    toast('Could not save to cloud — check your connection', '⚠️');
+  }
+}
+
+/**
+ * Soft-delete a project in D1 when the user moves it to Trash.
+ * No-ops silently for non-cloud projects or unauthenticated users.
+ *
+ * @param {string} id  — project id
+ */
+async function cloudDeleteProject(id) {
+  if (!isCloudUser()) return;
+  const p = LumioState.projects.find(function (x) { return x.id === id; });
+  if (!p || !p._cloud) return;
+  try {
+    await LumioAPI.projects.delete(id);
+  } catch (err) {
+    console.warn('[Lumio] Cloud delete failed for project', id, err);
+  }
+}
+
 /* ---------------- EXPORT / IMPORT ENGINE ---------------- */
 const LUMIO_FILE_VERSION = 1;    // project.json schema version (unchanged)
 const LUMIO_PACKAGE_VERSION = 2; // .lumio container format version
@@ -1971,6 +2136,8 @@ function _restoreProjectPayload(payload) {
   saveLumioState();
   renderProjects();
   toast(`"${payload.project.title}" imported`, '📥');
+  // Persist to D1 asynchronously — failure is non-fatal (localStorage remains the fallback).
+  cloudPersistProject(p.id);
 }
 
 /* ---------------- ROUTER ---------------- */
@@ -1997,6 +2164,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       const data = await LumioAPI.auth.session();
       LumioSession.set(data);
       sessionValid = true;
+      // Replace localStorage project cache with D1 source of truth.
+      // Awaited before render() so the first paint shows cloud projects.
+      await _loadCloudProjects();
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
       LumioSession.clear();

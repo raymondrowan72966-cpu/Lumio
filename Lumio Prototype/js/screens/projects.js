@@ -470,14 +470,18 @@ function bindProjectsEvents() {
   });
 }
 
-function openProject(id) {
+async function openProject(id) {
   const p = LumioState.projects.find(x => x.id === id);
   if (!p) return;
   p.lastAccessed = Date.now();
   if (p.type === 'Microlearning') {
     toast('Microlearning editor uses the same Builder — opening course view for this prototype', '⚡');
   }
-  // ensure a course object exists for this project
+  // Cloud-backed project: fetch course+lessons from D1 if not already in memory.
+  if (p._cloud && !LumioState.courses[id]) {
+    await _cloudLoadCourse(id);
+  }
+  // Ensure a course object exists (fallback to template if cloud fetch failed or user is local-only).
   if (!LumioState.courses[id]) {
     const tmpl = cloneCourseTemplate(id);
     tmpl.title = projectDisplayTitle(p);
@@ -734,6 +738,7 @@ function confirmDeleteProject(id) {
     overlay.remove();
     renderProjects();
     toast('Moved to Trash · Undo', '🗑️');
+    cloudDeleteProject(p.id);
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }

@@ -226,12 +226,45 @@ const LumioAPI = (function () {
     updateSettings: notImplemented('workspaces.updateSettings'),
   };
 
+  // -------------------------------------------------------------------------
+  // projects — Step 7: Cloud Project Persistence
+  // All methods require an active session (HttpOnly cookies sent automatically).
+  // -------------------------------------------------------------------------
   var projects = {
-    list:    notImplemented('projects.list'),
-    get:     notImplemented('projects.get'),
-    create:  notImplemented('projects.create'),
-    update:  notImplemented('projects.update'),
-    delete:  notImplemented('projects.delete'),
+    /**
+     * List all non-deleted projects for the authenticated workspace.
+     * @returns {Promise<Array>} array of project metadata objects
+     */
+    list: function () { return get('/projects'); },
+
+    /**
+     * Get a single project with its course and lessons.
+     * @param {string} id
+     * @returns {Promise<{ project, course, lessons }>}
+     */
+    get: function (id) { return get('/projects/' + id); },
+
+    /**
+     * Create a new project (with optional course + lessons payload).
+     * @param {{ title, type, status?, health?, folderId?, course?, lessons? }} data
+     * @returns {Promise<object>} the newly created project row
+     */
+    create: function (data) { return post('/projects', data); },
+
+    /**
+     * Replace a project's metadata and content.
+     * @param {string} id
+     * @param {{ project, course?, lessons? }} data
+     * @returns {Promise<object>} the updated project row
+     */
+    update: function (id, data) { return request('PUT', '/projects/' + id, data); },
+
+    /**
+     * Soft-delete a project (moves to Trash in D1; reversible via restore).
+     * @param {string} id
+     * @returns {Promise<{ deleted: true }>}
+     */
+    delete: function (id) { return request('DELETE', '/projects/' + id); },
   };
 
   var courses = {

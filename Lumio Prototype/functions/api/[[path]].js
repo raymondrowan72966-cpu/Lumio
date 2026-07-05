@@ -19,6 +19,7 @@
  * perspective.
  */
 
+// Step 7 — re-deployed with cloud project persistence.
 const WORKER_ORIGIN = 'https://lumio-api.raymondrowan72966.workers.dev';
 
 export async function onRequest(context) {

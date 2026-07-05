@@ -153,6 +153,7 @@ function renderBuilderTopbar(course, lesson) {
       </div>
       <div class="flex items-center gap-12" style="flex-shrink:0;">
         <span class="text-sm text-muted" id="save-status">Saved ✓</span>
+        <button class="btn btn-secondary btn-sm" id="cloud-save-btn" title="Save to cloud" style="display:none;">☁ Save</button>
         <button class="btn btn-secondary btn-sm" id="preview-lesson">👁️ Preview</button>
         <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, var(--violet-tint-md), rgba(6,182,212,0.08)); border-color:var(--violet-border);' : ''}">✨ AI Assistant</button>
       </div>
@@ -6182,6 +6183,24 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelector('#back-to-course').addEventListener('click', () => {
     if (course) navigate('#/course/' + course.id); else navigate('#/projects');
   });
+
+  // Cloud Save button — visible only for cloud-authenticated users.
+  const cloudSaveBtn = app.querySelector('#cloud-save-btn');
+  if (cloudSaveBtn && typeof isCloudUser === 'function' && isCloudUser() && course) {
+    cloudSaveBtn.style.display = '';
+    cloudSaveBtn.addEventListener('click', async () => {
+      cloudSaveBtn.disabled = true;
+      cloudSaveBtn.textContent = '☁ Saving…';
+      try {
+        await cloudPersistProject(course.id);
+        cloudSaveBtn.textContent = '☁ Saved ✓';
+        setTimeout(() => { cloudSaveBtn.textContent = '☁ Save'; cloudSaveBtn.disabled = false; }, 2000);
+      } catch (_) {
+        cloudSaveBtn.textContent = '☁ Save';
+        cloudSaveBtn.disabled = false;
+      }
+    });
+  }
   app.querySelector('#lesson-name-input').addEventListener('input', (e) => {
     if (lesson) lesson.title = e.target.value;
     flashSaveStatus();

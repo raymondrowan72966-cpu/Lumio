@@ -713,4 +713,6 @@ function createCourseFromWizard(blueprint) {
   LumioState.wizard = null;
   toast('Course created!', '🎉');
   navigate('#/course/' + id);
+  // Persist the new project to D1 asynchronously (failure is non-fatal).
+  cloudPersistProject(id);
 }
