@@ -597,6 +597,15 @@ function renderAcceptInvite(token) {
     </div>
   `;
 
+  // Password visibility toggle + caps lock for invitation password fields.
+  ['#accept-password', '#accept-password-confirm'].forEach(function (sel) {
+    const el = app.querySelector(sel);
+    if (el) {
+      LumioPasswordField.attachToggle(el);
+      LumioPasswordField.attachCapsLock(el);
+    }
+  });
+
   // Local account: validate + create password
   app.querySelector('#accept-activate-btn')?.addEventListener('click', () => {
     const pw = app.querySelector('#accept-password').value;

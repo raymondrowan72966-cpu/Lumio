@@ -10,6 +10,7 @@ import { loadAuthContext } from './middleware/authContext.js';
 import { buildCorsHeaders, handlePreflight, applyCorsHeaders } from './middleware/cors.js';
 import { TokenService } from './services/TokenService.js';
 import { SessionService } from './services/SessionService.js';
+import { JwtService } from './services/JwtService.js';
 
 const router = createAppRouter();
 
@@ -19,8 +20,6 @@ export default {
     const requestId = generateRequestId();
     const baseLogger = createLogger({ minLevel: env.LOG_LEVEL || 'INFO', context: { requestId } });
 
-    // corsHeaders is initialised to {} so applyCorsHeaders below is a safe
-    // no-op even if config loading fails before the variable is populated.
     let response;
     let corsHeaders = {};
     try {
@@ -28,9 +27,6 @@ export default {
       const logger = baseLogger.child({ environment: config.environment });
       const db = createDbClient(config.db, logger);
 
-      // Build CORS headers once per request — before routing so that
-      // OPTIONS preflights are handled here rather than falling through to
-      // the router (which has no OPTIONS routes registered).
       corsHeaders = buildCorsHeaders(request, config.corsAllowedOrigins);
 
       if (request.method === 'OPTIONS') {
@@ -45,18 +41,22 @@ export default {
       } else {
         const tokenService = new TokenService(config.security);
         const sessionService = new SessionService({ db, tokenService, securityConfig: config.security });
-        const auth = await loadAuthContext(request, { db, sessionService });
-        response = await match.handler(request, match.params, { config, db, logger, auth });
-      }
+        const jwtService = new JwtService(config.sessionSecret, { environment: config.environment });
+        const auth = await loadAuthContext(request, { db, sessionService, jwtService });
 
-      logRequest(logger, request, response, startedAt);
+        // Pass jwtService and sessionService in ctx so route handlers (refresh,
+        // session) can issue and rotate tokens without re-constructing services.
+        response = await match.handler(request, match.params, {
+          config, db, logger, auth, jwtService, sessionService,
+        });
+
+        logRequest(logger, request, response, startedAt);
+      }
     } catch (err) {
       response = handleError(err, baseLogger);
       logRequest(baseLogger, request, response, startedAt);
     }
 
-    // Apply CORS headers to every response — 200s, 4xxs, 5xxs alike —
-    // so clients receive consistent CORS behaviour regardless of route outcome.
     return applyCorsHeaders(response, corsHeaders);
   },
 };

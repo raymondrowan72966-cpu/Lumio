@@ -165,6 +165,7 @@ export class AuthService {
         name: workspaceName,
       },
       session: {
+        sessionId: sessionBuild.sessionId,
         refreshToken: sessionBuild.refreshToken,
         expiresAt: sessionBuild.expiresAt,
       },

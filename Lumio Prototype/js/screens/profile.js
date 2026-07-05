@@ -124,6 +124,15 @@ function bindProfileEvents() {
   const u = getCurrentUser();
   if (!u) return;
 
+  // Password visibility toggle + caps lock for the Change Password fields.
+  ['#profile-current-password', '#profile-new-password', '#profile-confirm-password'].forEach(function (sel) {
+    const el = app.querySelector(sel);
+    if (el) {
+      LumioPasswordField.attachToggle(el);
+      LumioPasswordField.attachCapsLock(el);
+    }
+  });
+
   app.querySelector('#profile-first-name').addEventListener('input', (e) => {
     u.firstName = e.target.value;
   });

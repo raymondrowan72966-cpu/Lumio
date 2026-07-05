@@ -44,18 +44,30 @@ const LumioAPI = (function () {
   // Internal HTTP client
   // -------------------------------------------------------------------------
 
+  // Guard against concurrent refresh calls — only one POST /auth/refresh is
+  // issued even if multiple requests get 401 TOKEN_EXPIRED simultaneously.
+  var _refreshPromise = null;
+
   /**
    * Core fetch wrapper. Always sends/expects JSON. Throws ApiError on
    * non-2xx. Returns the parsed `data` field from the standard envelope
    * { ok, data } on success, or the full parsed body when the backend
    * returns a non-standard shape (e.g. the health endpoint).
    *
-   * @param {string} method
-   * @param {string} path   - relative to BASE, e.g. '/health'
-   * @param {*}      [body] - serialised to JSON when present
+   * Automatic token refresh: when the server returns 401 TOKEN_EXPIRED
+   * (access JWT expired), this function transparently calls POST /auth/refresh
+   * to rotate the tokens and then retries the original request once.
+   * The retry is invisible to callers — they receive either the successful
+   * response or, if the refresh itself fails (session fully expired), the
+   * 401 from the refresh endpoint.
+   *
+   * @param {string}  method
+   * @param {string}  path      - relative to BASE, e.g. '/health'
+   * @param {*}       [body]    - serialised to JSON when present
+   * @param {boolean} [_retry]  - internal; prevents infinite retry loops
    * @returns {Promise<*>}
    */
-  async function request(method, path, body) {
+  async function request(method, path, body, _retry) {
     const init = {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -71,18 +83,45 @@ const LumioAPI = (function () {
     try {
       parsed = await response.json();
     } catch (_) {
-      // Body was not JSON (e.g. empty 204) — treat as no data.
       parsed = null;
     }
 
     if (!response.ok) {
-      // Standard backend error envelope: { ok: false, error: { code, message, details } }
       const err = parsed && parsed.error ? parsed.error : {};
+
+      // Automatic token refresh: intercept TOKEN_EXPIRED once per request.
+      // Skip if this is already the retry (prevents infinite loops) or if
+      // this IS the refresh request itself.
+      if (
+        response.status === 401 &&
+        err.code === 'TOKEN_EXPIRED' &&
+        !_retry &&
+        path !== '/auth/refresh'
+      ) {
+        try {
+          // Coalesce concurrent refresh calls into one shared Promise.
+          if (!_refreshPromise) {
+            _refreshPromise = request('POST', '/auth/refresh', undefined, true)
+              .finally(function () { _refreshPromise = null; });
+          }
+          await _refreshPromise;
+          // Retry the original request with the new cookies now in place.
+          return request(method, path, body, true);
+        } catch (_refreshErr) {
+          // Refresh failed (session fully expired) — propagate so the
+          // DOMContentLoaded handler can redirect to #/login.
+          throw new ApiError(
+            _refreshErr.status || 401,
+            _refreshErr.code || 'AUTHENTICATION_ERROR',
+            _refreshErr.message || 'Session expired. Please sign in again.',
+            _refreshErr.details || null,
+          );
+        }
+      }
+
       throw new ApiError(response.status, err.code, err.message, err.details);
     }
 
-    // Standard success envelope: { ok: true, data: { ... } }
-    // Some responses (e.g. health) return a flat object — return as-is.
     if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')) {
       return parsed.data;
     }
@@ -161,7 +200,15 @@ const LumioAPI = (function () {
       return get('/auth/session');
     },
 
-    refresh:             notImplemented('auth.refresh'),
+    /**
+     * Rotate the refresh token and issue a new access JWT.
+     * Called automatically by the request() retry loop — callers should not
+     * need to invoke this directly.
+     *
+     * @returns {Promise<{ ok: true }>}
+     * @throws {ApiError} 401 if the refresh token is also expired / invalid
+     */
+    refresh: function () { return post('/auth/refresh'); },
     requestPasswordReset: notImplemented('auth.requestPasswordReset'),
     confirmPasswordReset: notImplemented('auth.confirmPasswordReset'),
   };

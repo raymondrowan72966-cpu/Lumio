@@ -111,9 +111,9 @@ function paintLogin() {
         </div>
         <div class="field">
           <label>Password</label>
-          <div class="input-icon-wrap">
+          <div class="input-icon-wrap" style="position:relative;">
             <span class="icon">🔒</span>
-            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 6 characters)' : 'Enter your password'}" />
+            <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 8 characters)' : 'Enter your password'}" />
           </div>
         </div>
         ${!isRegister ? `
@@ -157,6 +157,13 @@ function paintLogin() {
 function bindLoginEvents() {
   const app = document.getElementById('app');
   const isRegister = LumioLoginMode === 'register';
+
+  // Password visibility toggle + caps lock indicator — reusable utility.
+  const pwInput = app.querySelector('#login-password');
+  if (pwInput) {
+    LumioPasswordField.attachToggle(pwInput);
+    LumioPasswordField.attachCapsLock(pwInput);
+  }
 
   const showError = (msg) => {
     const el = app.querySelector('#login-feedback');
@@ -309,17 +316,30 @@ function renderResetPassword(token) {
     <div id="reset-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
     <div class="field">
       <label>New Password</label>
-      <input class="input" id="reset-new-password" type="password" placeholder="Create a password (min. 6 characters)" />
+      <div style="position:relative;">
+        <input class="input" id="reset-new-password" type="password" placeholder="Create a password (min. 8 characters)" />
+      </div>
     </div>
     <div class="field">
       <label>Confirm New Password</label>
-      <input class="input" id="reset-confirm-password" type="password" placeholder="Re-enter the new password" />
+      <div style="position:relative;">
+        <input class="input" id="reset-confirm-password" type="password" placeholder="Re-enter the new password" />
+      </div>
     </div>
     <button class="btn btn-primary w-full btn-lg" id="reset-submit-btn">Reset Password →</button>
   `;
 
   app.innerHTML = loginAuthCardShell(inner);
   if (!check.ok) return;
+
+  // Attach password visibility + caps lock to both reset fields.
+  ['#reset-new-password', '#reset-confirm-password'].forEach(function (sel) {
+    const el = app.querySelector(sel);
+    if (el) {
+      LumioPasswordField.attachToggle(el);
+      LumioPasswordField.attachCapsLock(el);
+    }
+  });
 
   const showError = (msg) => {
     const el = app.querySelector('#reset-feedback');

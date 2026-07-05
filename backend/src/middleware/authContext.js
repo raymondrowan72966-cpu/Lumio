@@ -1,4 +1,4 @@
-import { parseSessionCookie } from '../utils/cookie.js';
+import { parseSessionCookie, parseAccessTokenCookie } from '../utils/cookie.js';
 
 export const ANONYMOUS_CONTEXT = Object.freeze({
   isAuthenticated: false,
@@ -8,20 +8,81 @@ export const ANONYMOUS_CONTEXT = Object.freeze({
   session: null,
 });
 
-export async function loadAuthContext(request, { db, sessionService }) {
-  // Cookie is the primary token carrier for same-origin browser requests
-  // (browser → Pages /api/* proxy → Worker). Bearer header is the fallback
-  // for non-browser clients (curl, Postman, native apps) that do not send
-  // cookies but do send an Authorization header.
-  let rawToken = parseSessionCookie(request);
-  if (!rawToken) {
+/**
+ * Resolves the authentication context for every incoming request.
+ *
+ * Priority  (per Step 6 specification):
+ *   1. lumio_access JWT (HttpOnly cookie) — fast path, zero DB queries.
+ *      Verifies HMAC-SHA256 signature and exp claim only.
+ *      If valid → return context immediately with no DB interaction.
+ *      If expired or absent → fall through to step 2.
+ *      If malformed / bad signature → fall through to step 2.
+ *
+ *   2. lumio_session refresh token (HttpOnly cookie or Bearer header).
+ *      Full DB path: sessions + users + workspace_members + workspace.
+ *      Used for: GET /auth/session (warm-up on page load), POST /auth/refresh,
+ *      and any request arriving before the access JWT has been issued or
+ *      after it has been expired/deleted by the browser (Max-Age elapsed).
+ *
+ *   3. Neither credential → ANONYMOUS_CONTEXT (isAuthenticated: false).
+ *      Protected routes return 401 AUTHENTICATION_ERROR, which LumioAPI's
+ *      DOMContentLoaded handler catches and redirects to #/login.
+ *
+ * Result: authenticated routes are served without 401 round-trips — the
+ * refresh token path handles silent token renewal end-to-end. The explicit
+ * POST /auth/refresh route exists for client-initiated rotation (LumioAPI
+ * auto-refresh) and for non-browser clients that want explicit control.
+ *
+ * @param {Request} request
+ * @param {{ db, sessionService, jwtService }} deps
+ */
+export async function loadAuthContext(request, { db, sessionService, jwtService }) {
+  // --- Path 1: Access JWT fast path (no DB) --------------------------------
+  const rawJwt = parseAccessTokenCookie(request);
+  if (rawJwt) {
+    const result = await jwtService.verify(rawJwt);
+
+    if (result.valid) {
+      const p = result.payload;
+      return {
+        isAuthenticated: true,
+        // Reconstruct DB-row-shaped objects from JWT claims so route handlers
+        // (which use snake_case column names) continue to work unchanged.
+        currentUser: {
+          id: p.sub,
+          email: p.email,
+          first_name: p.firstName,
+          last_name: p.lastName,
+          display_name: p.displayName,
+          auth_provider: p.authProvider,
+          created_at: p.createdAt,
+        },
+        currentWorkspace: p.workspaceId ? {
+          id: p.workspaceId,
+          name: p.workspaceName,
+          owner_id: p.workspaceOwnerId,
+        } : null,
+        currentMembership: p.workspaceId ? {
+          workspace_id: p.workspaceId,
+          role: p.role,
+        } : null,
+        // Minimal session object — handlers only need id for revoking on logout.
+        session: { id: p.sid },
+      };
+    }
+    // JWT expired, malformed, or bad signature → fall through to refresh token.
+  }
+
+  // --- Path 2: Refresh token (cookie or Bearer header) — full DB path ------
+  let rawRefreshToken = parseSessionCookie(request);
+  if (!rawRefreshToken) {
     const authHeader = request.headers.get('authorization') || '';
     const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (match) rawToken = match[1].trim();
+    if (match) rawRefreshToken = match[1].trim();
   }
-  if (!rawToken) return ANONYMOUS_CONTEXT;
+  if (!rawRefreshToken) return ANONYMOUS_CONTEXT;
 
-  const { valid, session } = await sessionService.validateSession(rawToken);
+  const { valid, session } = await sessionService.validateSession(rawRefreshToken);
   if (!valid || !session) return ANONYMOUS_CONTEXT;
 
   const currentUser = await db.first(
@@ -44,8 +105,12 @@ export async function loadAuthContext(request, { db, sessionService }) {
       [currentMembership.workspace_id],
     );
   }
-  // Multiple memberships → no single active workspace until multi-workspace
-  // selector (auth spec Section 8) is built in a later sprint.
 
-  return { isAuthenticated: true, currentUser, currentWorkspace, currentMembership, session };
+  return {
+    isAuthenticated: true,
+    currentUser,
+    currentWorkspace,
+    currentMembership,
+    session,
+  };
 }

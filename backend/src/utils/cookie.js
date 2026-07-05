@@ -1,65 +1,85 @@
 /**
- * HttpOnly session cookie utilities.
+ * HttpOnly cookie utilities — two cookies per authenticated session:
  *
- * Cookie design:
- *   Name:  lumio_session
- *   Attrs: HttpOnly; Secure; SameSite=Lax; Path=/
+ *   lumio_access  — short-lived JWT access token (15 min Max-Age).
+ *                   Verified by the Worker without a DB query (fast path).
+ *                   When missing or expired → Worker returns 401 TOKEN_EXPIRED
+ *                   → LumioAPI calls POST /auth/refresh → rotates both cookies.
  *
- * Remember Me = true  → Max-Age = 30 days (matches rememberMeRefreshTtlMs)
- * Remember Me = false → no Max-Age (session cookie; browser discards on close)
+ *   lumio_session — long-lived opaque refresh token (30 days / session-only).
+ *                   Only presented at POST /auth/refresh and GET /auth/session.
+ *                   Rotated on every use (prevents refresh token theft via replay).
  *
- * The same-origin architecture (browser → Pages /api/* proxy → Worker) means
- * the browser always sends this cookie with every /api/* request without any
- * CORS credential handling — it is a same-site cookie from the browser's
- * perspective. SameSite=Lax prevents cross-site request forgery while still
- * allowing top-level navigations (OAuth redirects, email links) to carry the
- * cookie, per the spec requirement.
- *
- * HttpOnly ensures the token is never accessible from JavaScript, which is the
- * entire point of moving away from localStorage: a stored XSS payload cannot
- * read or exfiltrate the session token.
+ * Both cookies: HttpOnly; Secure; SameSite=Lax; Path=/
+ * SameSite=Lax: prevents CSRF while allowing top-level navigations (future OAuth).
+ * HttpOnly: token never reachable from JavaScript — XSS cannot exfiltrate it.
  */
 
-const COOKIE_NAME = 'lumio_session';
+const SESSION_COOKIE = 'lumio_session';
+const ACCESS_COOKIE = 'lumio_access';
 const REMEMBER_ME_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
+const ACCESS_TOKEN_MAX_AGE_SECONDS = 15 * 60;           // 15 minutes — matches JWT exp
 const BASE_ATTRS = 'Path=/; HttpOnly; Secure; SameSite=Lax';
 
-/**
- * Builds the Set-Cookie header value for a new session.
- *
- * @param {string}  token
- * @param {{ rememberMe?: boolean }} opts
- * @returns {string}
- */
+// Legacy alias kept so existing callers don't need changing.
+const COOKIE_NAME = SESSION_COOKIE;
+
+// ---------------------------------------------------------------------------
+// lumio_session — long-lived refresh token
+// ---------------------------------------------------------------------------
+
+/** Set-Cookie for the refresh token. Remember Me → 30-day persistent cookie;
+ *  otherwise no Max-Age (browser discards on close, server TTL = 24 h). */
 export function buildSessionCookie(token, { rememberMe = false } = {}) {
   const maxAge = rememberMe ? `; Max-Age=${REMEMBER_ME_MAX_AGE_SECONDS}` : '';
-  return `${COOKIE_NAME}=${token}; ${BASE_ATTRS}${maxAge}`;
+  return `${SESSION_COOKIE}=${token}; ${BASE_ATTRS}${maxAge}`;
 }
 
-/**
- * Builds a cookie-clearing header value (Max-Age=0 removes the cookie
- * immediately on the client regardless of whether it was set with Max-Age).
- *
- * @returns {string}
- */
+/** Clears the refresh token cookie immediately. */
 export function clearSessionCookie() {
-  return `${COOKIE_NAME}=; ${BASE_ATTRS}; Max-Age=0`;
+  return `${SESSION_COOKIE}=; ${BASE_ATTRS}; Max-Age=0`;
 }
 
-/**
- * Extracts the lumio_session token from the Cookie request header.
- * Returns null if the cookie is absent or empty.
- *
- * @param {Request} request
- * @returns {string|null}
- */
+/** Extracts the lumio_session token from the Cookie request header.
+ *  Returns null if absent or empty. */
 export function parseSessionCookie(request) {
+  return _parseCookie(request, SESSION_COOKIE);
+}
+
+// ---------------------------------------------------------------------------
+// lumio_access — short-lived JWT access token
+// ---------------------------------------------------------------------------
+
+/** Set-Cookie for the JWT access token. Max-Age=900 (15 min) lets the
+ *  browser expire and discard it automatically when the JWT exp fires,
+ *  so the next request falls through to the refresh path rather than
+ *  sending a cookie the Worker would immediately reject. */
+export function buildAccessTokenCookie(jwt) {
+  return `${ACCESS_COOKIE}=${jwt}; ${BASE_ATTRS}; Max-Age=${ACCESS_TOKEN_MAX_AGE_SECONDS}`;
+}
+
+/** Clears the access token cookie immediately. */
+export function clearAccessTokenCookie() {
+  return `${ACCESS_COOKIE}=; ${BASE_ATTRS}; Max-Age=0`;
+}
+
+/** Extracts the lumio_access JWT from the Cookie request header.
+ *  Returns null if absent or empty. */
+export function parseAccessTokenCookie(request) {
+  return _parseCookie(request, ACCESS_COOKIE);
+}
+
+// ---------------------------------------------------------------------------
+// Internal helper
+// ---------------------------------------------------------------------------
+
+function _parseCookie(request, name) {
   const header = request.headers.get('cookie') || '';
   for (const part of header.split(';')) {
     const eqIdx = part.indexOf('=');
     if (eqIdx === -1) continue;
-    const name = part.slice(0, eqIdx).trim();
-    if (name !== COOKIE_NAME) continue;
+    const cookieName = part.slice(0, eqIdx).trim();
+    if (cookieName !== name) continue;
     const value = part.slice(eqIdx + 1).trim();
     return value ? decodeURIComponent(value) : null;
   }
