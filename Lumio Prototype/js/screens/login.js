@@ -177,24 +177,42 @@ function bindLoginEvents() {
     paintLogin();
   });
 
-  app.querySelector('#signin-btn').addEventListener('click', () => {
+  app.querySelector('#signin-btn').addEventListener('click', async () => {
     const email = app.querySelector('#login-email').value.trim();
     const password = app.querySelector('#login-password').value;
+    const btn = app.querySelector('#signin-btn');
+    btn.disabled = true;
 
     if (isRegister) {
       const firstName = app.querySelector('#login-first-name').value.trim();
       const lastName = app.querySelector('#login-last-name').value.trim();
-      const result = LumioAuth.registerEmail(email, password, firstName, lastName, true);
-      if (!result.ok) { showError(result.reason); return; }
-      toast(`Welcome to Lumio, ${result.user.displayName}!`, '🎉');
-      navigate('#/welcome');
+      try {
+        const data = await LumioAPI.auth.register({ email, password, firstName, lastName });
+        LumioSession.set(data);
+        toast('Welcome to Lumio, ' + data.user.displayName + '!', '🎉');
+        navigate('#/welcome');
+      } catch (e) {
+        const msg = e.code === 'DUPLICATE_EMAIL'
+          ? 'An account with this email already exists.'
+          : (e.message || 'Registration failed. Please try again.');
+        showError(msg);
+        btn.disabled = false;
+      }
       return;
     }
 
-    const rememberMe = app.querySelector('#login-remember-me').checked;
-    const result = LumioAuth.loginWithEmail(email, password, rememberMe);
-    if (!result.ok) { showError(result.reason); return; }
-    navigate('#/welcome');
+    const rememberMe = app.querySelector('#login-remember-me')?.checked ?? false;
+    try {
+      const data = await LumioAPI.auth.login({ email, password, rememberMe });
+      LumioSession.set(data);
+      navigate('#/welcome');
+    } catch (e) {
+      const msg = (e.status === 401 || e.status === 400)
+        ? 'Invalid email or password.'
+        : (e.message || 'Sign in failed. Please try again.');
+      showError(msg);
+      btn.disabled = false;
+    }
   });
 
   const rememberCheckbox = app.querySelector('#login-remember-me');

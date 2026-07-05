@@ -1,3 +1,5 @@
+import { parseSessionCookie } from '../utils/cookie.js';
+
 export const ANONYMOUS_CONTEXT = Object.freeze({
   isAuthenticated: false,
   currentUser: null,
@@ -7,10 +9,16 @@ export const ANONYMOUS_CONTEXT = Object.freeze({
 });
 
 export async function loadAuthContext(request, { db, sessionService }) {
-  const authHeader = request.headers.get('authorization') || '';
-  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-  if (!match) return ANONYMOUS_CONTEXT;
-  const rawToken = match[1].trim();
+  // Cookie is the primary token carrier for same-origin browser requests
+  // (browser → Pages /api/* proxy → Worker). Bearer header is the fallback
+  // for non-browser clients (curl, Postman, native apps) that do not send
+  // cookies but do send an Authorization header.
+  let rawToken = parseSessionCookie(request);
+  if (!rawToken) {
+    const authHeader = request.headers.get('authorization') || '';
+    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+    if (match) rawToken = match[1].trim();
+  }
   if (!rawToken) return ANONYMOUS_CONTEXT;
 
   const { valid, session } = await sessionService.validateSession(rawToken);

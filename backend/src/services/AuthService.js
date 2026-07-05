@@ -1,4 +1,4 @@
-import { ValidationError, DatabaseError, DuplicateEmailError } from '../errors/index.js';
+import { ValidationError, DatabaseError, DuplicateEmailError, AuthenticationError } from '../errors/index.js';
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -171,12 +171,86 @@ export class AuthService {
     };
   }
 
-  async login(_email, _password, _opts = {}) {
-    throw new Error('AuthService.login is not implemented yet (Sprint 2C: registration only).');
+  /**
+   * Email + password login. Returns the authenticated user context plus a raw
+   * refresh token that the route handler embeds in an HttpOnly session cookie —
+   * the token is never returned to the client in the JSON body.
+   *
+   * The error message is deliberately identical for "no account" and "wrong
+   * password" — distinguishing them would allow email enumeration.
+   */
+  async login({ email, password, rememberMe = false } = {}) {
+    if (!email || typeof email !== 'string') {
+      throw new ValidationError('Email is required.');
+    }
+    if (!password || typeof password !== 'string') {
+      throw new ValidationError('Password is required.');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!EMAIL_FORMAT.test(normalizedEmail)) {
+      throw new ValidationError('Email address is not a valid format.');
+    }
+
+    const user = await this.userRepository.findByEmail(normalizedEmail);
+    if (!user) {
+      this.logger?.warning('login rejected: invalid credentials', { email: normalizedEmail });
+      throw new AuthenticationError('Invalid email or password.');
+    }
+    const valid = await this.passwordService.verify(password, user.password_hash);
+    if (!valid) {
+      this.logger?.warning('login rejected: invalid credentials', { email: normalizedEmail });
+      throw new AuthenticationError('Invalid email or password.');
+    }
+
+    const { sessionId, refreshToken, expiresAt } = await this.sessionService.createSession({
+      userId: user.id,
+      rememberMe,
+      deviceId: null,
+    });
+
+    const memberships = await this.db.all(
+      'SELECT * FROM workspace_members WHERE user_id = ?',
+      [user.id],
+    );
+    const membership = memberships[0] || null;
+    let workspace = null;
+    if (membership) {
+      workspace = await this.workspaceRepository.findById(membership.workspace_id);
+    }
+
+    this.logger?.audit('user logged in', { userId: user.id, sessionId });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        displayName: user.display_name,
+        authProvider: user.auth_provider,
+        createdAt: user.created_at,
+      },
+      workspace: workspace ? {
+        id: workspace.id,
+        name: workspace.name,
+        ownerId: workspace.owner_id,
+      } : null,
+      membership: membership ? {
+        workspaceId: membership.workspace_id,
+        role: membership.role,
+      } : null,
+      session: { refreshToken, expiresAt, sessionId },
+    };
   }
 
-  async logout(_sessionId) {
-    throw new Error('AuthService.logout is not implemented yet (Sprint 2C: registration only).');
+  /**
+   * Revokes the caller's current session. Idempotent — calling logout with an
+   * already-revoked or missing sessionId is a no-op, not an error.
+   */
+  async logout({ sessionId } = {}) {
+    if (!sessionId) return;
+    await this.sessionService.revokeSession(sessionId);
+    this.logger?.audit('user logged out', { sessionId });
   }
 
   async acceptInvitation(_token, _credentials) {

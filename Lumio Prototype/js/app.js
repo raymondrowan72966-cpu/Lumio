@@ -2,6 +2,38 @@
    LUMIO PROTOTYPE — APP SHELL, ROUTER, STATE
    ============================================================ */
 
+/* ============================================================
+   LUMIO SESSION — server-authenticated state (Step 5)
+
+   In-memory only — never written to localStorage. Populated by
+   LumioAPI.auth.session() on page load, LumioAPI.auth.login() on
+   sign-in, and LumioAPI.auth.register() on registration. Cleared by
+   LumioAPI.auth.logout() on sign-out.
+
+   getCurrentUser() and getCurrentWorkspace() read from here first;
+   they fall back to the legacy LumioState.session + LumioState.users[]
+   path so existing prototype users (stored in localStorage from before
+   the real backend existed) continue to work without any data migration.
+   ============================================================ */
+const LumioSession = (function () {
+  var _auth = { isAuthenticated: false, user: null, workspace: null, membership: null };
+
+  return {
+    get: function () { return _auth; },
+    set: function (data) {
+      _auth = {
+        isAuthenticated: !!(data && data.user),
+        user: data ? data.user : null,
+        workspace: data ? data.workspace : null,
+        membership: data ? data.membership : null,
+      };
+    },
+    clear: function () {
+      _auth = { isAuthenticated: false, user: null, workspace: null, membership: null };
+    },
+  };
+})();
+
 const LumioState = {
   projects: JSON.parse(JSON.stringify(LumioData.projects)),
   folders: JSON.parse(JSON.stringify(LumioData.folders)),
@@ -181,9 +213,19 @@ function toCanonicalAuthProvider(legacyProvider) {
 // today this only ever points at the one migrated demo identity, but the
 // shape is real: a future login flow sets these two ids, nothing else.
 function getCurrentUser() {
+  // Server session takes precedence (real backend auth via cookie).
+  const s = LumioSession.get();
+  if (s.isAuthenticated && s.user) {
+    // Merge role from membership so legacy callers (isWorkspaceOwner etc.)
+    // that read user.role directly continue to work without change.
+    return s.membership ? Object.assign({}, s.user, { role: s.membership.role }) : s.user;
+  }
+  // Fall back to legacy localStorage session for prototype demo users.
   return (LumioState.users || []).find(u => u.id === LumioState.session?.currentUserId) || null;
 }
 function getCurrentWorkspace() {
+  const s = LumioSession.get();
+  if (s.isAuthenticated && s.workspace) return s.workspace;
   return (LumioState.workspaces || []).find(w => w.id === LumioState.session?.currentWorkspaceId) || null;
 }
 function getWorkspaceMembership(userId, workspaceId) {
@@ -1939,11 +1981,32 @@ function navigate(hash) {
 }
 
 window.addEventListener('hashchange', render);
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   const restoredHash = loadLumioState();
   ensureStableBlockIdentity();
   ensureSaasFoundation();
-  const sessionValid = LumioAuth.restoreSession();
+
+  // Restore server-managed session first. If a valid cookie exists, the server
+  // returns the full auth context and we populate LumioSession — the user
+  // never sees the login screen again. A 401 (no session, expired, revoked)
+  // is expected and handled silently; any other error (network failure, 5xx)
+  // falls through the same path (send to login) rather than crashing.
+  let sessionValid = false;
+  if (!LearnerUI.publishedMode) {
+    try {
+      const data = await LumioAPI.auth.session();
+      LumioSession.set(data);
+      sessionValid = true;
+    } catch (_e) {
+      // 401 = no active session; any other error = treat as unauthenticated.
+      LumioSession.clear();
+      // If no server session, fall back to checking the legacy localStorage
+      // session (prototype demo users who haven't yet signed in via the real
+      // backend). This keeps the existing prototype experience intact.
+      sessionValid = LumioAuth.restoreSession();
+    }
+  }
+
   // Published/exported packages (see the LearnerUI.publishedMode check in
   // render() above) are a single self-contained learner runtime with no
   // login concept at all — forcing #/login here would stomp whatever hash
@@ -1951,7 +2014,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (!LearnerUI.publishedMode) {
     if (sessionValid && restoredHash) location.hash = restoredHash;
     else if (sessionValid && !location.hash) location.hash = '#/projects';
-    else location.hash = '#/login'; // no valid session (never signed in, or "Remember me" was off and the browser was actually closed/reopened)
+    else location.hash = '#/login'; // no valid session
   }
   render();
   BlockMigration.validateAllLessons();
@@ -2332,7 +2395,14 @@ function renderShell(activeId, contentHtml, opts = {}) {
     elx.addEventListener('click', () => {
       // Close any open modal (e.g. Course Settings) before navigating away.
       document.querySelectorAll('.overlay').forEach(o => o.remove());
-      if (elx.dataset.nav === '#/login') LumioAuth.logout(); // "Sign out" — clear the real session, not just navigate away from it
+      if (elx.dataset.nav === '#/login') {
+        // Revoke the server session + clear the cookie (fire-and-forget — the
+        // navigate() below sends the user to #/login immediately regardless of
+        // whether the server call resolves, so the user never waits on it).
+        LumioAPI.auth.logout().catch(function () {});
+        LumioSession.clear();
+        LumioAuth.logout(); // also clear any legacy localStorage session
+      }
       navigate(elx.dataset.nav);
     });
   });

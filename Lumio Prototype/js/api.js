@@ -113,24 +113,54 @@ const LumioAPI = (function () {
 
   // -------------------------------------------------------------------------
   // auth
-  // Only POST /auth/register is backed by a real route in this sprint.
-  // All other auth methods are stubs until later sprints (login, logout, etc.)
-  // per docs/SAAS_AUTHENTICATION_SPECIFICATION.md.
   // -------------------------------------------------------------------------
   var auth = {
     /**
      * Register a new Workspace Owner via email + password.
+     * Server sets an HttpOnly session cookie on success.
      *
      * @param {{ email: string, password: string, firstName: string, lastName?: string }} opts
-     * @returns {Promise<{ user, workspace, session }>}
-     * @throws {ApiError} 409 for duplicate email, 422 for validation errors
+     * @returns {Promise<{ user, workspace, membership }>}
+     * @throws {ApiError} 409 duplicate email · 400 validation
      */
     register: function (opts) {
       return post('/auth/register', opts);
     },
 
-    login:               notImplemented('auth.login'),
-    logout:              notImplemented('auth.logout'),
+    /**
+     * Sign in with email + password.
+     * Server sets an HttpOnly session cookie on success.
+     *
+     * @param {{ email: string, password: string, rememberMe?: boolean }} opts
+     * @returns {Promise<{ user, workspace, membership }>}
+     * @throws {ApiError} 401 invalid credentials · 400 validation
+     */
+    login: function (opts) {
+      return post('/auth/login', opts);
+    },
+
+    /**
+     * Sign out the current session.
+     * Server revokes the session and clears the cookie.
+     *
+     * @returns {Promise<{ ok: true }>}
+     */
+    logout: function () {
+      return post('/auth/logout');
+    },
+
+    /**
+     * Restore an existing session from the server-managed cookie.
+     * Returns the authenticated context if a valid session cookie exists.
+     * Throws ApiError(401) when there is no session or it has expired.
+     *
+     * @returns {Promise<{ user, workspace, membership }>}
+     * @throws {ApiError} 401 no active session
+     */
+    session: function () {
+      return get('/auth/session');
+    },
+
     refresh:             notImplemented('auth.refresh'),
     requestPasswordReset: notImplemented('auth.requestPasswordReset'),
     confirmPasswordReset: notImplemented('auth.confirmPasswordReset'),
