@@ -16,7 +16,7 @@ LOG_LEVEL = "DEBUG"
 [[d1_databases]]
 binding = "DB"
 database_name = "lumio-dev"
-database_id = "REPLACE_WITH_LUMIO_DEV_DATABASE_ID"
+database_id = "fb2af44e-43dd-4b17-acb4-845e3a76da14"
 
 [[r2_buckets]]
 binding = "ASSETS_BUCKET"
