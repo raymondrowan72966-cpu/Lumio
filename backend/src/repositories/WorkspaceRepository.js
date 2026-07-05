@@ -60,6 +60,19 @@ export class WorkspaceRepository {
     };
   }
 
+  /** Builds (but does not execute) the INSERT statement for the default
+   *  workspace_settings row. Called as part of workspace creation — the
+   *  settings row must be created atomically with the workspace row itself
+   *  (in the same db.batch() call) so there is never a workspace without a
+   *  settings record. All columns except workspace_id and updated_at carry
+   *  schema-level defaults, so only those two are supplied here. */
+  buildCreateSettingsStatement({ workspaceId, now }) {
+    return {
+      sql: 'INSERT INTO workspace_settings (workspace_id, updated_at) VALUES (?, ?)',
+      params: [workspaceId, now],
+    };
+  }
+
   async addMember(fields) {
     const { sql, params } = this.buildAddMemberStatement(fields);
     try {

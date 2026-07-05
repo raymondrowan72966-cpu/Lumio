@@ -120,13 +120,21 @@ export class AuthService {
       deviceId: null,
       now,
     });
+    const settingsStatement = this.workspaceRepository.buildCreateSettingsStatement({
+      workspaceId,
+      now,
+    });
 
-    // --- 4-7. Execute all four inserts as one atomic transaction. This
-    //          catch block — not the pre-check above — is the
-    //          authoritative enforcement of email uniqueness, per the
-    //          Database Concurrency Rule (DECISIONS.md). -----------------
+    // --- 4-8. Execute all five inserts as one atomic transaction.
+    //          Order matters: workspace must precede workspace_settings
+    //          (FK constraint). D1 batch() executes statements in order
+    //          within a single transaction, so workspace exists before
+    //          the settings INSERT runs. This catch block — not the
+    //          pre-check above — is the authoritative enforcement of
+    //          email uniqueness, per the Database Concurrency Rule
+    //          (DECISIONS.md). -----------------------------------------
     try {
-      await this.db.batch([userStatement, workspaceStatement, membershipStatement, sessionBuild.statement]);
+      await this.db.batch([userStatement, workspaceStatement, settingsStatement, membershipStatement, sessionBuild.statement]);
     } catch (err) {
       const message = err?.details?.cause || String(err);
       if (message.includes('UNIQUE') && message.includes('users.email')) {
