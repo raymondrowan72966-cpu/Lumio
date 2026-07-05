@@ -77,6 +77,7 @@ const LumioAPI = (function () {
       init.body = JSON.stringify(body);
     }
 
+
     const response = await fetch(BASE + path, init);
 
     let parsed;
@@ -130,6 +131,36 @@ const LumioAPI = (function () {
 
   function get(path) { return request('GET', path); }
   function post(path, body) { return request('POST', path, body); }
+
+  // Non-JSON request (e.g. multipart/form-data). Browser sets Content-Type
+  // automatically with the correct boundary when body is FormData.
+  async function requestRaw(method, path, body) {
+    const response = await fetch(BASE + path, {
+      method,
+      body,
+      credentials: 'same-origin',
+    });
+    let parsed;
+    try { parsed = await response.json(); } catch (_) { parsed = null; }
+    if (!response.ok) {
+      const err = parsed && parsed.error ? parsed.error : {};
+      throw new ApiError(response.status, err.code, err.message, err.details);
+    }
+    if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')) return parsed.data;
+    return parsed;
+  }
+
+  // Blob fetch — returns a Blob on success, throws ApiError on non-2xx.
+  async function requestBlob(path) {
+    const response = await fetch(BASE + path, { credentials: 'same-origin' });
+    if (!response.ok) {
+      let parsed;
+      try { parsed = await response.json(); } catch (_) { parsed = null; }
+      const err = parsed && parsed.error ? parsed.error : {};
+      throw new ApiError(response.status, err.code, err.message, err.details);
+    }
+    return response.blob();
+  }
 
   // -------------------------------------------------------------------------
   // Stub factory — raises a clear error for unimplemented service methods
@@ -283,10 +314,57 @@ const LumioAPI = (function () {
     delete:  notImplemented('lessons.delete'),
   };
 
+  // -------------------------------------------------------------------------
+  // assets — Step 8: Cloud Asset Persistence
+  // All methods require an active session (HttpOnly cookies sent automatically).
+  // -------------------------------------------------------------------------
   var assets = {
-    upload:  notImplemented('assets.upload'),
-    get:     notImplemented('assets.get'),
-    delete:  notImplemented('assets.delete'),
+    /**
+     * Upload an asset blob to R2 and record metadata in D1.
+     * Uses multipart/form-data so large files are streamed without base64 overhead.
+     *
+     * @param {string}  assetId     - content-addressed "asset://..." identifier
+     * @param {File}    file        - the binary blob to upload
+     * @param {string}  [courseId]  - owning course (null for workspace-level assets)
+     * @param {string}  [workspaceId] - unused by server (derived from session), kept for symmetry
+     * @returns {Promise<{ id, fileName, mimeType, sizeBytes, r2Key }>}
+     */
+    upload: function (assetId, file, courseId) {
+      var fd = new FormData();
+      fd.append('assetId', assetId);
+      fd.append('file', file, file.name || 'asset');
+      if (courseId) fd.append('courseId', courseId);
+      return requestRaw('POST', '/assets/upload', fd);
+    },
+
+    /**
+     * Fetch an asset blob from R2 (via Worker ownership check).
+     * Returns a Blob with the correct Content-Type.
+     *
+     * @param {string} assetId - "asset://..." identifier
+     * @returns {Promise<Blob>}
+     */
+    getBlob: function (assetId) {
+      return requestBlob('/assets/' + encodeURIComponent(assetId));
+    },
+
+    /**
+     * List all assets belonging to a project (course).
+     * @param {string} projectId
+     * @returns {Promise<Array>}
+     */
+    listByProject: function (projectId) {
+      return get('/projects/' + projectId + '/assets');
+    },
+
+    /**
+     * Soft-delete an asset from D1 (R2 object is retained).
+     * @param {string} assetId
+     * @returns {Promise<{ deleted: true }>}
+     */
+    delete: function (assetId) {
+      return request('DELETE', '/assets/' + encodeURIComponent(assetId));
+    },
   };
 
   var users = {

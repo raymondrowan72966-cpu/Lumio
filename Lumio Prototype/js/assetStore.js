@@ -36,6 +36,10 @@ const AssetStore = (() => {
   /* ── In-memory fallback (private browsing / IDB unavailable) ── */
   let _fallback = null; // Map<assetId, { blob, mimeType, fileName, size, hash, createdAt, lastUsedAt }>
 
+  /* ── Cloud adapter (set by app.js after session restore) ── */
+  // { download: (assetId) => Promise<Blob|null> }
+  let _cloudAdapter = null;
+
   /* ============================================================
      INTERNAL: open / initialise IndexedDB
      ============================================================ */
@@ -281,6 +285,36 @@ const AssetStore = (() => {
 
     const asset = await get(assetId);
     if (!asset) {
+      // Try cloud download before caching null — needed on devices that have
+      // never stored this asset locally (cross-device scenario).
+      if (_cloudAdapter && _cloudAdapter.download) {
+        try {
+          const blob = await _cloudAdapter.download(assetId);
+          if (blob && blob.size > 0) {
+            const url = URL.createObjectURL(blob);
+            _urlCache.set(assetId, url);
+            // Cache in IndexedDB so subsequent resolveUrl calls are instant.
+            const rec = {
+              id: assetId,
+              blob,
+              mimeType: blob.type || 'application/octet-stream',
+              fileName: '',
+              size: blob.size,
+              hash: assetId.slice(ID_PREFIX.length),
+              createdAt: Date.now(),
+              lastUsedAt: Date.now(),
+            };
+            if (_db) {
+              try { await _idbPut(_tx('readwrite'), rec); } catch { /* best-effort */ }
+            } else if (_fallback) {
+              _fallback.set(assetId, rec);
+            }
+            return url;
+          }
+        } catch (err) {
+          console.warn('[AssetStore] Cloud download failed for', assetId, err);
+        }
+      }
       // Root cause of the Lesson Builder freeze on imports with a missing
       // asset (e.g. a referenced icon that was never bundled into the
       // .lumio file): leaving this id uncached meant every single
@@ -538,6 +572,18 @@ const AssetStore = (() => {
     return count;
   }
 
+  /**
+   * setCloudAdapter({ download }) — called by app.js after session restore.
+   * download: (assetId: string) => Promise<Blob|null>
+   *
+   * When set, resolveUrl() will attempt a cloud fetch for assets absent from
+   * IndexedDB before returning null. This powers cross-device asset loading.
+   * Pass null to clear the adapter (e.g. on logout).
+   */
+  function setCloudAdapter(adapter) {
+    _cloudAdapter = adapter || null;
+  }
+
   /* ── Expose internal for validation harness only ── */
   function _getState() {
     return { dbOpen: !!_db, fallbackMode: !!_fallback, cachedUrls: _urlCache.size };
@@ -558,6 +604,7 @@ const AssetStore = (() => {
     pruneOrphans,
     resolveMediaSrc,
     preloadBlocks,
+    setCloudAdapter,
     _getState, // validation only — not part of public contract
   };
 

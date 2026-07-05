@@ -1888,6 +1888,39 @@ async function cloudPersistProject(id) {
   } catch (err) {
     console.warn('[Lumio] Cloud persist failed for project', id, err);
     toast('Could not save to cloud — check your connection', '⚠️');
+    return; // don't attempt asset sync if project save failed
+  }
+
+  // Upload any locally-stored assets that haven't been synced to R2 yet.
+  // Fire-and-forget — asset sync failure does not roll back the project save.
+  const course  = LumioState.courses[id];
+  const lessons = LumioState.lessons[id];
+  const refs    = _collectProjectAssetRefs(course, Object.values(lessons || {}));
+  _cloudSyncAssets(id, refs).catch(function (err) {
+    console.warn('[Lumio] Asset sync failed for project', id, err);
+  });
+}
+
+/**
+ * Upload all locally-stored asset blobs for a project to R2/D1.
+ * Assets already in R2 are skipped (D1 insert uses INSERT OR IGNORE).
+ * Failures for individual assets are logged but do not abort the batch.
+ *
+ * @param {string}   courseId
+ * @param {string[]} assetRefs  — array of "asset://..." IDs
+ */
+async function _cloudSyncAssets(courseId, assetRefs) {
+  if (!isCloudUser() || !assetRefs || assetRefs.length === 0) return;
+  for (var i = 0; i < assetRefs.length; i++) {
+    var assetId = assetRefs[i];
+    try {
+      var asset = await AssetStore.get(assetId);
+      if (!asset) continue; // not in local store — skip (will be fetched from cloud on demand)
+      var file = new File([asset.blob], asset.fileName || 'asset', { type: asset.mimeType });
+      await LumioAPI.assets.upload(assetId, file, courseId);
+    } catch (err) {
+      console.warn('[Lumio] Cloud asset upload failed for', assetId, err);
+    }
   }
 }
 
@@ -1973,8 +2006,12 @@ async function exportProject(id) {
     if (LumioState.lessons[lid]) lessons[lid] = JSON.parse(JSON.stringify(LumioState.lessons[lid]));
   });
 
-  // Collect and fetch all referenced assets
+  // Collect and fetch all referenced assets.
+  // resolveUrl() fetches from R2 and caches in IndexedDB on miss — this
+  // ensures cross-device exports include assets the local device hasn't yet
+  // downloaded. exportAll() then reads from IndexedDB (now warm).
   const assetRefs = _collectProjectAssetRefs(course, lessons);
+  for (const ref of assetRefs) { await AssetStore.resolveUrl(ref); }
   const assetEntries = await AssetStore.exportAll(assetRefs);
 
   // Build asset manifest entries (id → path inside ZIP)
@@ -2164,6 +2201,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       const data = await LumioAPI.auth.session();
       LumioSession.set(data);
       sessionValid = true;
+      // Wire cloud adapter so AssetStore.resolveUrl() can fetch from R2 on
+      // devices that don't have the asset in IndexedDB yet.
+      AssetStore.setCloudAdapter({
+        download: function (assetId) { return LumioAPI.assets.getBlob(assetId); },
+      });
       // Replace localStorage project cache with D1 source of truth.
       // Awaited before render() so the first paint shows cloud projects.
       await _loadCloudProjects();
@@ -2571,6 +2613,7 @@ function renderShell(activeId, contentHtml, opts = {}) {
         // whether the server call resolves, so the user never waits on it).
         LumioAPI.auth.logout().catch(function () {});
         LumioSession.clear();
+        AssetStore.setCloudAdapter(null); // clear cloud adapter on logout
         LumioAuth.logout(); // also clear any legacy localStorage session
       }
       navigate(elx.dataset.nav);
