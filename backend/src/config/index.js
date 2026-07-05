@@ -19,6 +19,20 @@ import { loadSecurityConfig } from './security.js';
 // rather than crashing somewhere deep inside a route handler.
 const REQUIRED_BINDINGS = ['DB', 'ASSETS_BUCKET'];
 
+/**
+ * Parses the CORS_ALLOWED_ORIGINS env var (comma-separated list of origins)
+ * into an array. Falls back to the Pages domain so the most common case works
+ * without any wrangler.toml change. Additional origins (e.g. a local dev
+ * server or a future custom domain) can be added via CORS_ALLOWED_ORIGINS.
+ */
+function loadCorsOrigins(env) {
+  const raw = env.CORS_ALLOWED_ORIGINS;
+  if (raw && typeof raw === 'string' && raw.trim().length > 0) {
+    return raw.split(',').map((o) => o.trim()).filter(Boolean);
+  }
+  return ['https://lumio-6kn.pages.dev'];
+}
+
 export function loadConfig(env) {
   if (!env || typeof env !== 'object') {
     throw new ConfigurationError('Worker env was not provided.');
@@ -42,5 +56,6 @@ export function loadConfig(env) {
     security: loadSecurityConfig(env),
     assetsBucket: env.ASSETS_BUCKET,    // R2 binding — validated above
     sessionSecret: env.SESSION_SECRET, // secret — set via `wrangler secret put`
+    corsAllowedOrigins: loadCorsOrigins(env),
   };
 }
