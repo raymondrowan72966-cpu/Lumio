@@ -1259,15 +1259,15 @@ function learnerKcMultipleChoice(block, index, ctx) {
           const isSelected = ans && ans.selected === i;
           const isCorrect  = reveal && i === correct;
           const isWrong    = reveal && isSelected && i !== correct;
-          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}`;
+          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}${!submitted ? ' kc-interactive' : ''}`;
           return `
-          <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
+          <label class="${cls}">
             <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}"
               ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
             <span class="kc-choice-indicator" aria-hidden="true"></span>
             <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span class="text-xs" style="color:var(--teal); font-weight:600; margin-left:auto; white-space:nowrap;">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span class="text-xs text-destructive" style="font-weight:600; margin-left:auto; white-space:nowrap;">✕ Wrong</span>' : ''}
+            ${isCorrect ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
+            ${isWrong   ? '<span class="kc-label-wrong">✕ Wrong</span>' : ''}
           </label>`;
         }).join('')}
       </div>
@@ -1296,15 +1296,15 @@ function learnerKcMultipleResponse(block, index, ctx) {
           const isSelected = (ans.selected || []).includes(i);
           const isCorrect  = reveal && hasCorrect && d.correct.includes(i);
           const isWrong    = reveal && isSelected && hasCorrect && !d.correct.includes(i);
-          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}`;
+          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}${!submitted ? ' kc-interactive' : ''}`;
           return `
-          <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
+          <label class="${cls}">
             <input type="checkbox" data-kc-key="${key}" data-i="${i}"
               ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
             <span class="kc-choice-indicator kc-choice-check" aria-hidden="true"></span>
             <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span class="text-xs" style="color:var(--teal); font-weight:600; margin-left:auto; white-space:nowrap;">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span class="text-xs text-destructive" style="font-weight:600; margin-left:auto; white-space:nowrap;">✕ Wrong</span>' : ''}
+            ${isCorrect ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
+            ${isWrong   ? '<span class="kc-label-wrong">✕ Wrong</span>' : ''}
           </label>`;
         }).join('')}
       </div>
@@ -1386,8 +1386,8 @@ function learnerKcOrdering(block, index, ctx) {
             <button class="btn-icon lp-order-up"   data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
             <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
           ` : ''}
-          ${inCorrectPos ? '<span class="text-xs" style="color:var(--teal); font-weight:700; margin-left:auto;">✓</span>' : ''}
-          ${inWrongPos   ? '<span class="text-xs text-destructive" style="font-weight:700; margin-left:auto;">✕</span>' : ''}
+          ${inCorrectPos ? '<span class="kc-label-correct">✓</span>' : ''}
+          ${inWrongPos   ? '<span class="kc-label-wrong">✕</span>' : ''}
         </div>`;
       }).join('')}
     </div>

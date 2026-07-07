@@ -496,10 +496,11 @@ button { font-family: var(--font-body); cursor: pointer; }
   background: color-mix(in srgb, var(--color-destructive) 5%, var(--surface-0));
 }
 
-/* Hover on interactive (non-submitted) options */
-.kc-option[style*="pointer"]:hover:not(.correct):not(.wrong):not(.selected) {
+/* Hover — only on interactive (non-submitted) options */
+.kc-option.kc-interactive:hover:not(.correct):not(.wrong):not(.selected) {
   border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 50%, var(--border));
   background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 4%, var(--surface-0));
+  cursor: pointer;
 }
 
 /* Matching right-column items — theme-tinted background */
@@ -534,52 +535,60 @@ button { font-family: var(--font-body); cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  color: white;
-  font-weight: 700;
+  position: relative;
 }
 .kc-choice-indicator.kc-choice-check { border-radius: var(--r-sm, 4px); }
 
+/* Radio: selected — filled circle with white dot */
 .kc-option.selected .kc-choice-indicator {
   border-color: var(--theme-primary, var(--indigo));
   background: var(--theme-primary, var(--indigo));
 }
-.kc-option.selected .kc-choice-indicator::after {
+.kc-option.selected .kc-choice-indicator:not(.kc-choice-check)::after {
   content: '';
+  display: block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: white;
 }
+/* Checkbox: selected — white checkmark */
 .kc-option.selected .kc-choice-indicator.kc-choice-check::after {
   content: '';
-  width: 0;
-  height: 0;
-  border-radius: 0;
-  background: transparent;
+  display: block;
   width: 4px;
   height: 7px;
   border-right: 2px solid white;
   border-bottom: 2px solid white;
   transform: rotate(45deg) translate(-1px, -1px);
 }
+/* Correct state — green with checkmark */
 .kc-option.correct .kc-choice-indicator {
   border-color: var(--teal);
   background: var(--teal);
 }
 .kc-option.correct .kc-choice-indicator::after {
   content: '';
+  display: block;
   width: 4px;
   height: 7px;
   border-right: 2px solid white;
   border-bottom: 2px solid white;
   transform: rotate(45deg) translate(-1px, -1px);
 }
+/* Wrong state — red with × */
 .kc-option.wrong .kc-choice-indicator {
   border-color: var(--color-destructive);
   background: var(--color-destructive);
 }
-.kc-option.wrong .kc-choice-indicator::after { content: '✕'; }
+.kc-option.wrong .kc-choice-indicator::after {
+  content: '✕';
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+}
 
 /* Ordering items — themed position counter */
 .kc-order-item {
@@ -644,12 +653,32 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 /* Question heading inside KC blocks */
 .kc-question {
+  display: block;
+  width: 100%;
   font-size: 17px;
   font-weight: 700;
   line-height: 1.45;
   color: var(--ink-900);
   margin: 0 0 16px;
   padding: 0;
+  border: none;
+  float: none;
+}
+
+/* Correct/wrong inline label text beside each option */
+.kc-label-correct {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal);
+}
+.kc-label-wrong {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-destructive);
 }
 
 /* Feedback bar — replaces hardcoded inline colours */
