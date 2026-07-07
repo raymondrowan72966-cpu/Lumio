@@ -467,23 +467,206 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 .card-pad { padding: 24px; }
 
-/* Knowledge-check answer-option rows: flat bordered rows that sit inside an
-   already-elevated block — no additional shadow so elevation doesn't stack. */
+/* Knowledge-check answer-option rows */
 .kc-option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface-0);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
   box-shadow: none;
-  transition: border-color 0.15s;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
 }
-.kc-option.selected { border-color: var(--theme-primary, var(--indigo)); }
-.kc-option.correct  { border-color: var(--teal); }
-.kc-option.wrong    { border-color: var(--color-destructive); }
+.kc-option.selected {
+  border-color: var(--theme-primary, var(--indigo));
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 6%, var(--surface-0));
+}
+.kc-option.correct {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 6%, var(--surface-0));
+}
+.kc-option.wrong {
+  border-color: var(--color-destructive);
+  background: color-mix(in srgb, var(--color-destructive) 5%, var(--surface-0));
+}
+
+/* Hover on interactive (non-submitted) options */
+.kc-option[style*="pointer"]:hover:not(.correct):not(.wrong):not(.selected) {
+  border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 50%, var(--border));
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 4%, var(--surface-0));
+}
+
+/* Matching right-column items — theme-tinted background */
+.kc-option.lp-match-right {
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 7%, var(--surface-0));
+  border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 22%, transparent);
+}
+.kc-option.lp-match-right.selected {
+  border-color: var(--theme-primary, var(--indigo));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, var(--indigo)) 20%, transparent);
+}
+
+/* Visually hide native radio/checkbox — keep accessible for screen readers */
+.kc-option input[type="radio"],
+.kc-option input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Custom choice indicator (radio circle or checkbox square) */
+.kc-choice-indicator {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-0);
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: white;
+  font-weight: 700;
+}
+.kc-choice-indicator.kc-choice-check { border-radius: var(--r-sm, 4px); }
+
+.kc-option.selected .kc-choice-indicator {
+  border-color: var(--theme-primary, var(--indigo));
+  background: var(--theme-primary, var(--indigo));
+}
+.kc-option.selected .kc-choice-indicator::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+}
+.kc-option.selected .kc-choice-indicator.kc-choice-check::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  background: transparent;
+  width: 4px;
+  height: 7px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.kc-option.correct .kc-choice-indicator {
+  border-color: var(--teal);
+  background: var(--teal);
+}
+.kc-option.correct .kc-choice-indicator::after {
+  content: '';
+  width: 4px;
+  height: 7px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.kc-option.wrong .kc-choice-indicator {
+  border-color: var(--color-destructive);
+  background: var(--color-destructive);
+}
+.kc-option.wrong .kc-choice-indicator::after { content: '✕'; }
+
+/* Ordering items — themed position counter */
+.kc-order-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-0);
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.15s, background 0.15s;
+}
+.kc-order-item.correct {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 5%, var(--surface-0));
+}
+.kc-order-item.wrong {
+  border-color: var(--color-destructive);
+  background: color-mix(in srgb, var(--color-destructive) 4%, var(--surface-0));
+}
+.kc-order-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, transparent);
+  color: var(--theme-primary, var(--indigo));
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fill-the-gap input */
+.kc-fill-input {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-0);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-900);
+  transition: border-color 0.18s, box-shadow 0.18s;
+  outline: none;
+  margin-top: 12px;
+  box-sizing: border-box;
+}
+.kc-fill-input:focus {
+  border-color: var(--theme-primary, var(--indigo));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, var(--indigo)) 18%, transparent);
+}
+.kc-fill-input:disabled {
+  background: var(--surface-1);
+  color: var(--ink-600);
+  cursor: default;
+}
+
+/* Question heading inside KC blocks */
+.kc-question {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink-900);
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+/* Feedback bar — replaces hardcoded inline colours */
+.kc-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.kc-feedback-correct  { background: color-mix(in srgb, var(--teal) 10%, transparent); color: var(--teal); }
+.kc-feedback-incorrect { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
+.kc-feedback-neutral  { background: var(--surface-1); color: var(--ink-700); }
 
 /* ============================================================
    MATCHING CARDS KNOWLEDGE CHECK

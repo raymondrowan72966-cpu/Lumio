@@ -1201,7 +1201,7 @@ function shouldRevealCorrect(ans, settings) {
 function kcAttemptNote(ans, settings) {
   if (!settings.maxAttempts) return '';
   const n = (ans && ans.attempts) || 0;
-  return `<div class="text-xs text-muted mt-8">Attempt ${n + 1} of ${settings.maxAttempts}</div>`;
+  return `<div class="text-xs text-muted mb-8">Attempt ${n + 1} of ${settings.maxAttempts}</div>`;
 }
 
 // Feedback + optional retry button shown after submission.
@@ -1212,20 +1212,20 @@ function kcPostSubmitFooter(ans, settings, key) {
   const lastCorrect = ans && ans.lastCorrect;
   const canRetry    = !locked && settings.allowRetry;
 
-  const feedbackText  = lastCorrect === true  ? settings.correctFeedback
-                      : lastCorrect === false ? settings.incorrectFeedback
-                      : 'Response recorded.';
-  const feedbackColor = lastCorrect === true  ? 'var(--teal)'
-                      : lastCorrect === false ? 'var(--color-destructive)'
-                      : 'var(--ink-700)';
-  const prefix        = lastCorrect === true ? '✓ ' : lastCorrect === false ? '✕ ' : '';
-  const attemptLine   = maxAttempts > 0
+  const feedbackText = lastCorrect === true  ? settings.correctFeedback
+                     : lastCorrect === false ? settings.incorrectFeedback
+                     : 'Response recorded.';
+  const feedbackCls  = lastCorrect === true  ? 'kc-feedback kc-feedback-correct'
+                     : lastCorrect === false ? 'kc-feedback kc-feedback-incorrect'
+                     : 'kc-feedback kc-feedback-neutral';
+  const icon         = lastCorrect === true ? '✓' : lastCorrect === false ? '✕' : '';
+  const attemptLine  = maxAttempts > 0
     ? `<div class="text-xs text-muted mb-4">Attempt ${attempts} of ${maxAttempts}</div>`
     : '';
   return `
-    <div class="mt-12">
+    <div>
       ${attemptLine}
-      <div class="text-sm" style="font-weight:600; color:${feedbackColor};">${prefix}${escapeHtml(feedbackText)}</div>
+      <div class="${feedbackCls}">${icon ? `<span style="flex-shrink:0;">${icon}</span>` : ''}<span>${escapeHtml(feedbackText)}</span></div>
       ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">Try Again</button>` : ''}
     </div>`;
 }
@@ -1252,10 +1252,9 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const reveal = shouldRevealCorrect(ans, settings);
   const canSubmit = ans && ans.selected !== undefined;
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Multiple Choice</div>
     <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; font-size:14px; padding:0; width:100%;">${d.question || 'Which of the following is correct?'}</legend>
-      <div class="flex-col gap-8 mt-12">
+      <legend class="kc-question">${escapeHtml(d.question || 'Which of the following is correct?')}</legend>
+      <div class="flex-col gap-8">
         ${options.map((o, i) => {
           const isSelected = ans && ans.selected === i;
           const isCorrect  = reveal && i === correct;
@@ -1265,9 +1264,10 @@ function learnerKcMultipleChoice(block, index, ctx) {
           <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
             <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}"
               ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
+            <span class="kc-choice-indicator" aria-hidden="true"></span>
             <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span class="text-destructive" style="font-size:12px; font-weight:600;">✕ Your answer</span>' : ''}
+            ${isCorrect ? '<span class="text-xs" style="color:var(--teal); font-weight:600; margin-left:auto; white-space:nowrap;">✓ Correct</span>' : ''}
+            ${isWrong   ? '<span class="text-xs text-destructive" style="font-weight:600; margin-left:auto; white-space:nowrap;">✕ Wrong</span>' : ''}
           </label>`;
         }).join('')}
       </div>
@@ -1289,10 +1289,9 @@ function learnerKcMultipleResponse(block, index, ctx) {
   const hasCorrect = Array.isArray(d.correct);
   const reveal = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Select all that apply</div>
     <fieldset style="border:none; margin:0; padding:0;">
-      <legend style="font-weight:600; padding:0; width:100%;">${d.question || 'Select all that apply.'}</legend>
-      <div class="flex-col gap-8 mt-12">
+      <legend class="kc-question">${escapeHtml(d.question || 'Select all that apply.')}</legend>
+      <div class="flex-col gap-8">
         ${options.map((o, i) => {
           const isSelected = (ans.selected || []).includes(i);
           const isCorrect  = reveal && hasCorrect && d.correct.includes(i);
@@ -1302,8 +1301,10 @@ function learnerKcMultipleResponse(block, index, ctx) {
           <label class="${cls}" style="cursor:${submitted ? 'default' : 'pointer'};">
             <input type="checkbox" data-kc-key="${key}" data-i="${i}"
               ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
+            <span class="kc-choice-indicator kc-choice-check" aria-hidden="true"></span>
             <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓</span>' : ''}
+            ${isCorrect ? '<span class="text-xs" style="color:var(--teal); font-weight:600; margin-left:auto; white-space:nowrap;">✓ Correct</span>' : ''}
+            ${isWrong   ? '<span class="text-xs text-destructive" style="font-weight:600; margin-left:auto; white-space:nowrap;">✕ Wrong</span>' : ''}
           </label>`;
         }).join('')}
       </div>
@@ -1327,9 +1328,8 @@ function learnerKcMatching(block, index, ctx) {
   const locked    = !!(ans.locked);
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Matching</div>
-    <p class="text-sm text-muted mb-8">Tap an item on the left, then its match on the right.</p>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+    <p class="text-sm text-muted mb-12">Tap an item on the left, then its match on the right.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
       <div class="flex-col gap-8">
         ${left.map((l, i) => {
           const matchedTo  = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
@@ -1339,8 +1339,8 @@ function learnerKcMatching(block, index, ctx) {
           return `
           <div class="kc-option lp-match-left${ans.selectedLeft === i ? ' selected' : ''}${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}" data-kc-key="${key}" data-i="${i}"
             role="button" tabindex="${locked ? '-1' : '0'}" aria-pressed="${ans.selectedLeft === i}" aria-label="${escapeHtml(label)}"
-            style="cursor:${locked ? 'default' : 'pointer'};">
-            ${escapeHtml(l)}${matchedTo ? ` → ${escapeHtml(matchedTo)}` : ''}
+            style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">
+            ${escapeHtml(l)}${matchedTo ? ` <span style="opacity:0.5;">→</span> <strong>${escapeHtml(matchedTo)}</strong>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -1348,7 +1348,7 @@ function learnerKcMatching(block, index, ctx) {
         ${right.map((r, i) => `
           <div class="kc-option lp-match-right" data-kc-key="${key}" data-i="${i}"
             role="button" tabindex="${locked ? '-1' : '0'}" aria-label="${escapeHtml(r)}"
-            style="cursor:${locked ? 'default' : 'pointer'}; background:var(--pastel-lavender); border-color:transparent;">${escapeHtml(r)}</div>
+            style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">${escapeHtml(r)}</div>
         `).join('')}
       </div>
     </div>
@@ -1373,22 +1373,21 @@ function learnerKcOrdering(block, index, ctx) {
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Put in order</div>
-    <p class="text-sm text-muted mb-8">Use the arrows to arrange these in the correct order.</p>
-    <div class="flex-col gap-8 mt-8">
+    <p class="text-sm text-muted mb-12">Use the arrows to arrange these in the correct order.</p>
+    <div class="flex-col gap-8">
       ${order.map((itemIdx, pos) => {
         const inCorrectPos = reveal && itemIdx === pos;
         const inWrongPos   = reveal && itemIdx !== pos;
         return `
-        <div class="kc-option${inCorrectPos ? ' correct' : ''}${inWrongPos ? ' wrong' : ''}" style="gap:10px;">
-          <span class="pill pill-grey" style="flex-shrink:0;">${pos + 1}</span>
+        <div class="kc-order-item${inCorrectPos ? ' correct' : ''}${inWrongPos ? ' wrong' : ''}">
+          <span class="kc-order-num" aria-label="Position ${pos + 1}">${pos + 1}</span>
           <span style="flex:1;">${escapeHtml(items[itemIdx])}</span>
           ${!submitted ? `
-            <button class="btn-icon lp-order-up"   data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''}>↑</button>
-            <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="btn-icon lp-order-up"   data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+            <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
           ` : ''}
-          ${inCorrectPos ? '<span style="color:var(--teal); font-size:12px; font-weight:600;">✓</span>' : ''}
-          ${inWrongPos   ? '<span class="text-destructive" style="font-size:12px; font-weight:600;">✕</span>'   : ''}
+          ${inCorrectPos ? '<span class="text-xs" style="color:var(--teal); font-weight:700; margin-left:auto;">✓</span>' : ''}
+          ${inWrongPos   ? '<span class="text-xs text-destructive" style="font-weight:700; margin-left:auto;">✕</span>' : ''}
         </div>`;
       }).join('')}
     </div>
@@ -1408,9 +1407,8 @@ function learnerKcFillGap(block, index, ctx) {
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Fill the Gap</div>
-    <p style="font-size:15px; line-height:2;">${text}</p>
-    <input class="input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer..."
+    <p style="font-size:16px; line-height:1.7; font-weight:500; color:var(--ink-900);">${text}</p>
+    <input class="kc-fill-input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer…"
       value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />
     ${reveal && ans.lastCorrect === false
       ? (() => {
@@ -1467,7 +1465,6 @@ function learnerKcMatchingCards(block, index, ctx) {
     </div>`;
 
     return learnerKcWrap(ds, `
-      <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
       <p class="text-sm text-muted mb-4" style="visibility:hidden;">Drag each card to its correct category.</p>
       <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
     `);
@@ -1537,7 +1534,6 @@ function learnerKcMatchingCards(block, index, ctx) {
   const hint = selectedCard !== null ? ' — or tap a category to place the selected card' : '';
 
   return learnerKcWrap(ds, `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
     <p class="text-sm text-muted mb-4">Drag each card to its correct category${hint}.</p>
     ${deckHtml}
     ${zonesHtml}
