@@ -2938,106 +2938,39 @@ function kcBadgeStyle(ds) {
 }
 
 function knowledgeCheckMC(d, editable, ds) {
-  const options = normalizeKcOptions(d);
-  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Multiple Choice</div>
-    <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
-      data-placeholder="Enter your question…"
-      style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
-    >${richTextOut(d.question || '')}</div>
-    <div class="flex-col gap-6 mt-12">
-      ${options.map((o, i) => `
-        <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
-          <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid var(--border); flex-shrink:0; display:inline-block;"></span>
-          <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
-            data-placeholder="Option…" style="flex:1; outline:none;"
-          >${richTextOut(o || '')}</span>
-        </div>
-      `).join('')}
-    </div>
+    ${kcSharedMC(d, ds, { editable })}
     ${editable ? '<p class="text-xs text-muted mt-8">Mark the correct answer in the Content panel →</p>' : ''}
   `;
 }
 
 function knowledgeCheckMR(d, editable, ds) {
-  const options = normalizeKcOptions(d);
-  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Select all that apply</div>
-    <div class="editable-text" data-field="kcQuestion" data-richtext="true" ${ce}
-      data-placeholder="Enter your question…"
-      style="font-weight:600; font-size:14px; min-height:1.4em; outline:none;"
-    >${richTextOut(d.question || '')}</div>
-    <div class="flex-col gap-6 mt-12">
-      ${options.map((o, i) => `
-        <div class="flex items-center gap-8 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
-          <span style="width:14px; height:14px; border-radius:3px; border:1.5px solid var(--border); flex-shrink:0; display:inline-block;"></span>
-          <span class="editable-text" data-field="kcOption" data-col="${i}" ${ce}
-            data-placeholder="Option…" style="flex:1; outline:none;"
-          >${richTextOut(o || '')}</span>
-        </div>
-      `).join('')}
-    </div>
+    ${kcSharedMR(d, ds, { editable })}
     ${editable ? '<p class="text-xs text-muted mt-8">Check correct answers in the Content panel →</p>' : ''}
   `;
 }
 
 function knowledgeCheckMatching(d, editable, ds) {
-  const left = normalizeKcLeft(d);
-  const right = normalizeKcRight(d);
-  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
-  const rowBase = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md); font-size:13px; outline:none;';
   return `
     <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Matching</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
-      <div class="flex-col gap-6">
-        ${left.map((l, i) => `
-          <div class="editable-text" data-field="kcPairLeft" data-col="${i}" ${ce}
-            data-placeholder="Item…" style="${rowBase}"
-          >${richTextOut(l || '')}</div>
-        `).join('')}
-      </div>
-      <div class="flex-col gap-6">
-        ${right.map((r, i) => `
-          <div class="editable-text" data-field="kcPairRight" data-col="${i}" ${ce}
-            data-placeholder="Match…" style="${rowBase} background:var(--pastel-lavender); border-color:transparent;"
-          >${richTextOut(r || '')}</div>
-        `).join('')}
-      </div>
-    </div>
-    ${editable ? '<p class="text-xs text-muted mt-8">Each left item matches the right item on the same row.</p>' : ''}
+    ${kcSharedMatching(d, ds, { editable })}
   `;
 }
 
 function knowledgeCheckFillGap(d, editable, ds) {
-  const answers = normalizeKcAnswers(d);
-  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Fill the Gap</div>
-    <div class="editable-text" data-field="kcGapText" data-richtext="true" ${ce}
-      data-placeholder="Enter the sentence with ____ marking the gap…"
-      style="font-size:15px; line-height:2; min-height:1.4em; outline:none;"
-    >${richTextOut(d.text || '')}</div>
-    <div class="text-xs text-muted mt-4">Accepted: ${answers.filter(Boolean).map(a => `<strong>${escapeHtml(a)}</strong>`).join(', ') || (editable ? '<em>Add accepted answers in the Content panel →</em>' : '—')}</div>
+    ${kcSharedFillGap(d, ds, { editable })}
   `;
 }
 
 function knowledgeCheckOrdering(d, editable, ds) {
-  const items = normalizeKcItems(d);
-  const ce = editable ? 'contenteditable="true" spellcheck="false"' : '';
   return `
     <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Put in order</div>
-    <div class="flex-col gap-6 mt-8">
-      ${items.map((item, i) => `
-        <div class="flex items-center gap-10 text-sm" style="padding:10px 12px; border:1px solid var(--border); border-radius:var(--r-md);">
-          <span class="pill pill-grey" style="flex-shrink:0;">${i + 1}</span>
-          <span class="editable-text" data-field="kcItem" data-col="${i}" ${ce}
-            data-placeholder="Step…" style="flex:1; outline:none;"
-          >${richTextOut(item || '')}</span>
-        </div>
-      `).join('')}
-    </div>
+    ${kcSharedOrdering(d, ds, { editable })}
   `;
 }
 

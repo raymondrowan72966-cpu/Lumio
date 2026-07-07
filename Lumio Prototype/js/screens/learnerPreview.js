@@ -1251,27 +1251,16 @@ function learnerKcMultipleChoice(block, index, ctx) {
   const submitted = !!(ans && ans.submitted);
   const reveal = shouldRevealCorrect(ans, settings);
   const canSubmit = ans && ans.selected !== undefined;
+  const optionStates = options.map((_, i) => ({
+    selected: !!(ans && ans.selected === i),
+    correct:  reveal && i === correct,
+    wrong:    reveal && !!(ans && ans.selected === i) && i !== correct,
+    reveal,
+    interactive: !submitted,
+    disabled: submitted,
+  }));
   return learnerKcWrap(ds, `
-    <fieldset style="border:none; margin:0; padding:0;">
-      <legend class="kc-question">${escapeHtml(d.question || 'Which of the following is correct?')}</legend>
-      <div class="flex-col gap-8">
-        ${options.map((o, i) => {
-          const isSelected = ans && ans.selected === i;
-          const isCorrect  = reveal && i === correct;
-          const isWrong    = reveal && isSelected && i !== correct;
-          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}${!submitted ? ' kc-interactive' : ''}`;
-          return `
-          <label class="${cls}">
-            <input type="radio" name="kc-${key}" data-kc-key="${key}" data-i="${i}"
-              ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
-            <span class="kc-choice-indicator" aria-hidden="true"></span>
-            <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span class="kc-label-wrong">✕ Wrong</span>' : ''}
-          </label>`;
-        }).join('')}
-      </div>
-    </fieldset>
+    ${kcSharedMC(d, ds, { editable: false, key, optionStates })}
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${canSubmit ? '' : 'disabled'}>Check Answer</button>`
       : kcPostSubmitFooter(ans, settings, key)}
@@ -1288,27 +1277,19 @@ function learnerKcMultipleResponse(block, index, ctx) {
   const submitted = ans.submitted;
   const hasCorrect = Array.isArray(d.correct);
   const reveal = shouldRevealCorrect(ans, settings);
+  const optionStates = options.map((_, i) => {
+    const isSelected = (ans.selected || []).includes(i);
+    return {
+      selected: isSelected,
+      correct:  reveal && hasCorrect && d.correct.includes(i),
+      wrong:    reveal && isSelected && hasCorrect && !d.correct.includes(i),
+      reveal,
+      interactive: !submitted,
+      disabled: submitted,
+    };
+  });
   return learnerKcWrap(ds, `
-    <fieldset style="border:none; margin:0; padding:0;">
-      <legend class="kc-question">${escapeHtml(d.question || 'Select all that apply.')}</legend>
-      <div class="flex-col gap-8">
-        ${options.map((o, i) => {
-          const isSelected = (ans.selected || []).includes(i);
-          const isCorrect  = reveal && hasCorrect && d.correct.includes(i);
-          const isWrong    = reveal && isSelected && hasCorrect && !d.correct.includes(i);
-          const cls = `kc-option${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}${isSelected && !reveal ? ' selected' : ''}${!submitted ? ' kc-interactive' : ''}`;
-          return `
-          <label class="${cls}">
-            <input type="checkbox" data-kc-key="${key}" data-i="${i}"
-              ${isSelected ? 'checked' : ''} ${submitted ? 'disabled' : ''} />
-            <span class="kc-choice-indicator kc-choice-check" aria-hidden="true"></span>
-            <span style="flex:1;">${escapeHtml(o)}</span>
-            ${isCorrect ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
-            ${isWrong   ? '<span class="kc-label-wrong">✕ Wrong</span>' : ''}
-          </label>`;
-        }).join('')}
-      </div>
-    </fieldset>
+    ${kcSharedMR(d, ds, { editable: false, key, optionStates })}
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
       : kcPostSubmitFooter(ans, settings, key)}
@@ -1327,31 +1308,18 @@ function learnerKcMatching(block, index, ctx) {
   const submitted = ans.submitted;
   const locked    = !!(ans.locked);
   const reveal    = shouldRevealCorrect(ans, settings);
+  const leftStates = left.reduce((acc, l, i) => {
+    const matchedTo = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
+    acc[i] = {
+      selected:  ans.selectedLeft === i,
+      correct:   reveal && pairs[i] === i,
+      wrong:     reveal && Object.prototype.hasOwnProperty.call(pairs, i) && pairs[i] !== i,
+      matchedTo,
+    };
+    return acc;
+  }, {});
   return learnerKcWrap(ds, `
-    <p class="text-sm text-muted mb-12">Tap an item on the left, then its match on the right.</p>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="flex-col gap-8">
-        ${left.map((l, i) => {
-          const matchedTo  = Object.prototype.hasOwnProperty.call(pairs, i) ? right[pairs[i]] || '' : '';
-          const isCorrect  = reveal && pairs[i] === i;
-          const isWrong    = reveal && Object.prototype.hasOwnProperty.call(pairs, i) && pairs[i] !== i;
-          const label      = matchedTo ? `${l}, matched with ${matchedTo}` : `${l}${ans.selectedLeft === i ? ', selected' : ''}`;
-          return `
-          <div class="kc-option lp-match-left${ans.selectedLeft === i ? ' selected' : ''}${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${locked ? '-1' : '0'}" aria-pressed="${ans.selectedLeft === i}" aria-label="${escapeHtml(label)}"
-            style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">
-            ${escapeHtml(l)}${matchedTo ? ` <span style="opacity:0.5;">→</span> <strong>${escapeHtml(matchedTo)}</strong>` : ''}
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="flex-col gap-8">
-        ${right.map((r, i) => `
-          <div class="kc-option lp-match-right" data-kc-key="${key}" data-i="${i}"
-            role="button" tabindex="${locked ? '-1' : '0'}" aria-label="${escapeHtml(r)}"
-            style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">${escapeHtml(r)}</div>
-        `).join('')}
-      </div>
-    </div>
+    ${kcSharedMatching(d, ds, { editable: false, key, matchStates: { left: leftStates }, locked })}
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-match-submit" data-kc-key="${key}" ${Object.keys(pairs).length === left.length ? '' : 'disabled'}>Check Matches</button>`
       : kcPostSubmitFooter(ans, settings, key)}
@@ -1373,24 +1341,7 @@ function learnerKcOrdering(block, index, ctx) {
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <p class="text-sm text-muted mb-12">Use the arrows to arrange these in the correct order.</p>
-    <div class="flex-col gap-8">
-      ${order.map((itemIdx, pos) => {
-        const inCorrectPos = reveal && itemIdx === pos;
-        const inWrongPos   = reveal && itemIdx !== pos;
-        return `
-        <div class="kc-order-item${inCorrectPos ? ' correct' : ''}${inWrongPos ? ' wrong' : ''}">
-          <span class="kc-order-num" aria-label="Position ${pos + 1}">${pos + 1}</span>
-          <span style="flex:1;">${escapeHtml(items[itemIdx])}</span>
-          ${!submitted ? `
-            <button class="btn-icon lp-order-up"   data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-            <button class="btn-icon lp-order-down" data-kc-key="${key}" data-block-index="${index}" data-i="${pos}" ${pos === order.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-          ` : ''}
-          ${inCorrectPos ? '<span class="kc-label-correct">✓</span>' : ''}
-          ${inWrongPos   ? '<span class="kc-label-wrong">✕</span>' : ''}
-        </div>`;
-      }).join('')}
-    </div>
+    ${kcSharedOrdering(d, ds, { editable: false, key, order, submitted, reveal, blockIndex: index })}
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-order-submit" data-kc-key="${key}">Check Order</button>`
       : kcPostSubmitFooter(ans, settings, key)}
@@ -1402,22 +1353,11 @@ function learnerKcFillGap(block, index, ctx) {
   const ds = block.design || {};
   const key = ctx.lessonId + ':' + (block.id || index);
   const ans = ctx.progress.kcAnswers[key] || {};
-  const text = d.text || 'Complete this sentence: ____.';
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
   return learnerKcWrap(ds, `
-    <p style="font-size:16px; line-height:1.7; font-weight:500; color:var(--ink-900);">${text}</p>
-    <input class="kc-fill-input lp-kc-fillgap-input" data-kc-key="${key}" placeholder="Type your answer…"
-      value="${(ans.response || '').replace(/"/g, '&quot;')}" ${submitted ? 'disabled' : ''} />
-    ${reveal && ans.lastCorrect === false
-      ? (() => {
-          const firstAccepted = (Array.isArray(d.answers) && d.answers[0])
-            ? d.answers[0]
-            : (d.answer || '').split('|')[0].trim();
-          return firstAccepted ? `<div class="text-xs text-muted mt-4">Accepted answer: ${escapeHtml(firstAccepted)}</div>` : '';
-        })()
-      : ''}
+    ${kcSharedFillGap(d, ds, { editable: false, key, ans, submitted, reveal })}
     ${!submitted
       ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
       : kcPostSubmitFooter(ans, settings, key)}
