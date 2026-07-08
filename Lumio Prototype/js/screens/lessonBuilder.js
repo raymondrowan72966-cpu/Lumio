@@ -3010,7 +3010,7 @@ function knowledgeCheckMatchingCards(d, editable, ds) {
   </div>`;
 
   return `
-    <p class="text-sm text-muted mb-4">Drag each card to its correct category.</p>
+    <p class="kc-question">Drag each card to its correct category.</p>
     ${deckHtml}
     ${zonesHtml}
   `;

@@ -1405,7 +1405,7 @@ function learnerKcMatchingCards(block, index, ctx) {
     </div>`;
 
     return learnerKcWrap(ds, `
-      <p class="text-sm text-muted mb-4" style="visibility:hidden;">Drag each card to its correct category.</p>
+      <p class="kc-question" style="visibility:hidden;">Drag each card to its correct category.</p>
       <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
     `);
   }
@@ -1474,7 +1474,7 @@ function learnerKcMatchingCards(block, index, ctx) {
   const hint = selectedCard !== null ? ' — or tap a category to place the selected card' : '';
 
   return learnerKcWrap(ds, `
-    <p class="text-sm text-muted mb-4">Drag each card to its correct category${hint}.</p>
+    <p class="kc-question">Drag each card to its correct category${hint}.</p>
     ${deckHtml}
     ${zonesHtml}
   `);

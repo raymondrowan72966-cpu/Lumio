@@ -29,7 +29,18 @@ function _kcOptionClass(st) {
   ].filter(Boolean).join(' ');
 }
 
-// ── MC / MR shared question heading ─────────────────────────────────────────
+// ── Shared KC instruction/heading typography ─────────────────────────────────
+// Single source of truth for ALL KC instruction text (question headings,
+// interactive instructions, sentence prompts). Every KC type renders its
+// primary heading through one of these two helpers so all six types share
+// identical font-size, font-weight, colour, line-height and spacing.
+
+// Static instruction line (Matching, Ordering, Cards) — plain text, not user-authored.
+function _kcInstruction(text) {
+  return `<p class="kc-question">${text}</p>`;
+}
+
+// ── MC / MR authored question heading ────────────────────────────────────────
 
 function _kcQuestionHtml(question, fieldName, opts) {
   if (opts.editable) {
@@ -160,7 +171,7 @@ function kcSharedMatching(d, ds, opts) {
   const hint = 'Tap an item on the left, then its match on the right.';
 
   return `
-    <p class="text-sm text-muted mb-12">${hint}</p>
+    ${_kcInstruction(hint)}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
       <div class="flex-col gap-8">${leftHtml}</div>
       <div class="flex-col gap-8">${rightHtml}</div>
@@ -175,7 +186,7 @@ function kcSharedOrdering(d, ds, opts) {
 
   if (opts.editable) {
     return `
-      <p class="text-sm text-muted mb-12">Use the arrows to arrange these in the correct order.</p>
+      ${_kcInstruction('Use the arrows to arrange these in the correct order.')}
       <div class="flex-col gap-8">
         ${items.map((item, i) => `
           <div class="kc-order-item">
@@ -192,7 +203,7 @@ function kcSharedOrdering(d, ds, opts) {
   const submitted = opts.submitted || false;
 
   return `
-    <p class="text-sm text-muted mb-12">Use the arrows to arrange these in the correct order.</p>
+    ${_kcInstruction('Use the arrows to arrange these in the correct order.')}
     <div class="flex-col gap-8">
       ${order.map((itemIdx, pos) => {
         const inCorrectPos = reveal && itemIdx === pos;
@@ -222,10 +233,10 @@ function kcSharedFillGap(d, ds, opts) {
 
   if (opts.editable) {
     return `
-      <div class="editable-text" data-field="kcGapText" data-richtext="true"
+      <div class="editable-text kc-question" data-field="kcGapText" data-richtext="true"
         contenteditable="true" spellcheck="false"
         data-placeholder="Enter the sentence with ____ marking the gap…"
-        style="font-size:16px; line-height:1.7; font-weight:500; color:var(--ink-900); outline:none;"
+        style="outline:none;"
       >${richTextOut(d.text || '')}</div>
       <input class="kc-fill-input" disabled placeholder="Type your answer…" style="margin-top:12px;" />`;
   }
@@ -244,7 +255,7 @@ function kcSharedFillGap(d, ds, opts) {
   })();
 
   return `
-    <p style="font-size:16px; line-height:1.7; font-weight:500; color:var(--ink-900);">${text}</p>
+    <p class="kc-question">${text}</p>
     <input class="kc-fill-input lp-kc-fillgap-input" data-kc-key="${opts.key}"
       placeholder="Type your answer…"
       value="${(ans.response || '').replace(/"/g, '&quot;')}"
