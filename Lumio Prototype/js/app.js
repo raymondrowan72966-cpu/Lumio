@@ -2521,16 +2521,26 @@ const NotifySystem = (() => {
 // Backward-compatible global — all 93 existing call sites unchanged
 function toast(msg, icon) { return NotifySystem.toast(msg, icon); }
 
-// Applies a course's theme CSS variables to the #app root so that global
-// styles (.btn, .card, nav, tabs, headings, etc.) inherit them via the
-// cascade. Pass null/undefined to clear theme overrides on non-course pages.
+// Scopes course theme CSS variables ONLY to course content containers
+// (#lesson-canvas, .lumio-learner-root, .course-landing-root) via a
+// dedicated <style> block in <head>.  The #app element is never touched, so
+// platform chrome (nav, buttons, cards, dialogs) always inherits the
+// immutable :root platform defaults — the core architectural invariant.
+// Pass null/undefined to clear the sheet when navigating to non-course pages.
 function applyThemeVars(course) {
-  const app = document.getElementById('app');
+  let sheet = document.getElementById('__lumio-course-theme');
+  if (!sheet) {
+    sheet = document.createElement('style');
+    sheet.id = '__lumio-course-theme';
+    document.head.appendChild(sheet);
+  }
   if (course) {
     ensureCourseDesign(course);
-    app.setAttribute('style', themeVarStyle(course.themeDesign));
+    const vars = themeVarStyle(course.themeDesign);
+    sheet.textContent =
+      `#lesson-canvas, .lumio-learner-root, .course-landing-root { ${vars} }`;
   } else {
-    app.removeAttribute('style');
+    sheet.textContent = '';
   }
 }
 
@@ -2849,10 +2859,11 @@ function render() {
     path = 'login';
   }
 
-  // Clear any course-theme CSS variables left over from a previous screen;
-  // themed screens (course/lesson/learner) re-apply their own via applyThemeVars().
+  // Clear course-theme scoped vars when navigating to platform screens;
+  // themed screens re-apply their own scope via applyThemeVars().
   if (path !== 'course' && path !== 'lesson' && path !== 'learner') {
-    document.getElementById('app')?.removeAttribute('style');
+    const sheet = document.getElementById('__lumio-course-theme');
+    if (sheet) sheet.textContent = '';
   }
 
   switch (path) {

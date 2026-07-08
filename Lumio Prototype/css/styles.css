@@ -95,7 +95,10 @@
   /* Focus */
   --focus-ring: 0 0 0 3px rgba(124, 58, 237, 0.22);
 
-  /* Theme Designer defaults (overridable per-course at runtime) */
+  /* Theme Designer defaults (overridable per-course at runtime).
+     These values are NEVER changed on :root or #app — course overrides
+     are scoped to #lesson-canvas / .lumio-learner-root / .course-landing-root
+     by applyThemeVars() so the platform chrome always reads these defaults. */
   --theme-primary: var(--violet);
   --theme-secondary: var(--indigo);
   --theme-accent: var(--cyan);
@@ -105,6 +108,19 @@
   --theme-radius: var(--r-lg);
   --theme-button-style: var(--r-pill);
   --theme-bg-style: var(--surface-50);
+
+  /* ── Platform Design Tokens ─────────────────────────────────────────────
+     Hard-wired platform values that must never be overridden by any course
+     theme.  All platform chrome (nav, buttons, cards, forms, dialogs) uses
+     these tokens exclusively.  Course content uses --theme-* scoped to its
+     own container via applyThemeVars(). */
+  --plt-font-display:  var(--font-display);
+  --plt-font-body:     var(--font-body);
+  --plt-font-size-btn: 14px;
+  --plt-font-size-sm:  13px;
+  --plt-font-size-lg:  15px;
+  --plt-radius-btn:    var(--r-pill);
+  --plt-radius-card:   var(--r-lg);
 }
 
 * { box-sizing: border-box; }
@@ -200,16 +216,28 @@ button { font-family: var(--font-body); cursor: pointer; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: var(--theme-font-body, var(--font-body));
+  /* Platform-fixed typography — never affected by course theme */
+  font-family: var(--plt-font-body);
   font-weight: 600;
-  font-size: calc(var(--theme-font-size, 16px) - 2px);
+  font-size: var(--plt-font-size-btn);
   padding: 12px 22px;
-  border-radius: var(--theme-button-style, var(--r-pill));
+  border-radius: var(--plt-radius-btn);
   border: none;
   cursor: pointer;
   transition: all 0.18s ease-out;
   white-space: nowrap;
   outline: none;
+}
+
+/* ── Course canvas button override ───────────────────────────────────────
+   Buttons rendered inside lesson/learner/landing content use the course
+   theme fonts and radius, not the platform defaults above. */
+#lesson-canvas .btn,
+.lumio-learner-root .btn,
+.course-landing-root .btn {
+  font-family: var(--theme-font-body, var(--font-body));
+  font-size: calc(var(--theme-font-size, 16px) - 2px);
+  border-radius: var(--theme-button-style, var(--r-pill));
 }
 .btn:active { transform: scale(0.98); }
 .btn:disabled,
@@ -286,8 +314,14 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 /* Sizes: small / medium (default) / large — share the same radius token,
    only padding/font-size scale between them. */
-.btn-sm { padding: 8px 16px; font-size: calc(var(--theme-font-size, 16px) - 3px); }
-.btn-lg { padding: 14px 30px; font-size: calc(var(--theme-font-size, 16px) - 1px); }
+.btn-sm { padding: 8px 16px; font-size: var(--plt-font-size-sm); }
+.btn-lg { padding: 14px 30px; font-size: var(--plt-font-size-lg); }
+#lesson-canvas .btn-sm, .lumio-learner-root .btn-sm, .course-landing-root .btn-sm {
+  font-size: calc(var(--theme-font-size, 16px) - 3px);
+}
+#lesson-canvas .btn-lg, .lumio-learner-root .btn-lg, .course-landing-root .btn-lg {
+  font-size: calc(var(--theme-font-size, 16px) - 1px);
+}
 
 .btn-icon {
   display: inline-flex;
@@ -460,7 +494,7 @@ button { font-family: var(--font-body); cursor: pointer; }
    ============================================================ */
 .card {
   background: var(--surface-0);
-  border-radius: var(--theme-radius, var(--r-lg));
+  border-radius: var(--plt-radius-card);
   box-shadow: var(--shadow-soft);
   border: 1px solid var(--border);
 }
