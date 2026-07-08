@@ -881,7 +881,8 @@ function normalizeKcAnswers(d) {
   return [''];
 }
 function normalizeKcCategories(d) {
-  return Array.isArray(d.categories) && d.categories.length ? d.categories : ['Category A', 'Category B'];
+  const cats = Array.isArray(d.categories) && d.categories.length ? d.categories : ['Category A', 'Category B'];
+  return cats.map(c => typeof c === 'string' ? c : (c && c.name) || String(c));
 }
 function normalizeKcCards(d) {
   return Array.isArray(d.cards) && d.cards.length ? d.cards : [

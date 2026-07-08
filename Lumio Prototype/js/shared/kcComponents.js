@@ -40,6 +40,32 @@ function _kcInstruction(text) {
   return `<p class="kc-question">${text}</p>`;
 }
 
+// ── Assessment Footer — single source of truth for the Submit button ─────────
+// opts:
+//   editable: true  → Builder disabled placeholder
+//   editable: false → Learner active button
+//   align: 'left' | 'center' | 'right'  (default 'center')
+//   key: string     — data-kc-key
+//   kcType: string  — data-kc-type (mc, response, matching, ordering, fill_gap)
+//   disabled: bool  — whether Submit should be disabled (no answer yet)
+function _kcFooter(opts) {
+  opts = opts || {};
+  const align = opts.align || 'center';
+  const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+  const jc = justifyMap[align] || 'center';
+  if (opts.editable) {
+    return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
+      <button class="btn btn-primary btn-sm" disabled>Submit</button>
+    </div>`;
+  }
+  return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
+    <button class="btn btn-primary btn-sm lp-kc-submit"
+      data-kc-key="${opts.key || ''}"
+      data-kc-type="${opts.kcType || ''}"
+      ${opts.disabled ? 'disabled' : ''}>Submit</button>
+  </div>`;
+}
+
 // ── MC / MR authored question heading ────────────────────────────────────────
 
 function _kcQuestionHtml(question, fieldName, opts) {

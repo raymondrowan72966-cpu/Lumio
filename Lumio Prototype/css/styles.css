@@ -483,9 +483,13 @@ button { font-family: var(--font-body); cursor: pointer; }
   position: relative;
   transition: border-color 0.15s, background 0.15s;
 }
+/* Selected: subtle background tint — the radio/check indicator carries the selection signal */
 .kc-option.selected {
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-0));
+}
+/* Matching left items keep a border highlight since they have no radio indicator */
+.kc-option.lp-match-left.selected {
   border-color: var(--theme-primary, var(--indigo));
-  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 6%, var(--surface-0));
 }
 .kc-option.correct {
   border-color: var(--teal);
@@ -501,6 +505,14 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 50%, var(--border));
   background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 4%, var(--surface-0));
   cursor: pointer;
+}
+
+/* Matching left/right items — standardised dimensions (Step 9) */
+.kc-option.lp-match-left,
+.kc-option.lp-match-right {
+  min-height: 56px;
+  align-items: center;
+  font-size: 13px;
 }
 
 /* Matching right-column items — theme-tinted background */
@@ -696,6 +708,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .kc-feedback-correct  { background: color-mix(in srgb, var(--teal) 10%, transparent); color: var(--teal); }
 .kc-feedback-incorrect { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
 .kc-feedback-neutral  { background: var(--surface-1); color: var(--ink-700); }
+/* Prefix label ("✓ Correct" / "✕ Not quite") — bold inline label before explanation */
+.kc-feedback-prefix { font-weight: 700; flex-shrink: 0; margin-right: 4px; }
 
 /* ============================================================
    MATCHING CARDS KNOWLEDGE CHECK

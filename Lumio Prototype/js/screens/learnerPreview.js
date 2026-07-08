@@ -1197,35 +1197,27 @@ function shouldRevealCorrect(ans, settings) {
   }
 }
 
-// Attempt counter shown above the submit button (pre-submission).
-function kcAttemptNote(ans, settings) {
-  if (!settings.maxAttempts) return '';
-  const n = (ans && ans.attempts) || 0;
-  return `<div class="text-xs text-muted mb-8">Attempt ${n + 1} of ${settings.maxAttempts}</div>`;
-}
-
 // Feedback + optional retry button shown after submission.
 function kcPostSubmitFooter(ans, settings, key) {
   const locked      = !!(ans && ans.locked);
-  const attempts    = (ans && ans.attempts) || 0;
-  const maxAttempts = settings.maxAttempts;
   const lastCorrect = ans && ans.lastCorrect;
   const canRetry    = !locked && settings.allowRetry;
 
-  const feedbackText = lastCorrect === true  ? settings.correctFeedback
-                     : lastCorrect === false ? settings.incorrectFeedback
-                     : 'Response recorded.';
-  const feedbackCls  = lastCorrect === true  ? 'kc-feedback kc-feedback-correct'
-                     : lastCorrect === false ? 'kc-feedback kc-feedback-incorrect'
-                     : 'kc-feedback kc-feedback-neutral';
-  const icon         = lastCorrect === true ? '✓' : lastCorrect === false ? '✕' : '';
-  const attemptLine  = maxAttempts > 0
-    ? `<div class="text-xs text-muted mb-4">Attempt ${attempts} of ${maxAttempts}</div>`
-    : '';
+  const prefix      = lastCorrect === true  ? '✓ Correct'
+                    : lastCorrect === false ? '✕ Not quite'
+                    : '';
+  const explanation = lastCorrect === true  ? settings.correctFeedback
+                    : lastCorrect === false ? settings.incorrectFeedback
+                    : 'Response recorded.';
+  const feedbackCls = lastCorrect === true  ? 'kc-feedback kc-feedback-correct'
+                    : lastCorrect === false ? 'kc-feedback kc-feedback-incorrect'
+                    : 'kc-feedback kc-feedback-neutral';
   return `
     <div>
-      ${attemptLine}
-      <div class="${feedbackCls}">${icon ? `<span style="flex-shrink:0;">${icon}</span>` : ''}<span>${escapeHtml(feedbackText)}</span></div>
+      <div class="${feedbackCls}">
+        ${prefix ? `<span class="kc-feedback-prefix">${prefix}</span>` : ''}
+        <span>${escapeHtml(explanation)}</span>
+      </div>
       ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">Try Again</button>` : ''}
     </div>`;
 }
@@ -1259,10 +1251,11 @@ function learnerKcMultipleChoice(block, index, ctx) {
     interactive: !submitted,
     disabled: submitted,
   }));
+  const align = (block.settings || {}).kcSubmitAlign || 'center';
   return learnerKcWrap(ds, `
     ${kcSharedMC(d, ds, { editable: false, key, optionStates })}
     ${!submitted
-      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="mc" ${canSubmit ? '' : 'disabled'}>Check Answer</button>`
+      ? _kcFooter({ key, kcType: 'mc', disabled: !canSubmit, align })
       : kcPostSubmitFooter(ans, settings, key)}
   `);
 }
@@ -1288,10 +1281,11 @@ function learnerKcMultipleResponse(block, index, ctx) {
       disabled: submitted,
     };
   });
+  const align = (block.settings || {}).kcSubmitAlign || 'center';
   return learnerKcWrap(ds, `
     ${kcSharedMR(d, ds, { editable: false, key, optionStates })}
     ${!submitted
-      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-submit" data-kc-key="${key}" data-kc-type="response" ${(ans.selected || []).length ? '' : 'disabled'}>Check Answer</button>`
+      ? _kcFooter({ key, kcType: 'response', disabled: !(ans.selected || []).length, align })
       : kcPostSubmitFooter(ans, settings, key)}
   `);
 }
@@ -1318,10 +1312,11 @@ function learnerKcMatching(block, index, ctx) {
     };
     return acc;
   }, {});
+  const align = (block.settings || {}).kcSubmitAlign || 'center';
   return learnerKcWrap(ds, `
     ${kcSharedMatching(d, ds, { editable: false, key, matchStates: { left: leftStates }, locked })}
     ${!submitted
-      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-match-submit" data-kc-key="${key}" ${Object.keys(pairs).length === left.length ? '' : 'disabled'}>Check Matches</button>`
+      ? _kcFooter({ key, kcType: 'matching', disabled: Object.keys(pairs).length !== left.length, align })
       : kcPostSubmitFooter(ans, settings, key)}
   `);
 }
@@ -1340,10 +1335,11 @@ function learnerKcOrdering(block, index, ctx) {
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
+  const align = (block.settings || {}).kcSubmitAlign || 'center';
   return learnerKcWrap(ds, `
     ${kcSharedOrdering(d, ds, { editable: false, key, order, submitted, reveal, blockIndex: index })}
     ${!submitted
-      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-order-submit" data-kc-key="${key}">Check Order</button>`
+      ? _kcFooter({ key, kcType: 'ordering', disabled: false, align })
       : kcPostSubmitFooter(ans, settings, key)}
   `);
 }
@@ -1356,10 +1352,11 @@ function learnerKcFillGap(block, index, ctx) {
   const settings = normalizeKcSettings(block.settings);
   const submitted = ans.submitted;
   const reveal    = shouldRevealCorrect(ans, settings);
+  const align = (block.settings || {}).kcSubmitAlign || 'center';
   return learnerKcWrap(ds, `
     ${kcSharedFillGap(d, ds, { editable: false, key, ans, submitted, reveal })}
     ${!submitted
-      ? `${kcAttemptNote(ans, settings)}<button class="btn btn-primary btn-sm mt-12 lp-kc-fillgap-submit" data-kc-key="${key}">Submit</button>`
+      ? _kcFooter({ key, kcType: 'fill_gap', disabled: false, align })
       : kcPostSubmitFooter(ans, settings, key)}
   `);
 }
@@ -1976,11 +1973,24 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     rerender();
   }));
 
-  // KC submit (multiple choice / multiple response)
+  // Unified KC submit — handles all assessment types via data-kc-type
   app.querySelectorAll('.lp-kc-submit').forEach(btn => btn.addEventListener('click', () => {
-    submitKc(ctx, btn.dataset.kcKey, btn.dataset.kcType, blocks);
+    const key = btn.dataset.kcKey;
+    const type = btn.dataset.kcType;
+    submitKc(ctx, key, type, blocks);
     scheduleLumioSave();
     rerender();
+    // Auto-scroll to the next unsubmitted KC block after this one
+    const suffix = key.slice(key.indexOf(':') + 1);
+    const blockIndex = blocks.findIndex(b => b.id === suffix || String(b.id) === suffix);
+    const nextKcIndex = blocks.findIndex((b, i) => {
+      if (i <= blockIndex) return false;
+      if (!b.type || !b.type.startsWith('kc_')) return false;
+      const bKey = ctx.lessonId + ':' + (b.id || i);
+      const bAns = ctx.progress.kcAnswers[bKey];
+      return !bAns || !bAns.submitted;
+    });
+    if (nextKcIndex !== -1) scrollContinueTargetIntoView(ctx.lessonId, nextKcIndex);
   }));
 
   // KC retry — clear submission state so the learner can attempt again
@@ -2037,15 +2047,10 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     rerender();
   }));
 
-  // KC fill gap
+  // KC fill gap — input only (submit handled by unified .lp-kc-submit handler above)
   app.querySelectorAll('.lp-kc-fillgap-input').forEach(input => input.addEventListener('input', () => {
     const key = input.dataset.kcKey;
     ctx.progress.kcAnswers[key] = { ...(ctx.progress.kcAnswers[key] || {}), response: input.value };
-  }));
-  app.querySelectorAll('.lp-kc-fillgap-submit').forEach(btn => btn.addEventListener('click', () => {
-    submitKc(ctx, btn.dataset.kcKey, 'fill_gap', blocks);
-    scheduleLumioSave();
-    rerender();
   }));
 
   // KC ordering
@@ -2060,12 +2065,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     [ans.order[i], ans.order[j]] = [ans.order[j], ans.order[i]];
     rerender();
   }));
-  app.querySelectorAll('.lp-order-submit').forEach(btn => btn.addEventListener('click', () => {
-    submitKc(ctx, btn.dataset.kcKey, 'ordering', blocks);
-    scheduleLumioSave();
-    rerender();
-  }));
-
   // KC matching
   const handleMatchClick = (elx) => {
     const key = elx.dataset.kcKey, i = parseInt(elx.dataset.i, 10);
@@ -2085,12 +2084,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     elx.addEventListener('click', () => handleMatchClick(elx));
     elx.addEventListener('keydown', (e) => onActivateKey(e, () => handleMatchClick(elx)));
   });
-  app.querySelectorAll('.lp-match-submit').forEach(btn => btn.addEventListener('click', () => {
-    submitKc(ctx, btn.dataset.kcKey, 'matching', blocks);
-    scheduleLumioSave();
-    rerender();
-  }));
-
   // Matching Cards — drag + click-to-place
   // Shared placement logic: called when a card is dropped or tapped onto a category zone.
   const placeMcCard = (key, cardIdx, catIdx) => {

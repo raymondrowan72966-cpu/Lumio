@@ -2610,17 +2610,17 @@ function renderBlockContent(block, editable) {
     }
 
     case 'kc_multiple_choice':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMC(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMC(d, editable, ds, block.settings)}</div>`;
     case 'kc_multiple_response':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMR(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMR(d, editable, ds, block.settings)}</div>`;
     case 'kc_matching':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatching(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatching(d, editable, ds, block.settings)}</div>`;
     case 'kc_fill_gap':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckFillGap(d, editable, ds, block.settings)}</div>`;
     case 'kc_ordering':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckOrdering(d, editable, ds, block.settings)}</div>`;
     case 'kc_matching_cards':
-      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatchingCards(d, editable, ds)}</div>`;
+      return `<div style="${interactiveSpacingStyle(ds)} border:${interactiveBorderStyle(ds)}; border-radius:${RADIUS_MAP[ds.radius] || 'var(--r-lg)'};">${knowledgeCheckMatchingCards(d, editable, ds, block.settings)}</div>`;
 
     default:
       return `<div class="text-center" style="padding:24px; color:var(--ink-400);">
@@ -2937,42 +2937,32 @@ function kcBadgeStyle(ds) {
   return ` style="color:${ds.kcBadgeColor}; background:color-mix(in srgb, ${ds.kcBadgeColor} 12%, transparent);"`;
 }
 
-function knowledgeCheckMC(d, editable, ds) {
-  return `
-    ${kcSharedMC(d, ds, { editable })}
-    <button class="btn btn-primary btn-sm mt-12" disabled>Check Answer</button>
-  `;
+function knowledgeCheckMC(d, editable, ds, settings) {
+  const align = (settings || {}).kcSubmitAlign || 'center';
+  return `${kcSharedMC(d, ds, { editable })}${_kcFooter({ editable: true, align })}`;
 }
 
-function knowledgeCheckMR(d, editable, ds) {
-  return `
-    ${kcSharedMR(d, ds, { editable })}
-    <button class="btn btn-primary btn-sm mt-12" disabled>Check Answer</button>
-  `;
+function knowledgeCheckMR(d, editable, ds, settings) {
+  const align = (settings || {}).kcSubmitAlign || 'center';
+  return `${kcSharedMR(d, ds, { editable })}${_kcFooter({ editable: true, align })}`;
 }
 
-function knowledgeCheckMatching(d, editable, ds) {
-  return `
-    ${kcSharedMatching(d, ds, { editable })}
-    <button class="btn btn-primary btn-sm mt-12" disabled>Check Matches</button>
-  `;
+function knowledgeCheckMatching(d, editable, ds, settings) {
+  const align = (settings || {}).kcSubmitAlign || 'center';
+  return `${kcSharedMatching(d, ds, { editable })}${_kcFooter({ editable: true, align })}`;
 }
 
-function knowledgeCheckFillGap(d, editable, ds) {
-  return `
-    ${kcSharedFillGap(d, ds, { editable })}
-    <button class="btn btn-primary btn-sm mt-12" disabled>Submit</button>
-  `;
+function knowledgeCheckFillGap(d, editable, ds, settings) {
+  const align = (settings || {}).kcSubmitAlign || 'center';
+  return `${kcSharedFillGap(d, ds, { editable })}${_kcFooter({ editable: true, align })}`;
 }
 
-function knowledgeCheckOrdering(d, editable, ds) {
-  return `
-    ${kcSharedOrdering(d, ds, { editable })}
-    <button class="btn btn-primary btn-sm mt-12" disabled>Check Order</button>
-  `;
+function knowledgeCheckOrdering(d, editable, ds, settings) {
+  const align = (settings || {}).kcSubmitAlign || 'center';
+  return `${kcSharedOrdering(d, ds, { editable })}${_kcFooter({ editable: true, align })}`;
 }
 
-function knowledgeCheckMatchingCards(d, editable, ds) {
+function knowledgeCheckMatchingCards(d, editable, ds, settings) {
   const categories = normalizeKcCategories(d);
   const cards = normalizeKcCards(d);
 
@@ -3009,6 +2999,7 @@ function knowledgeCheckMatchingCards(d, editable, ds) {
     </div>`).join('')}
   </div>`;
 
+  const align = (settings || {}).kcSubmitAlign || 'center';
   return `
     <p class="kc-question">Drag each card to its correct category.</p>
     ${deckHtml}
@@ -4383,6 +4374,17 @@ function kcSettingsPanel(block) {
       </div>
     </div>
 
+    </div>
+    <div class="prop-section" style="margin-top:16px;">
+      <div class="prop-section-title">Assessment Footer</div>
+      <div class="field">
+        <label>Submit Button Alignment</label>
+        <select class="input settings-select-str" data-field="kcSubmitAlign">
+          <option value="left"   ${(s.kcSubmitAlign || 'center') === 'left'   ? 'selected' : ''}>Left</option>
+          <option value="center" ${(s.kcSubmitAlign || 'center') === 'center' ? 'selected' : ''}>Center</option>
+          <option value="right"  ${(s.kcSubmitAlign || 'center') === 'right'  ? 'selected' : ''}>Right</option>
+        </select>
+      </div>
     </div>
     <div class="prop-section" style="margin-top:16px; border-bottom:none;">
       <div class="prop-section-title">Feedback</div>
