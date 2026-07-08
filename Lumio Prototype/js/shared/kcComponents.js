@@ -12,6 +12,15 @@
 // (same interactiveSpacingStyle/border/radius as learnerKcWrap), so the outer
 // shell is also identical — full WYSIWYG parity.
 
+// ── Default instruction text — single source of truth per KC type ────────────
+// Applied when no author-customised instruction is stored in block.data.instruction.
+const KC_DEFAULT_INSTRUCTIONS = {
+  kc_matching:       'Tap an item on the left, then its match on the right.',
+  kc_ordering:       'Use the arrows to arrange these in the correct order.',
+  kc_fill_gap:       'Complete the missing word or phrase.',
+  kc_matching_cards: 'Drag each card to its correct category.',
+};
+
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 function _kcEditableText(o, fieldName, col, placeholder) {
@@ -35,9 +44,18 @@ function _kcOptionClass(st) {
 // primary heading through one of these two helpers so all six types share
 // identical font-size, font-weight, colour, line-height and spacing.
 
-// Static instruction line (Matching, Ordering, Cards) — plain text, not user-authored.
-function _kcInstruction(text) {
-  return `<p class="kc-question">${text}</p>`;
+// Instruction line — editable in builder, rendered in learner.
+// Builder (opts.editable=true): contenteditable div with data-field="kcInstruction".
+// Learner: plain <p> rendered via richTextOut so any saved rich formatting is preserved.
+function _kcInstruction(text, opts) {
+  opts = opts || {};
+  if (opts.editable) {
+    return `<div class="editable-text kc-question" data-field="kcInstruction"
+      data-richtext="true" contenteditable="true" spellcheck="false"
+      data-placeholder="Enter instruction text…"
+      style="outline:none; min-height:1.4em;">${richTextOut(text || '')}</div>`;
+  }
+  return `<p class="kc-question">${richTextOut(text || '')}</p>`;
 }
 
 // ── Assessment Footer — single source of truth for the Submit button ─────────
@@ -194,10 +212,12 @@ function kcSharedMatching(d, ds, opts) {
       style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">${escapeHtml(r)}</div>`;
   }).join('');
 
-  const hint = 'Tap an item on the left, then its match on the right.';
+  const instruction = (d.instruction !== undefined && d.instruction !== null)
+    ? d.instruction
+    : KC_DEFAULT_INSTRUCTIONS.kc_matching;
 
   return `
-    ${_kcInstruction(hint)}
+    ${_kcInstruction(instruction, { editable: opts.editable })}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
       <div class="flex-col gap-8">${leftHtml}</div>
       <div class="flex-col gap-8">${rightHtml}</div>
@@ -210,9 +230,13 @@ function kcSharedOrdering(d, ds, opts) {
   opts = opts || {};
   const items = normalizeKcItems(d);
 
+  const instruction = (d.instruction !== undefined && d.instruction !== null)
+    ? d.instruction
+    : KC_DEFAULT_INSTRUCTIONS.kc_ordering;
+
   if (opts.editable) {
     return `
-      ${_kcInstruction('Use the arrows to arrange these in the correct order.')}
+      ${_kcInstruction(instruction, { editable: true })}
       <div class="flex-col gap-8">
         ${items.map((item, i) => `
           <div class="kc-order-item">
@@ -229,7 +253,7 @@ function kcSharedOrdering(d, ds, opts) {
   const submitted = opts.submitted || false;
 
   return `
-    ${_kcInstruction('Use the arrows to arrange these in the correct order.')}
+    ${_kcInstruction(instruction)}
     <div class="flex-col gap-8">
       ${order.map((itemIdx, pos) => {
         const inCorrectPos = reveal && itemIdx === pos;
@@ -257,12 +281,17 @@ function kcSharedFillGap(d, ds, opts) {
   opts = opts || {};
   const answers = normalizeKcAnswers(d);
 
+  const instruction = (d.instruction !== undefined && d.instruction !== null)
+    ? d.instruction
+    : KC_DEFAULT_INSTRUCTIONS.kc_fill_gap;
+
   if (opts.editable) {
     return `
+      ${_kcInstruction(instruction, { editable: true })}
       <div class="editable-text kc-question" data-field="kcGapText" data-richtext="true"
         contenteditable="true" spellcheck="false"
         data-placeholder="Enter the sentence with ____ marking the gap…"
-        style="outline:none;"
+        style="outline:none; margin-top:8px;"
       >${richTextOut(d.text || '')}</div>
       <input class="kc-fill-input" disabled placeholder="Type your answer…" style="margin-top:12px;" />`;
   }
@@ -271,6 +300,7 @@ function kcSharedFillGap(d, ds, opts) {
   const submitted = opts.submitted || false;
   const ans = opts.ans || {};
   const reveal = opts.reveal || false;
+  const instructionHtml = instruction ? `${_kcInstruction(instruction)}` : '';
 
   const revealHtml = (() => {
     if (!reveal || ans.lastCorrect !== false) return '';
@@ -281,7 +311,8 @@ function kcSharedFillGap(d, ds, opts) {
   })();
 
   return `
-    <p class="kc-question">${text}</p>
+    ${instructionHtml}
+    <p class="kc-question" style="margin-top:${instruction ? '8px' : '0'};">${richTextOut(text)}</p>
     <input class="kc-fill-input lp-kc-fillgap-input" data-kc-key="${opts.key}"
       placeholder="Type your answer…"
       value="${(ans.response || '').replace(/"/g, '&quot;')}"

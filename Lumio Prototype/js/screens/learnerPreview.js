@@ -1401,8 +1401,10 @@ function learnerKcMatchingCards(block, index, ctx) {
       </button>
     </div>`;
 
+    const baseInstruction = (d.instruction !== undefined && d.instruction !== null)
+      ? d.instruction : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
     return learnerKcWrap(ds, `
-      <p class="kc-question" style="visibility:hidden;">Drag each card to its correct category.</p>
+      <p class="kc-question" style="visibility:hidden;">${richTextOut(baseInstruction)}</p>
       <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
     `);
   }
@@ -1468,10 +1470,15 @@ function learnerKcMatchingCards(block, index, ctx) {
     }).join('')}
   </div>`;
 
-  const hint = selectedCard !== null ? ' — or tap a category to place the selected card' : '';
+  const baseInstruction = (d.instruction !== undefined && d.instruction !== null)
+    ? d.instruction : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
+  const hintHtml = selectedCard !== null
+    ? `<p class="text-sm text-muted" style="margin-top:-4px; margin-bottom:4px;">or tap a category to place the selected card</p>`
+    : '';
 
   return learnerKcWrap(ds, `
-    <p class="kc-question">Drag each card to its correct category${hint}.</p>
+    <p class="kc-question">${richTextOut(baseInstruction)}</p>
+    ${hintHtml}
     ${deckHtml}
     ${zonesHtml}
   `);
@@ -1980,17 +1987,6 @@ function bindLearnerBlockEvents(course, blocks, ctx) {
     submitKc(ctx, key, type, blocks);
     scheduleLumioSave();
     rerender();
-    // Auto-scroll to the next unsubmitted KC block after this one
-    const suffix = key.slice(key.indexOf(':') + 1);
-    const blockIndex = blocks.findIndex(b => b.id === suffix || String(b.id) === suffix);
-    const nextKcIndex = blocks.findIndex((b, i) => {
-      if (i <= blockIndex) return false;
-      if (!b.type || !b.type.startsWith('kc_')) return false;
-      const bKey = ctx.lessonId + ':' + (b.id || i);
-      const bAns = ctx.progress.kcAnswers[bKey];
-      return !bAns || !bAns.submitted;
-    });
-    if (nextKcIndex !== -1) scrollContinueTargetIntoView(ctx.lessonId, nextKcIndex);
   }));
 
   // KC retry — clear submission state so the learner can attempt again

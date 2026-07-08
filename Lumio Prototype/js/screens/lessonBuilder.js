@@ -1641,6 +1641,8 @@ function syncRichTextField(block, elx) {
     if (scenes[i]) scenes[i].dialogue = sanitizeRichHtml(elx.innerHTML);
   } else if (elx.dataset.field === 'kcQuestion') {
     block.data.question = sanitizeRichHtml(elx.innerHTML);
+  } else if (elx.dataset.field === 'kcInstruction') {
+    block.data.instruction = sanitizeRichHtml(elx.innerHTML);
   } else if (elx.dataset.field === 'kcGapText') {
     block.data.text = sanitizeRichHtml(elx.innerHTML);
   } else if (elx.dataset.field === 'kcOption') {
@@ -2999,9 +3001,11 @@ function knowledgeCheckMatchingCards(d, editable, ds, settings) {
     </div>`).join('')}
   </div>`;
 
-  const align = (settings || {}).kcSubmitAlign || 'center';
+  const instruction = (d.instruction !== undefined && d.instruction !== null)
+    ? d.instruction
+    : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
   return `
-    <p class="kc-question">Drag each card to its correct category.</p>
+    ${_kcInstruction(instruction, { editable: true })}
     ${deckHtml}
     ${zonesHtml}
   `;

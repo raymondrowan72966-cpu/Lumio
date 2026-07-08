@@ -467,6 +467,12 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 .card-pad { padding: 24px; }
 
+/* ── Assessment Theme ───────────────────────────────────────────────────────
+   Single location for all KC visual design tokens.
+   Future settings (submit button style, card radius, feedback position,
+   spacing scale, animation, review mode colours) belong here.
+   ──────────────────────────────────────────────────────────────────────── */
+
 /* Knowledge-check answer-option rows */
 .kc-option {
   display: flex;
@@ -507,12 +513,17 @@ button { font-family: var(--font-body); cursor: pointer; }
   cursor: pointer;
 }
 
-/* Matching left/right items — standardised dimensions (Step 9) */
+/* Matching left/right items — consistent component standard */
 .kc-option.lp-match-left,
 .kc-option.lp-match-right {
-  min-height: 56px;
+  min-height: 48px;
   align-items: center;
-  font-size: 13px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  border-radius: var(--r-md);
+  word-break: break-word;
 }
 
 /* Matching right-column items — theme-tinted background */
@@ -663,11 +674,11 @@ button { font-family: var(--font-body); cursor: pointer; }
   cursor: default;
 }
 
-/* Question heading inside KC blocks */
+/* Question / instruction heading — 16px default across all KC types */
 .kc-question {
   display: block;
   width: 100%;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.45;
   color: var(--ink-900);
