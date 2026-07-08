@@ -51,6 +51,7 @@ function renderCourseLanding(courseId) {
           <div class="tab ${course.mode==='preview'?'active':''}" data-mode="preview">👁️ Preview as Learner</div>
         </div>
         <button class="btn btn-secondary btn-sm" id="course-settings">⚙️ Settings</button>
+        <button class="btn btn-secondary btn-sm" id="course-translate">🌐 Translate</button>
         ${canPublishProjectStatus(project) ? `<button class="btn btn-primary btn-sm" id="course-publish">🚀 Publish</button>` : `<button class="btn btn-secondary btn-sm" disabled title="This project must be Approved before it can be published.">🚀 Publish</button>`}
         ` : `<span class="text-sm text-muted">👁️ Preview as Learner</span>`}
       </div>
@@ -469,6 +470,7 @@ function bindCourseLandingEvents(course, viewOnly) {
   }));
 
   app.querySelector('#course-settings')?.addEventListener('click', () => openCourseSettings(course));
+  app.querySelector('#course-translate')?.addEventListener('click', () => openTranslationModal(course));
   app.querySelector('#course-publish')?.addEventListener('click', () => openPublishModal(course));
   app.querySelector('#change-hero')?.addEventListener('click', () => openCourseSettings(course, 'hero'));
   app.querySelector('#start-course')?.addEventListener('click', () => {
@@ -713,6 +715,249 @@ function getCourseReadinessIssues(course) {
   if (!course.description || !course.description.trim()) issues.push('Course description is missing');
   if (!course.lessons || course.lessons.length === 0) issues.push('At least one lesson is required');
   return issues;
+}
+
+/* ============================================================
+   TRANSLATION MODAL
+   ============================================================ */
+function openTranslationModal(course) {
+  ensureCourseDesign(course);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'translation-modal-overlay';
+
+  let importFile = null;
+  let lastValidation = null;
+  let exportLang = 'en-us';
+  let preserveHtml = true;
+
+  const stringCount = TranslationEngine.countStrings(course);
+
+  function renderModal() {
+    const validationHtml = lastValidation ? renderValidationStats(lastValidation) : '';
+    overlay.innerHTML = `
+      <div class="modal" style="width:540px; max-width:95vw; max-height:90vh; overflow-y:auto;">
+        <div class="flex items-center justify-between" style="padding:16px 20px; border-bottom:1px solid var(--border);">
+          <div class="flex items-center gap-8">
+            <span style="font-size:20px;">🌐</span>
+            <strong style="font-size:16px;">Translate Course</strong>
+          </div>
+          <button class="btn-icon" id="tm-close">✕</button>
+        </div>
+
+        <div style="padding:20px; display:flex; flex-direction:column; gap:24px;">
+
+          <!-- Export Section -->
+          <section>
+            <div class="flex items-center gap-8" style="margin-bottom:12px;">
+              <span style="font-size:15px;">📤</span>
+              <strong style="font-size:14px;">Export for Translation</strong>
+            </div>
+            <p class="text-sm text-muted" style="margin-bottom:12px;">
+              Download an XLIFF 1.2 file compatible with professional CAT tools.
+              This course has <strong>${stringCount}</strong> translatable string${stringCount !== 1 ? 's' : ''}.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div class="flex items-center gap-12">
+                <label class="text-sm" style="min-width:120px;">Source language</label>
+                <select class="input" id="tm-source-lang" style="flex:1;">
+                  ${_langOptions(course.language)}
+                </select>
+              </div>
+              <div class="flex items-center gap-12">
+                <label class="text-sm" style="min-width:120px;">Target language</label>
+                <select class="input" id="tm-target-lang" style="flex:1;">
+                  <option value="">— leave blank —</option>
+                  ${_langOptions()}
+                </select>
+              </div>
+              <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
+                <input type="checkbox" id="tm-preserve-html" ${preserveHtml ? 'checked' : ''} />
+                Preserve rich text formatting (recommended)
+              </label>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="tm-export" style="margin-top:12px;">⬇ Export XLIFF</button>
+          </section>
+
+          <div style="border-top:1px solid var(--border);"></div>
+
+          <!-- Import Section -->
+          <section>
+            <div class="flex items-center gap-8" style="margin-bottom:12px;">
+              <span style="font-size:15px;">📥</span>
+              <strong style="font-size:14px;">Import Translated File</strong>
+            </div>
+            <p class="text-sm text-muted" style="margin-bottom:12px;">
+              Upload the completed XLIFF file to update your course content.
+            </p>
+            <div id="tm-drop-zone" style="border:2px dashed var(--border); border-radius:var(--r-lg); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; background:var(--surface-1);">
+              ${importFile
+                ? `<p class="text-sm" style="color:var(--ink-900);">📄 <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
+                   <button class="btn btn-ghost btn-sm" id="tm-clear-file" style="margin-top:6px;">✕ Remove</button>`
+                : `<p class="text-sm text-muted">Drag &amp; drop your .xlf file here, or</p>
+                   <button class="btn btn-secondary btn-sm" id="tm-select-file" style="margin-top:8px;">📁 Select File</button>`
+              }
+            </div>
+            <input type="file" id="tm-file-input" accept=".xlf,.xliff,application/xliff+xml,text/xml" style="display:none;" />
+
+            ${validationHtml}
+
+            ${importFile && lastValidation ? `
+              <button class="btn btn-primary btn-sm" id="tm-apply" style="margin-top:12px;" ${!lastValidation.ready ? 'disabled title="Fix validation issues before importing"' : ''}>
+                ✅ Apply Translation
+              </button>
+            ` : (importFile ? `<button class="btn btn-secondary btn-sm" id="tm-validate" style="margin-top:12px;">🔍 Validate File</button>` : '')}
+          </section>
+
+          <div style="border-top:1px solid var(--border);"></div>
+
+          <!-- Future / AI Section (reserved) -->
+          <section style="opacity:0.5; pointer-events:none;">
+            <div class="flex items-center gap-8" style="margin-bottom:8px;">
+              <span style="font-size:15px;">✨</span>
+              <strong style="font-size:14px;">AI Translation</strong>
+              <span class="text-sm text-muted" style="background:var(--surface-2); padding:2px 8px; border-radius:999px;">Coming soon</span>
+            </div>
+            <p class="text-sm text-muted">
+              One-click AI translation via OpenAI, Anthropic, Google, Azure, DeepL, or a local model.
+              Translation memory will be applied automatically.
+            </p>
+          </section>
+
+        </div>
+      </div>
+    `;
+
+    bindModalEvents();
+  }
+
+  function renderValidationStats(v) {
+    if (v.error) {
+      return `<div style="margin-top:12px; padding:12px; background:var(--destructive-tint); border-radius:var(--r-md); border:1px solid var(--destructive-border);">
+        <p class="text-sm" style="color:var(--destructive);">❌ ${escapeHtml(v.error)}</p>
+      </div>`;
+    }
+    const readyColor = v.ready ? 'var(--success)' : 'var(--destructive)';
+    const readyIcon  = v.ready ? '✅' : '⚠️';
+    return `
+      <div style="margin-top:12px; padding:12px; background:var(--surface-1); border-radius:var(--r-md); border:1px solid var(--border);">
+        <p class="text-sm" style="font-weight:600; margin-bottom:8px; color:${readyColor};">${readyIcon} Validation ${v.ready ? 'Passed' : 'Issues Found'}</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">
+          ${_stat('Total units', v.total)}
+          ${_stat('Matched', v.matched, v.matched > 0 ? 'var(--success)' : undefined)}
+          ${_stat('Missing', v.missing, v.missing > 0 ? 'var(--destructive)' : undefined)}
+          ${_stat('Unknown IDs', v.unknown, v.unknown > 0 ? 'var(--destructive)' : undefined)}
+          ${_stat('Duplicates', v.duplicates, v.duplicates > 0 ? 'var(--warning)' : undefined)}
+          ${_stat('Malformed HTML', v.malformedHtml, v.malformedHtml > 0 ? 'var(--destructive)' : undefined)}
+        </div>
+        ${v.missingIds && v.missingIds.length ? `<details style="margin-top:8px;"><summary class="text-sm text-muted" style="cursor:pointer;">Missing IDs (${v.missing})</summary><pre style="font-size:11px; overflow-x:auto; margin-top:4px;">${escapeHtml(v.missingIds.join('\n'))}</pre></details>` : ''}
+        ${v.unknownIds && v.unknownIds.length ? `<details style="margin-top:4px;"><summary class="text-sm text-muted" style="cursor:pointer;">Unknown IDs (${v.unknown})</summary><pre style="font-size:11px; overflow-x:auto; margin-top:4px;">${escapeHtml(v.unknownIds.join('\n'))}</pre></details>` : ''}
+      </div>
+    `;
+  }
+
+  function _stat(label, value, color) {
+    const style = color ? `color:${color}; font-weight:600;` : '';
+    return `<span class="text-sm text-muted">${label}:</span><span class="text-sm" style="${style}">${value}</span>`;
+  }
+
+  function _fileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function _langOptions(selected) {
+    const langs = [
+      ['en-us', 'English (US)'], ['en-gb', 'English (UK)'],
+      ['fr-fr', 'French'], ['de-de', 'German'], ['es-es', 'Spanish (Spain)'],
+      ['es-419', 'Spanish (Latin America)'], ['it-it', 'Italian'],
+      ['pt-pt', 'Portuguese (Portugal)'], ['pt-br', 'Portuguese (Brazil)'],
+      ['nl-nl', 'Dutch'], ['ja-jp', 'Japanese'], ['zh-cn', 'Chinese (Simplified)'],
+      ['zh-tw', 'Chinese (Traditional)'], ['ko-kr', 'Korean'],
+      ['ar-sa', 'Arabic'], ['ru-ru', 'Russian'], ['pl-pl', 'Polish'],
+      ['sv-se', 'Swedish'], ['no-no', 'Norwegian'], ['da-dk', 'Danish'],
+      ['fi-fi', 'Finnish'], ['tr-tr', 'Turkish'],
+    ];
+    return langs.map(([code, name]) => {
+      const sel = (selected && (selected.toLowerCase() === code || selected.toLowerCase() === name.toLowerCase())) ? ' selected' : '';
+      return `<option value="${code}"${sel}>${escapeHtml(name)}</option>`;
+    }).join('');
+  }
+
+  function bindModalEvents() {
+    overlay.querySelector('#tm-close')?.addEventListener('click', () => overlay.remove());
+
+    // Export
+    overlay.querySelector('#tm-export')?.addEventListener('click', () => {
+      const sourceLang = overlay.querySelector('#tm-source-lang')?.value || 'en-us';
+      const targetLang = overlay.querySelector('#tm-target-lang')?.value || '';
+      preserveHtml = overlay.querySelector('#tm-preserve-html')?.checked !== false;
+      const xliff = TranslationEngine.generateXliff(course, {
+        sourceLocale: sourceLang,
+        targetLocale: targetLang,
+        preserveHtml,
+      });
+      const safeName = (course.title || 'course').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      TranslationEngine.downloadXliff(xliff, `${safeName}.xlf`);
+      toast('XLIFF exported — send to your translators', '🌐');
+    });
+
+    // Import file selection
+    const dropZone = overlay.querySelector('#tm-drop-zone');
+    const fileInput = overlay.querySelector('#tm-file-input');
+
+    overlay.querySelector('#tm-select-file')?.addEventListener('click', () => fileInput?.click());
+    overlay.querySelector('#tm-clear-file')?.addEventListener('click', () => {
+      importFile = null;
+      lastValidation = null;
+      renderModal();
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) { importFile = f; lastValidation = null; renderModal(); }
+    });
+
+    dropZone?.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--violet)'; });
+    dropZone?.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
+    dropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '';
+      const f = e.dataTransfer?.files?.[0];
+      if (f) { importFile = f; lastValidation = null; renderModal(); }
+    });
+
+    // Validate
+    overlay.querySelector('#tm-validate')?.addEventListener('click', () => {
+      if (!importFile) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const parsed = TranslationEngine.parseXliff(e.target.result);
+        lastValidation = TranslationEngine.validateImport(course, parsed);
+        lastValidation._parsed = parsed;
+        renderModal();
+      };
+      reader.readAsText(importFile);
+    });
+
+    // Apply
+    overlay.querySelector('#tm-apply')?.addEventListener('click', () => {
+      if (!lastValidation || !lastValidation.ready || !lastValidation._parsed) return;
+      const result = TranslationEngine.applyTranslation(course, lastValidation._parsed);
+      scheduleLumioSave();
+      overlay.remove();
+      renderCourseLanding(course.id);
+      toast(`Translation applied — ${result.applied} strings updated`, '✅');
+    });
+
+    // Close on backdrop click
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  renderModal();
+  document.body.appendChild(overlay);
 }
 
 function openPublishModal(course) {
