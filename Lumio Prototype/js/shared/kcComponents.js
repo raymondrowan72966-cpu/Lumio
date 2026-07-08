@@ -1,16 +1,26 @@
 // js/shared/kcComponents.js
-// Single source of truth for Knowledge Check visual rendering.
-// Loaded after lessonBuilder.js (provides escapeHtml, richTextOut, RADIUS_MAP,
-// interactiveBorderStyle, interactiveSpacingStyle, normalizeKc*) and before
-// learnerPreview.js so both screens can call these functions.
+// ── Assessment Engine — shared KC rendering layer ────────────────────────────
 //
-// opts shape:
-//   editable: true   → Builder; text uses contenteditable spans; no real inputs
+// Architecture contract:
+//   This file is the single source of truth for ALL KC visual rendering.
+//   Assessment types provide: question text, interaction model, correct answer,
+//   optional settings. Everything else (heading, instruction, footer, feedback,
+//   answer cards) is owned by the engine and rendered through this file.
+//
+// Load order: lessonBuilder.js → pdf.js → publish.js → kcComponents.js →
+//   learnerPreview.js
+//   (lessonBuilder.js provides escapeHtml, richTextOut, RADIUS_MAP,
+//    interactiveBorderStyle, interactiveSpacingStyle, normalizeKc*)
+//
+// opts shape (passed from both Builder and Learner callers):
+//   editable: true   → Builder; text uses contenteditable divs; no real inputs
 //   editable: false  → Learner; real inputs + data-* interaction attributes
 //
-// Builder wraps the returned HTML in its own `<div style="...">` container
-// (same interactiveSpacingStyle/border/radius as learnerKcWrap), so the outer
-// shell is also identical — full WYSIWYG parity.
+// Builder/Preview parity:
+//   Builder wraps returned HTML in its own container matching learnerKcWrap —
+//   same border, radius, and spacing — so both screens share identical rendering
+//   and differ only in whether editing controls are present. No separate
+//   "builder renderer" exists; the editable:true path IS the builder renderer.
 
 // ── Default instruction text — single source of truth per KC type ────────────
 // Applied when no author-customised instruction is stored in block.data.instruction.
@@ -38,22 +48,35 @@ function _kcOptionClass(st) {
   ].filter(Boolean).join(' ');
 }
 
-// ── Shared KC instruction/heading typography ─────────────────────────────────
-// Single source of truth for ALL KC instruction text (question headings,
-// interactive instructions, sentence prompts). Every KC type renders its
-// primary heading through one of these two helpers so all six types share
-// identical font-size, font-weight, colour, line-height and spacing.
-
-// Instruction line — editable in builder, rendered in learner.
-// Builder (opts.editable=true): contenteditable div with data-field="kcInstruction".
-// Learner: plain <p> rendered via richTextOut so any saved rich formatting is preserved.
-function _kcInstruction(text, opts) {
+// ── Shared KC heading — single renderer for every KC type ────────────────────
+//
+// ALL six KC types route their primary heading/instruction through this one
+// function. No assessment type owns its own heading renderer. This guarantees
+// identical font-size, font-weight, colour, line-height, spacing, and
+// rich-text support across Builder, Preview, and Published.
+//
+// opts:
+//   editable:    true  → contenteditable div (Builder); false → rendered (Learner)
+//   field:       'kcQuestion'    (MC/MR — stored in block.data.question)
+//              | 'kcInstruction' (Matching/Ordering/FillGap/MatchingCards —
+//                                 stored in block.data.instruction)
+//   placeholder: string          (shown when empty in Builder)
+//   asLegend:    true            (MC/MR learner path only — wraps in <legend>
+//                                 so it acts as the <fieldset> label)
+function _kcHeading(text, opts) {
   opts = opts || {};
+  const field       = opts.field       || 'kcQuestion';
+  const placeholder = opts.placeholder || 'Enter your question…';
   if (opts.editable) {
-    return `<div class="editable-text kc-question" data-field="kcInstruction"
+    return `<div class="editable-text kc-question" data-field="${field}"
       data-richtext="true" contenteditable="true" spellcheck="false"
-      data-placeholder="Enter instruction text…"
+      data-placeholder="${placeholder}"
       style="outline:none; min-height:1.4em;">${richTextOut(text || '')}</div>`;
+  }
+  // richTextOut preserves any bold/italic/size/colour applied in the builder.
+  // <legend> correctly labels a <fieldset> for MC/MR; all other types use <p>.
+  if (opts.asLegend) {
+    return `<legend class="kc-question">${richTextOut(text || '')}</legend>`;
   }
   return `<p class="kc-question">${richTextOut(text || '')}</p>`;
 }
@@ -84,25 +107,12 @@ function _kcFooter(opts) {
   </div>`;
 }
 
-// ── MC / MR authored question heading ────────────────────────────────────────
-
-function _kcQuestionHtml(question, fieldName, opts) {
-  if (opts.editable) {
-    // <div> because contenteditable is not permitted inside <legend>
-    return `<div class="editable-text kc-question" data-field="${fieldName}"
-      data-richtext="true" contenteditable="true" spellcheck="false"
-      data-placeholder="Enter your question…"
-      style="outline:none; min-height:1.4em;">${richTextOut(question)}</div>`;
-  }
-  return `<legend class="kc-question">${escapeHtml(question)}</legend>`;
-}
-
 // ── Multiple Choice ──────────────────────────────────────────────────────────
 
 function kcSharedMC(d, ds, opts) {
   opts = opts || {};
   const options = normalizeKcOptions(d);
-  const questionHtml = _kcQuestionHtml(d.question || 'Which of the following is correct?', 'kcQuestion', opts);
+  const questionHtml = _kcHeading(d.question || 'Which of the following is correct?', { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
 
   const optionsHtml = options.map((o, i) => {
     const st = (opts.optionStates && opts.optionStates[i]) || {};
@@ -138,7 +148,7 @@ function kcSharedMC(d, ds, opts) {
 function kcSharedMR(d, ds, opts) {
   opts = opts || {};
   const options = normalizeKcOptions(d);
-  const questionHtml = _kcQuestionHtml(d.question || 'Select all that apply.', 'kcQuestion', opts);
+  const questionHtml = _kcHeading(d.question || 'Select all that apply.', { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
 
   const optionsHtml = options.map((o, i) => {
     const st = (opts.optionStates && opts.optionStates[i]) || {};
@@ -217,7 +227,7 @@ function kcSharedMatching(d, ds, opts) {
     : KC_DEFAULT_INSTRUCTIONS.kc_matching;
 
   return `
-    ${_kcInstruction(instruction, { editable: opts.editable })}
+    ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: opts.editable })}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
       <div class="flex-col gap-8">${leftHtml}</div>
       <div class="flex-col gap-8">${rightHtml}</div>
@@ -236,7 +246,7 @@ function kcSharedOrdering(d, ds, opts) {
 
   if (opts.editable) {
     return `
-      ${_kcInstruction(instruction, { editable: true })}
+      ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: true })}
       <div class="flex-col gap-8">
         ${items.map((item, i) => `
           <div class="kc-order-item">
@@ -253,7 +263,7 @@ function kcSharedOrdering(d, ds, opts) {
   const submitted = opts.submitted || false;
 
   return `
-    ${_kcInstruction(instruction)}
+    ${_kcHeading(instruction, { field: 'kcInstruction' })}
     <div class="flex-col gap-8">
       ${order.map((itemIdx, pos) => {
         const inCorrectPos = reveal && itemIdx === pos;
@@ -287,7 +297,7 @@ function kcSharedFillGap(d, ds, opts) {
 
   if (opts.editable) {
     return `
-      ${_kcInstruction(instruction, { editable: true })}
+      ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: true })}
       <div class="editable-text kc-question" data-field="kcGapText" data-richtext="true"
         contenteditable="true" spellcheck="false"
         data-placeholder="Enter the sentence with ____ marking the gap…"
@@ -300,7 +310,7 @@ function kcSharedFillGap(d, ds, opts) {
   const submitted = opts.submitted || false;
   const ans = opts.ans || {};
   const reveal = opts.reveal || false;
-  const instructionHtml = instruction ? `${_kcInstruction(instruction)}` : '';
+  const instructionHtml = instruction ? _kcHeading(instruction, { field: 'kcInstruction' }) : '';
 
   const revealHtml = (() => {
     if (!reveal || ans.lastCorrect !== false) return '';

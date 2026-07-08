@@ -1325,18 +1325,41 @@ function rgbToHex(rgb) {
   return '#' + [m[1], m[2], m[3]].map(n => parseInt(n, 10).toString(16).padStart(2, '0')).join('');
 }
 
-/* execCommand (with styleWithCSS) can still emit legacy <font> tags for
-   fontSize/foreColor — convert those to sanitizer-safe <span style="..."> */
-function normalizeLegacyFontTags(root, pendingFontSize) {
+/* execCommand('foreColor') can still emit legacy <font color="..."> tags —
+   convert those to sanitizer-safe <span style="color:..."> */
+function normalizeLegacyFontTags(root) {
   root.querySelectorAll('font').forEach(f => {
     const span = document.createElement('span');
-    const styles = [];
-    if (f.color) styles.push(`color:${f.color}`);
-    if (f.getAttribute('size') === '7' && pendingFontSize) styles.push(`font-size:${pendingFontSize}`);
-    if (styles.length) span.setAttribute('style', styles.join(';'));
+    if (f.color) span.style.color = f.color;
     while (f.firstChild) span.appendChild(f.firstChild);
     f.replaceWith(span);
   });
+}
+
+/* Apply a font-size to exactly the current selection using the Range API.
+   Unlike execCommand('fontSize'), this never touches content outside the
+   selection — it wraps ONLY the selected nodes in a new span without any
+   browser normalization side-effects. */
+function applyInlineFontSize(size) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const span = document.createElement('span');
+  span.style.fontSize = size;
+  try {
+    // Simple case: selection is fully within a single element.
+    range.surroundContents(span);
+  } catch (_) {
+    // Complex case: selection spans partial element boundaries.
+    // Extract the selected content and re-insert inside the span.
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+  }
+  // Leave the selection covering the newly-formatted span.
+  const newRange = document.createRange();
+  newRange.selectNodeContents(span);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
 }
 
 /* Shared floating formatting toolbar — appears when text is selected inside
@@ -1345,7 +1368,6 @@ const RichTextToolbar = {
   el: null,
   activeField: null, // { block, elx }
   savedRange: null,
-  pendingFontSize: null,
   colorPickerActive: false, // true while native colour picker is open; suppresses toolbar hide/reposition
 };
 
@@ -1395,8 +1417,7 @@ function ensureRichTextToolbar() {
     const active = restoreSelection();
     if (!active) return;
     fn(active);
-    normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
-    RichTextToolbar.pendingFontSize = null;
+    normalizeLegacyFontTags(active.elx);
     syncRichTextField(active.block, active.elx);
     const sel = window.getSelection();
     if (sel.rangeCount) RichTextToolbar.savedRange = sel.getRangeAt(0).cloneRange();
@@ -1442,8 +1463,11 @@ function ensureRichTextToolbar() {
     const size = e.target.value;
     e.target.value = '';
     if (!size) return;
-    RichTextToolbar.pendingFontSize = size;
-    applyAndSync(() => document.execCommand('fontSize', false, '7'));
+    // Use Range-based application instead of execCommand('fontSize') to
+    // guarantee formatting is isolated exactly to the selection — execCommand
+    // normalizes across formatting boundaries and can silently affect
+    // previously-typed content outside the selection.
+    applyAndSync(() => applyInlineFontSize(size));
   });
 
   // Root cause of the colour picker's "closes/loses focus while dragging"
@@ -1474,7 +1498,7 @@ function ensureRichTextToolbar() {
     // Stage 1: try execCommand — fast, handles complex multi-element selections.
     applyAndSync((active) => {
       document.execCommand('foreColor', false, colorEl.value || '#000000');
-      normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
+      normalizeLegacyFontTags(active.elx);
       // Acquire liveColorEl from the browser selection, not DOM order.
       // execCommand('foreColor') guarantees the new/modified element contains
       // the active selection; .closest('[style*="color"]') anchors to it
@@ -1523,7 +1547,7 @@ function ensureRichTextToolbar() {
     // (e.g., the selection was collapsed when the picker opened).
     applyAndSync((active) => {
       document.execCommand('foreColor', false, e.target.value);
-      normalizeLegacyFontTags(active.elx, RichTextToolbar.pendingFontSize);
+      normalizeLegacyFontTags(active.elx);
       // Same selection-anchored acquisition as Stage 1 in mousedown.
       const sel = window.getSelection();
       if (sel.rangeCount > 0) {
@@ -3005,7 +3029,7 @@ function knowledgeCheckMatchingCards(d, editable, ds, settings) {
     ? d.instruction
     : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
   return `
-    ${_kcInstruction(instruction, { editable: true })}
+    ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: true })}
     ${deckHtml}
     ${zonesHtml}
   `;

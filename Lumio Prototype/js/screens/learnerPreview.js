@@ -1404,7 +1404,7 @@ function learnerKcMatchingCards(block, index, ctx) {
     const baseInstruction = (d.instruction !== undefined && d.instruction !== null)
       ? d.instruction : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
     return learnerKcWrap(ds, `
-      <p class="kc-question" style="visibility:hidden;">${richTextOut(baseInstruction)}</p>
+      <p class="kc-question" style="visibility:hidden;">${richTextOut(baseInstruction || '')}</p>
       <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
     `);
   }
@@ -1477,7 +1477,7 @@ function learnerKcMatchingCards(block, index, ctx) {
     : '';
 
   return learnerKcWrap(ds, `
-    <p class="kc-question">${richTextOut(baseInstruction)}</p>
+    ${_kcHeading(baseInstruction, { field: 'kcInstruction' })}
     ${hintHtml}
     ${deckHtml}
     ${zonesHtml}

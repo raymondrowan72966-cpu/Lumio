@@ -468,48 +468,76 @@ button { font-family: var(--font-body); cursor: pointer; }
 .card-pad { padding: 24px; }
 
 /* ── Assessment Theme ───────────────────────────────────────────────────────
-   Single location for all KC visual design tokens.
-   Future settings (submit button style, card radius, feedback position,
-   spacing scale, animation, review mode colours) belong here.
+   Design token system for all KC visual design.
+   All KC component rules below consume these tokens — nothing is hardcoded.
+   Future settings (submit style, card radius, feedback position, spacing
+   scale, animation, review-mode colours) belong here as additional tokens.
    ──────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Answer card base */
+  --kc-card-bg:          var(--surface-1);
+  --kc-card-border:      transparent;
+  --kc-card-radius:      var(--r-md);
+  --kc-card-padding:     12px 16px;
+  --kc-card-font-size:   14px;
+  --kc-card-font-weight: 500;
+  --kc-card-line-height: 1.45;
+  /* Hover state */
+  --kc-hover-bg:     color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-1));
+  --kc-hover-border: color-mix(in srgb, var(--theme-primary, var(--indigo)) 35%, transparent);
+  /* Selected state */
+  --kc-selected-bg:     color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, var(--surface-0));
+  --kc-selected-border: color-mix(in srgb, var(--theme-primary, var(--indigo)) 55%, transparent);
+  /* Correct state */
+  --kc-correct-bg:     color-mix(in srgb, var(--teal) 8%, var(--surface-0));
+  --kc-correct-border: var(--teal);
+  /* Wrong state */
+  --kc-wrong-bg:     color-mix(in srgb, var(--color-destructive) 7%, var(--surface-0));
+  --kc-wrong-border: var(--color-destructive);
+  /* Matching column tints */
+  --kc-match-right-bg:     color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-1));
+  --kc-match-right-border: color-mix(in srgb, var(--theme-primary, var(--indigo)) 25%, transparent);
+}
 
-/* Knowledge-check answer-option rows */
+/* ── Shared Answer Card — MC, MR, Matching, Ordering ────────────────────────
+   All selectable answer components share one visual system.
+   Default state: filled background row, no visible border.
+   State is communicated through background + indicator, not thick outlines. */
 .kc-option {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-0);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.45;
-  box-shadow: none;
+  padding: var(--kc-card-padding);
+  border: 1.5px solid var(--kc-card-border);
+  border-radius: var(--kc-card-radius);
+  background: var(--kc-card-bg);
+  font-size: var(--kc-card-font-size);
+  font-weight: var(--kc-card-font-weight);
+  line-height: var(--kc-card-line-height);
   position: relative;
   transition: border-color 0.15s, background 0.15s;
 }
-/* Selected: subtle background tint — the radio/check indicator carries the selection signal */
 .kc-option.selected {
-  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-0));
+  background: var(--kc-selected-bg);
+  border-color: var(--kc-selected-border);
 }
 /* Matching left items keep a border highlight since they have no radio indicator */
 .kc-option.lp-match-left.selected {
   border-color: var(--theme-primary, var(--indigo));
 }
 .kc-option.correct {
-  border-color: var(--teal);
-  background: color-mix(in srgb, var(--teal) 6%, var(--surface-0));
+  border-color: var(--kc-correct-border);
+  background: var(--kc-correct-bg);
 }
 .kc-option.wrong {
-  border-color: var(--color-destructive);
-  background: color-mix(in srgb, var(--color-destructive) 5%, var(--surface-0));
+  border-color: var(--kc-wrong-border);
+  background: var(--kc-wrong-bg);
 }
 
 /* Hover — only on interactive (non-submitted) options */
 .kc-option.kc-interactive:hover:not(.correct):not(.wrong):not(.selected) {
-  border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 50%, var(--border));
-  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 4%, var(--surface-0));
+  border-color: var(--kc-hover-border);
+  background: var(--kc-hover-bg);
   cursor: pointer;
 }
 
@@ -519,17 +547,17 @@ button { font-family: var(--font-body); cursor: pointer; }
   min-height: 48px;
   align-items: center;
   padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--kc-card-font-size);
+  font-weight: var(--kc-card-font-weight);
   line-height: 1.4;
-  border-radius: var(--r-md);
+  border-radius: var(--kc-card-radius);
   word-break: break-word;
 }
 
 /* Matching right-column items — theme-tinted background */
 .kc-option.lp-match-right {
-  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 7%, var(--surface-0));
-  border-color: color-mix(in srgb, var(--theme-primary, var(--indigo)) 22%, transparent);
+  background: var(--kc-match-right-bg);
+  border-color: var(--kc-match-right-border);
 }
 .kc-option.lp-match-right.selected {
   border-color: var(--theme-primary, var(--indigo));
@@ -613,26 +641,26 @@ button { font-family: var(--font-body); cursor: pointer; }
   line-height: 1;
 }
 
-/* Ordering items — themed position counter */
+/* Ordering items — same Answer Card token system as .kc-option */
 .kc-order-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-0);
-  font-size: 14px;
-  font-weight: 500;
+  padding: var(--kc-card-padding);
+  border: 1.5px solid var(--kc-card-border);
+  border-radius: var(--kc-card-radius);
+  background: var(--kc-card-bg);
+  font-size: var(--kc-card-font-size);
+  font-weight: var(--kc-card-font-weight);
   transition: border-color 0.15s, background 0.15s;
 }
 .kc-order-item.correct {
-  border-color: var(--teal);
-  background: color-mix(in srgb, var(--teal) 5%, var(--surface-0));
+  border-color: var(--kc-correct-border);
+  background: var(--kc-correct-bg);
 }
 .kc-order-item.wrong {
-  border-color: var(--color-destructive);
-  background: color-mix(in srgb, var(--color-destructive) 4%, var(--surface-0));
+  border-color: var(--kc-wrong-border);
+  background: var(--kc-wrong-bg);
 }
 .kc-order-num {
   flex-shrink: 0;
