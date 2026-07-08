@@ -2939,38 +2939,36 @@ function kcBadgeStyle(ds) {
 
 function knowledgeCheckMC(d, editable, ds) {
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Multiple Choice</div>
     ${kcSharedMC(d, ds, { editable })}
-    ${editable ? '<p class="text-xs text-muted mt-8">Mark the correct answer in the Content panel →</p>' : ''}
+    <button class="btn btn-primary btn-sm mt-12" disabled>Check Answer</button>
   `;
 }
 
 function knowledgeCheckMR(d, editable, ds) {
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Select all that apply</div>
     ${kcSharedMR(d, ds, { editable })}
-    ${editable ? '<p class="text-xs text-muted mt-8">Check correct answers in the Content panel →</p>' : ''}
+    <button class="btn btn-primary btn-sm mt-12" disabled>Check Answer</button>
   `;
 }
 
 function knowledgeCheckMatching(d, editable, ds) {
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Matching</div>
     ${kcSharedMatching(d, ds, { editable })}
+    <button class="btn btn-primary btn-sm mt-12" disabled>Check Matches</button>
   `;
 }
 
 function knowledgeCheckFillGap(d, editable, ds) {
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Fill the Gap</div>
     ${kcSharedFillGap(d, ds, { editable })}
+    <button class="btn btn-primary btn-sm mt-12" disabled>Submit</button>
   `;
 }
 
 function knowledgeCheckOrdering(d, editable, ds) {
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>✅ Knowledge Check · Put in order</div>
     ${kcSharedOrdering(d, ds, { editable })}
+    <button class="btn btn-primary btn-sm mt-12" disabled>Check Order</button>
   `;
 }
 
@@ -3012,11 +3010,9 @@ function knowledgeCheckMatchingCards(d, editable, ds) {
   </div>`;
 
   return `
-    <div class="pill pill-teal mb-8 kc-badge"${kcBadgeStyle(ds)}>⊞ Knowledge Check · Matching Cards</div>
     <p class="text-sm text-muted mb-4">Drag each card to its correct category.</p>
     ${deckHtml}
     ${zonesHtml}
-    <div class="text-xs text-muted mt-12" style="text-align:center;">0 / ${cards.length} placed</div>
   `;
 }
 

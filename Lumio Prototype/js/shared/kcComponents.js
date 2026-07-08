@@ -157,9 +157,7 @@ function kcSharedMatching(d, ds, opts) {
       style="cursor:${locked ? 'default' : 'pointer'}; font-size:13px;">${escapeHtml(r)}</div>`;
   }).join('');
 
-  const hint = opts.editable
-    ? 'Each left item matches the right item on the same row.'
-    : 'Tap an item on the left, then its match on the right.';
+  const hint = 'Tap an item on the left, then its match on the right.';
 
   return `
     <p class="text-sm text-muted mb-12">${hint}</p>
@@ -177,12 +175,14 @@ function kcSharedOrdering(d, ds, opts) {
 
   if (opts.editable) {
     return `
-      <p class="text-sm text-muted mb-12">Items will be shuffled for learners. Author sets the correct order here.</p>
+      <p class="text-sm text-muted mb-12">Use the arrows to arrange these in the correct order.</p>
       <div class="flex-col gap-8">
         ${items.map((item, i) => `
           <div class="kc-order-item">
             <span class="kc-order-num" aria-label="Position ${i + 1}">${i + 1}</span>
             ${_kcEditableText(item, 'kcItem', i, 'Step…')}
+            <button class="btn-icon" disabled aria-label="Move up" style="opacity:0.35;">↑</button>
+            <button class="btn-icon" disabled aria-label="Move down" style="opacity:0.35;">↓</button>
           </div>`).join('')}
       </div>`;
   }
@@ -221,16 +221,13 @@ function kcSharedFillGap(d, ds, opts) {
   const answers = normalizeKcAnswers(d);
 
   if (opts.editable) {
-    const acceptedList = answers.filter(Boolean).map(a => `<strong>${escapeHtml(a)}</strong>`).join(', ')
-      || '<em>Add accepted answers in the Content panel →</em>';
     return `
       <div class="editable-text" data-field="kcGapText" data-richtext="true"
         contenteditable="true" spellcheck="false"
         data-placeholder="Enter the sentence with ____ marking the gap…"
         style="font-size:16px; line-height:1.7; font-weight:500; color:var(--ink-900); outline:none;"
       >${richTextOut(d.text || '')}</div>
-      <input class="kc-fill-input" disabled placeholder="Type your answer…" style="margin-top:12px;" />
-      <div class="text-xs text-muted mt-4">Accepted: ${acceptedList}</div>`;
+      <input class="kc-fill-input" disabled placeholder="Type your answer…" style="margin-top:12px;" />`;
   }
 
   const text = d.text || 'Complete this sentence: ____.';
