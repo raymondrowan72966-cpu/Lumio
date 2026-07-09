@@ -129,6 +129,7 @@ const PUBLISH_JS_FILES = [
   'js/screens/landingSections.js',
   'js/screens/courseLanding.js',
   'js/screens/lessonBuilder.js',
+  'js/shared/kcComponents.js',
   'js/screens/learnerPreview.js',
 ];
 
@@ -223,6 +224,15 @@ async function buildExportPackage(course, triggerBtn, adapter) {
 
     const courseDataJson = JSON.stringify({ course, lessons: lessonData });
     const assetMapJson = JSON.stringify(assetMap);
+
+    // Serialize the active label pack so the published runtime can resolve L()
+    // without bundling the full LabelEngine authoring module. Falls back to the
+    // English built-in if the course has no labelSet or the pack is not found.
+    const _allPacks = LabelEngine.getAllPacks();
+    const _activePackId = course.labelSet || 'en';
+    const _activePack = (_allPacks[_activePackId] || _allPacks['en'] || {}).labels || {};
+    const labelPackJson = JSON.stringify(_activePack);
+
     const bootstrapScript = adapter.buildBootstrapScript();
 
     const jsBlocks = jsSources.map((src, i) =>
@@ -242,6 +252,7 @@ async function buildExportPackage(course, triggerBtn, adapter) {
   <div id="app"></div>
   <script>window.__LUMIO_COURSE_DATA__=${courseDataJson};<\/script>
   <script>window.__LUMIO_ASSET_MAP__=${assetMapJson};<\/script>
+  <script>window.__LUMIO_LABEL_PACK__=${labelPackJson};<\/script>
 ${jsBlocks}
   <script>${bootstrapScript}<\/script>
 </body>
@@ -304,6 +315,7 @@ const HTML_EXPORT_ADAPTER = {
   // Also patches AssetStore to resolve asset:// refs via the publish-time asset map
   // instead of IndexedDB, making the published package fully self-contained.
   buildBootstrapScript: () => `(function(){
+  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   // Learner-only persistence, isolated per published course — never the full
@@ -439,6 +451,7 @@ const SCORM12_EXPORT_ADAPTER = {
     `SCORM 1.2 package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
   buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest(course, project) }),
   buildBootstrapScript: () => `(function(){
+  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -649,6 +662,7 @@ function buildImsManifest2004(course, project, edition) {
 // function rather than each carrying its own near-identical copy.
 function build2004BootstrapScript() {
   return `(function(){
+  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -881,6 +895,7 @@ function buildTincanManifest(course, project) {
 // no parallel completion logic, only a diff over it.
 function buildXapiBootstrapScript() {
   return `(function(){
+  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
