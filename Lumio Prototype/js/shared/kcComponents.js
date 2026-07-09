@@ -111,11 +111,11 @@ function _kcFooter(opts) {
   const submitLabel = (typeof L === 'function') ? L('kc.submit') : 'Submit';
   if (opts.editable) {
     return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
-      <button class="btn btn-primary btn-sm" disabled>${submitLabel}</button>
+      <button class="btn btn-kc-submit btn-sm" disabled>${submitLabel}</button>
     </div>`;
   }
   return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
-    <button class="btn btn-primary btn-sm lp-kc-submit"
+    <button class="btn btn-kc-submit btn-sm lp-kc-submit"
       data-kc-key="${opts.key || ''}"
       data-kc-type="${opts.kcType || ''}"
       ${opts.disabled ? 'disabled' : ''}>${submitLabel}</button>
