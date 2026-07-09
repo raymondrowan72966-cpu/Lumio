@@ -2843,7 +2843,11 @@ function openNotificationsPanel() {
 // post-logout null currentUser would have crashed any directly-hit
 // protected route (hashchange, back/forward, a stale bookmark) instead of
 // gracefully redirecting.
-const PUBLIC_ROUTES = ['login', 'accept-invite', 'reset-password'];
+// True when running on a local development server — used to gate the dev
+// bypass login so it never surfaces in production or published packages.
+const IS_LOCALHOST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+
+const PUBLIC_ROUTES = ['login', 'accept-invite', 'reset-password', 'devlogin'];
 function render() {
   const hash = location.hash || '#/login';
   const parts = hash.replace('#/', '').split('/');
@@ -2899,6 +2903,14 @@ function render() {
       break;
     case 'reset-password':
       renderResetPassword(param);
+      break;
+    case 'devlogin':
+      if (IS_LOCALHOST) {
+        const _devResult = LumioAuth.loginWithProvider('google');
+        if (_devResult.ok) { navigate('#/projects'); } else { navigate('#/login'); }
+      } else {
+        navigate('#/login');
+      }
       break;
     case 'wizard':
       renderWizard();

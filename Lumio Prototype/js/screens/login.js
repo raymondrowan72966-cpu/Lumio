@@ -143,6 +143,15 @@ function paintLogin() {
           <button class="btn btn-secondary w-full social-login-btn" id="apple-signin-btn">${SOCIAL_ICONS.apple} Continue with Apple</button>
         </div>
 
+        ${typeof IS_LOCALHOST !== 'undefined' && IS_LOCALHOST ? `
+        <div style="margin-top:24px; padding-top:16px; border-top:1px dashed var(--border);">
+          <button class="btn w-full" id="dev-bypass-btn"
+            style="background:var(--surface-100); color:var(--ink-500); border:1.5px dashed var(--border); font-size:12px; letter-spacing:0.04em; gap:6px;">
+            🔧 Dev Bypass — Sign in as Alex Morgan
+          </button>
+          <p style="font-size:11px; color:var(--ink-300); text-align:center; margin-top:6px;">Localhost only · Not visible in production</p>
+        </div>` : ''}
+
       </div>
 
       <style>
@@ -228,6 +237,9 @@ function bindLoginEvents() {
   app.querySelector('#microsoft-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateMicrosoft(); });
   app.querySelector('#google-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateGoogle(); });
   app.querySelector('#apple-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateApple(); });
+
+  const devBtn = app.querySelector('#dev-bypass-btn');
+  if (devBtn) devBtn.addEventListener('click', () => { navigate('#/devlogin'); });
 }
 
 /* ============================================================
