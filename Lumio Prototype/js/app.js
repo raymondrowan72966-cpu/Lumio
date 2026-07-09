@@ -1744,6 +1744,24 @@ function scheduleLumioSave() {
   lumioSaveTimer = setTimeout(saveLumioState, 400);
 }
 
+/**
+ * PUBLIC PERSISTENCE API — Golden Rule #14
+ *
+ * Single entry point for all course mutations (content, settings, lessons,
+ * assessments, themes, labels, publish history). Call this instead of
+ * invoking scheduleLumioSave() + cloudPersistProject() independently.
+ *
+ * Callers are insulated from implementation details. Future layers
+ * (dirty-state tracking, retry queues, offline sync, conflict resolution,
+ * telemetry) can be added here without changing any call site.
+ *
+ * @param {string} courseId  — project/course id that was mutated
+ */
+function persistCourse(courseId) {
+  scheduleLumioSave();
+  return cloudPersistProject(courseId);
+}
+
 /* ============================================================
    CLOUD PROJECT PERSISTENCE — Step 7
    All functions below operate only when the user is authenticated

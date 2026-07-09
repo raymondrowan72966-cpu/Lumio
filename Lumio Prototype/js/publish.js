@@ -279,14 +279,14 @@ ${jsBlocks}
 
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: adapter.formatLabel, version: course.publishVersion || '1.0', status: 'success' });
-    scheduleLumioSave();
+    persistCourse(course.id);
     NotifySystem.complete(pgId, adapter.successMessage({ assetEntries, savedBytes }), 'export');
   } catch (err) {
     console.error(`[Lumio Publish] ${adapter.formatLabel} publish failed:`, err);
     NotifySystem.complete(pgId, `${adapter.formatLabel} export failed — see console`, 'error');
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: adapter.formatLabel, version: course.publishVersion || '1.0', status: 'failed' });
-    scheduleLumioSave();
+    persistCourse(course.id);
   } finally {
     if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
   }
@@ -1085,14 +1085,14 @@ async function publishPdfPackage(course, triggerBtn, opts) {
 
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'success' });
-    scheduleLumioSave();
+    persistCourse(course.id);
     NotifySystem.complete(pgId, `PDF downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`, 'export');
   } catch (err) {
     console.error('[Lumio Publish] PDF publish failed:', err);
     NotifySystem.complete(pgId, 'PDF export failed — see console', 'error');
     if (!course.publishHistory) course.publishHistory = [];
     course.publishHistory.unshift({ date: Date.now(), format: 'PDF Document', version: course.publishVersion || '1.0', status: 'failed' });
-    scheduleLumioSave();
+    persistCourse(course.id);
   } finally {
     if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
   }

@@ -6151,7 +6151,7 @@ function bindBuilderEvents(course, lesson, blocks) {
       cloudSaveBtn.disabled = true;
       cloudSaveBtn.textContent = '☁ Saving…';
       try {
-        await cloudPersistProject(course.id);
+        await persistCourse(course.id);
         cloudSaveBtn.textContent = '☁ Saved ✓';
         setTimeout(() => { cloudSaveBtn.textContent = '☁ Save'; cloudSaveBtn.disabled = false; }, 2000);
       } catch (_) {

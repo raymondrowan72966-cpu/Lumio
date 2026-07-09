@@ -419,7 +419,7 @@ function openAssessmentSettingsModal(course, assessment) {
       showAnswers: overlay.querySelector('#as-show-answers').checked,
       lockAfterPass: overlay.querySelector('#as-lock-after-pass').checked,
     };
-    scheduleLumioSave();
+    persistCourse(course.id);
     overlay.remove();
     toast('Assessment settings saved', '⚙️');
   });
@@ -998,8 +998,7 @@ function openTranslationModal(course) {
     overlay.querySelector('#tm-apply')?.addEventListener('click', () => {
       if (!lastValidation || !lastValidation.ready || !lastValidation._parsed) return;
       const result = TranslationEngine.applyTranslation(course, lastValidation._parsed);
-      scheduleLumioSave();
-      cloudPersistProject(course.id);
+      persistCourse(course.id);
       overlay.remove();
       renderCourseLanding(course.id);
       toast(`Translation applied — ${result.applied} strings updated`, '✅');
@@ -1010,7 +1009,7 @@ function openTranslationModal(course) {
       const sel = overlay.querySelector('#tm-label-set')?.value;
       if (!sel) return;
       course.labelSet = sel;
-      scheduleLumioSave();
+      persistCourse(course.id);
       toast('Label set applied — learner UI will use ' + (LabelEngine.getAllPacks()[sel] || {}).name, '🏷️');
     });
 
@@ -1028,7 +1027,7 @@ function openTranslationModal(course) {
       const name = prompt(`Name for new custom label set (based on ${baseName}):`, baseName + ' (custom)');
       if (!name) return;
       LabelEngine.createCustomPack(name, base);
-      scheduleLumioSave();
+      persistCourse(course.id);
       renderModal(); // refresh select to show new pack
       toast('Custom label set created: ' + name, '🏷️');
     });
@@ -1045,7 +1044,7 @@ function openTranslationModal(course) {
       reader.onload = (ev) => {
         const result = LabelEngine.importXliff(targetId, ev.target.result, { name: f.name.replace(/\.xlf.*$/, '') });
         if (!result.ok) { toast('Label import failed — check the file format', '❌'); return; }
-        scheduleLumioSave();
+        persistCourse(course.id);
         renderModal();
         toast('Labels imported — ' + result.applied + ' strings updated', '✅');
       };
