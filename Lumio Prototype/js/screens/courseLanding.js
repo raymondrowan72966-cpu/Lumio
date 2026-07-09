@@ -999,6 +999,7 @@ function openTranslationModal(course) {
       if (!lastValidation || !lastValidation.ready || !lastValidation._parsed) return;
       const result = TranslationEngine.applyTranslation(course, lastValidation._parsed);
       scheduleLumioSave();
+      cloudPersistProject(course.id);
       overlay.remove();
       renderCourseLanding(course.id);
       toast(`Translation applied — ${result.applied} strings updated`, '✅');
