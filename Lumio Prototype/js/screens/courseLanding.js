@@ -154,7 +154,7 @@ function renderHeroSection(course, opts = {}) {
   const editBtnLabel = '⚙️ Edit Landing Page';
 
   const ctaId = opts.ctaId || 'start-course';
-  const ctaLabel = opts.ctaLabel || (course.mode==='preview' ? 'Start Course →' : 'Preview Course →');
+  const ctaLabel = opts.ctaLabel || (typeof L === 'function' ? L('nav.start_course') + ' →' : 'Start Course →');
   const ctaBtn = `<button class="btn btn-lg" id="${ctaId}" ${opts.ctaDisabled ? 'disabled' : ''} style="border-radius:var(--theme-button-style, var(--r-pill)); background:var(--theme-accent, var(--cyan)); color:#fff; border:none; font-weight:600;">${ctaLabel}</button>`;
 
   const titleBlock = (align, onDark) => `
