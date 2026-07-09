@@ -3027,7 +3027,7 @@ function knowledgeCheckMatchingCards(d, editable, ds, settings) {
 
   const instruction = (d.instruction !== undefined && d.instruction !== null)
     ? d.instruction
-    : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
+    : kcDefaultInstruction('kc_matching_cards');
   return `
     ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: true })}
     ${deckHtml}
