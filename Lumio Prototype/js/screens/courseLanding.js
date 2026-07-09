@@ -21,6 +21,7 @@ function renderCourseLanding(courseId) {
   const course = LumioState.courses[courseId];
   if (!course) { navigate('#/projects'); return; }
   LumioState.currentCourseId = courseId;
+  if (typeof LabelEngine !== 'undefined') LabelEngine.setActivePack(course);
 
   const project = LumioState.projects.find(p => p.id === courseId);
   const viewOnly = isProjectViewOnly(project);

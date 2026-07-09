@@ -137,6 +137,7 @@ function renderLearnerPreview(courseId, lessonId) {
   const course = LumioState.courses[courseId];
   if (!course) { navigate('#/projects'); return; }
   LumioState.currentCourseId = courseId;
+  if (typeof LabelEngine !== 'undefined') LabelEngine.setActivePack(course);
   ensureCourseDesign(course);
   applyThemeVars(course);
 

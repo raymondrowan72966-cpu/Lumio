@@ -8,19 +8,19 @@
 
 const LANDING_SECTION_DEFAULTS = {
   objectives: {
-    headingText: "By the end of this course, you will be able to:",
+    headingText: '',
     headingFont: '', headingFontSize: 16, headingColor: '', headingAlign: 'center', headingWeight: '600',
     textFont: '', textFontSize: 14, textColor: '', bold: false, italic: false, underline: false, textAlign: 'left',
     bg: '', border: '', radius: '',
   },
   navTips: {
-    headingText: 'Navigation Tips',
+    headingText: '',
     headingFont: '', headingFontSize: 13, headingColor: '', headingAlign: 'left', headingWeight: '700',
     textFont: '', textFontSize: 14, textColor: '', bold: false, italic: false, underline: false, textAlign: 'left',
     bg: '', border: '', radius: '', iconColor: '',
   },
   courseStructure: {
-    headingText: 'This course covers the following:',
+    headingText: '',
     headingFont: '', headingFontSize: 16, headingColor: '', headingAlign: 'center', headingWeight: '600',
     textFont: '', textFontSize: 14, textColor: '', bold: false, italic: false, underline: false, textAlign: 'left',
     bg: '', border: '', radius: '',
@@ -41,6 +41,15 @@ const LANDING_FONT_OPTIONS = [
   { id: "'Courier New', monospace", label: 'Courier New' },
 ];
 
+// English defaults that were previously baked into LANDING_SECTION_DEFAULTS.headingText.
+// Kept here so ensureLandingStyles() can migrate existing courses that stored these
+// strings verbatim — clearing them restores Label Engine control over the heading text.
+const _HEADING_ENGLISH_DEFAULTS = {
+  objectives:      'By the end of this course, you will be able to:',
+  navTips:         'Navigation Tips',
+  courseStructure: 'This course covers the following:',
+};
+
 function ensureLandingStyles(course) {
   if (!course.landingStyles) course.landingStyles = {};
   Object.keys(LANDING_SECTION_DEFAULTS).forEach(k => {
@@ -49,6 +58,9 @@ function ensureLandingStyles(course) {
     Object.keys(LANDING_SECTION_DEFAULTS[k]).forEach(prop => {
       if (!(prop in target)) target[prop] = LANDING_SECTION_DEFAULTS[k][prop];
     });
+    // Migrate: if headingText is the old English baked-in default, clear it so
+    // the Label Engine provides the correct localised string at render time.
+    if (target.headingText === _HEADING_ENGLISH_DEFAULTS[k]) target.headingText = '';
   });
   return course.landingStyles;
 }
