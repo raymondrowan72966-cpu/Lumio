@@ -50,8 +50,13 @@ const TranslationEngine = (function () {
     U: 'x-html-U',
     P: 'x-html-P',
     BR: 'x-html-BR',
+    IMG: 'x-html-IMG',
     SPAN: 'x-html-SPAN',
     A: 'x-html-A',
+    H1: 'x-html-H1', H2: 'x-html-H2', H3: 'x-html-H3',
+    H4: 'x-html-H4', H5: 'x-html-H5', H6: 'x-html-H6',
+    UL: 'x-html-UL', OL: 'x-html-OL', LI: 'x-html-LI',
+    DIV: 'x-html-DIV',
     TABLE: 'x-html-TABLE',
     THEAD: 'x-html-THEAD',
     TBODY: 'x-html-TBODY',
@@ -63,6 +68,11 @@ const TranslationEngine = (function () {
   const CTYPE_TO_HTML = {
     'x-html-STRONG': 'strong', 'x-html-EM': 'em', 'x-html-U': 'u',
     'x-html-P': 'p', 'x-html-SPAN': 'span', 'x-html-A': 'a',
+    'x-html-IMG': 'img',
+    'x-html-H1': 'h1', 'x-html-H2': 'h2', 'x-html-H3': 'h3',
+    'x-html-H4': 'h4', 'x-html-H5': 'h5', 'x-html-H6': 'h6',
+    'x-html-UL': 'ul', 'x-html-OL': 'ol', 'x-html-LI': 'li',
+    'x-html-DIV': 'div',
     'x-html-TABLE': 'table', 'x-html-THEAD': 'thead', 'x-html-TBODY': 'tbody',
     'x-html-TR': 'tr', 'x-html-TH': 'th', 'x-html-TD': 'td',
     'x-html-BR': 'br',
@@ -110,9 +120,18 @@ const TranslationEngine = (function () {
         return Array.from(node.childNodes).map(walk).join('');
       }
 
-      // Void element (BR)
+      // Void elements
       if (tag === 'BR') {
         return `<x id="${nextId()}" ctype="${ctype}"/>`;
+      }
+      if (tag === 'IMG') {
+        const src = node.getAttribute('src') || '';
+        const alt = node.getAttribute('alt') || '';
+        const imgAttrs = [];
+        if (src) imgAttrs.push(`xhtml:src="${escapeXml(src)}"`);
+        if (alt) imgAttrs.push(`xhtml:alt="${escapeXml(alt)}"`);
+        const attrsStr = imgAttrs.length ? ' ' + imgAttrs.join(' ') : '';
+        return `<x id="${nextId()}" ctype="${ctype}"${attrsStr}/>`;
       }
 
       const attrs = [];
@@ -166,19 +185,25 @@ const TranslationEngine = (function () {
         if (rel)  attrStr += ` rel="${escapeXml(rel)}"`;
         if (tgt)  attrStr += ` target="${escapeXml(tgt)}"`;
       }
-      if (htmlTag === 'span') {
+      if (htmlTag === 'span' || htmlTag === 'p' || htmlTag === 'div') {
         const style = node.getAttributeNS(XHTML_NS, 'style') || node.getAttribute('xhtml:style') || '';
         if (style) attrStr += ` style="${escapeXml(style)}"`;
       }
-      if (htmlTag === 'p') {
-        const style = node.getAttributeNS(XHTML_NS, 'style') || node.getAttribute('xhtml:style') || '';
-        if (style) attrStr += ` style="${escapeXml(style)}"`;
+      if (htmlTag === 'table' || htmlTag === 'th' || htmlTag === 'td') {
+        const cls = node.getAttributeNS(XHTML_NS, 'class') || node.getAttribute('xhtml:class') || '';
+        if (cls) attrStr += ` class="${escapeXml(cls)}"`;
       }
       return `<${htmlTag}${attrStr}>${inner}</${htmlTag}>`;
     }
 
     if (localName === 'x') {
       const ctype = node.getAttribute('ctype') || '';
+      if (ctype === 'x-html-IMG') {
+        const src = node.getAttributeNS(XHTML_NS, 'src') || node.getAttribute('xhtml:src') || '';
+        const alt = node.getAttributeNS(XHTML_NS, 'alt') || node.getAttribute('xhtml:alt') || '';
+        const imgAttrStr = (src ? ` src="${escapeXml(src)}"` : '') + (alt ? ` alt="${escapeXml(alt)}"` : '');
+        return `<img${imgAttrStr}>`;
+      }
       const htmlTag = CTYPE_TO_HTML[ctype];
       if (htmlTag) return `<${htmlTag}>`;
       return '';
@@ -395,11 +420,16 @@ const TranslationEngine = (function () {
       }
 
       // ── Flashcard family ──────────────────────────────────────
+      // Each item is { front: { text, image, imageFit }, back: { text, image, imageFit } }.
+      // Only the text subfield is translatable. image and imageFit are non-translatable
+      // asset/layout properties that must never be touched.
       case 'flashcard_grid': case 'flashcard_stack': {
         const items = d.items || [];
         items.forEach((item, i) => {
-          addItem('items', i, 'front', item.front, true);
-          addItem('items', i, 'back', item.back, true);
+          const front = (item && item.front) || {};
+          const back  = (item && item.back)  || {};
+          addItem('items', i, 'front.text', front.text, true);
+          addItem('items', i, 'back.text',  back.text,  true);
         });
         break;
       }
@@ -563,12 +593,16 @@ const TranslationEngine = (function () {
 
   // ── XLIFF generation ──────────────────────────────────────────
 
-  /* Renders a single <trans-unit> element. */
+  /* Renders a single <trans-unit> element.
+     Returns empty string (caller must filter) when sourceContent is empty —
+     this prevents empty <source> elements appearing in the XLIFF, which would
+     cause the importer to overwrite the original field with an empty string. */
   function renderTransUnit(unit, sourceLocale, opts) {
     const preserveHtml = opts && opts.preserveHtml !== false;
     const sourceContent = (preserveHtml && unit.richText)
       ? htmlToXliffInline(unit.text)
       : escapeXml(unit.text);
+    if (!sourceContent) return '';
     return `<trans-unit id="${escapeXml(unit.id)}"><source>${sourceContent}</source></trans-unit>`;
   }
 
@@ -576,7 +610,9 @@ const TranslationEngine = (function () {
   function renderFile(group, sourceLocale, targetLocale, opts) {
     const targetAttr = targetLocale ? ` target-language="${escapeXml(targetLocale)}"` : '';
     const units = group.units
-      .map(u => '      ' + renderTransUnit(u, sourceLocale, opts))
+      .map(u => renderTransUnit(u, sourceLocale, opts))
+      .filter(u => u)
+      .map(u => '      ' + u)
       .join('\n');
     return `  <file original="${escapeXml(group.fileId)}" datatype="plaintext" source-language="${escapeXml(sourceLocale)}"${targetAttr}>
     <body>
@@ -793,6 +829,14 @@ ${files}
      MUTATES course.lessons, LumioState.lessons blocks in place.
      Returns { applied: number, skipped: number }.
 
+     ARCHITECTURE RULE — permanent:
+       The Translation Engine is a pure text transformation engine.
+       It may modify learner-visible text only.
+       It must NEVER modify object structure, object identity, asset references,
+       UUIDs, IDs, settings, layouts, themes, interactions, or media.
+       No array may be replaced. No object may be replaced. No new object may be
+       created. Only approved text property values may change.
+
      Phase 1: in-place replacement.
      Phase 2 architecture: store in course.translations[locale] instead,
      and read the active locale when rendering. See docs/translation-engine.md. */
@@ -870,15 +914,14 @@ ${files}
     }
     function applyItem(arrayField, index, subField) {
       const id = sid(bid, arrayField, index, subField);
-      if (unitMap.has(id)) {
-        const arr = d[arrayField] = d[arrayField] || [];
-        if (!arr[index]) arr[index] = {};
-        if (typeof arr[index] === 'string') arr[index] = { text: arr[index] };
-        arr[index][subField] = unitMap.get(id);
-        result.applied++;
-        return true;
-      }
-      return false;
+      if (!unitMap.has(id)) return false;
+      // Only update an item that already exists in the block data.
+      // Never create stub objects or convert types — that would be a structural mutation.
+      const arr = d[arrayField];
+      if (!arr || !arr[index] || typeof arr[index] !== 'object') return false;
+      arr[index][subField] = unitMap.get(id);
+      result.applied++;
+      return true;
     }
 
     switch (block.type) {
@@ -968,8 +1011,7 @@ ${files}
         const items = d.items || [];
         items.forEach((item, i) => {
           const id = sid(bid, 'chartItems', i, 'label');
-          if (unitMap.has(id)) {
-            d.items[i] = d.items[i] || {};
+          if (unitMap.has(id) && d.items[i]) {
             d.items[i].label = unitMap.get(id);
             result.applied++;
           }
@@ -991,7 +1033,20 @@ ${files}
 
       case 'flashcard_grid': case 'flashcard_stack': {
         const items = d.items || [];
-        items.forEach((_, i) => { applyItem('items', i, 'front'); applyItem('items', i, 'back'); });
+        items.forEach((_, i) => {
+          const item = d.items[i];
+          if (!item) return;
+          const frontId = sid(bid, 'items', i, 'front.text');
+          if (unitMap.has(frontId) && item.front && typeof item.front === 'object') {
+            item.front.text = unitMap.get(frontId);
+            result.applied++;
+          }
+          const backId = sid(bid, 'items', i, 'back.text');
+          if (unitMap.has(backId) && item.back && typeof item.back === 'object') {
+            item.back.text = unitMap.get(backId);
+            result.applied++;
+          }
+        });
         break;
       }
 
