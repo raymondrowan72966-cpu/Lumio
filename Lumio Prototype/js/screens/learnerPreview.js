@@ -1200,10 +1200,14 @@ function shouldRevealCorrect(ans, settings) {
 }
 
 // Feedback + optional retry button shown after submission.
-function kcPostSubmitFooter(ans, settings, key) {
+// align must be passed from the caller so the retry button stays in the
+// same position as the Submit button that preceded it — no layout jump.
+function kcPostSubmitFooter(ans, settings, key, align) {
   const locked      = !!(ans && ans.locked);
   const lastCorrect = ans && ans.lastCorrect;
   const canRetry    = !locked && settings.allowRetry;
+  const justifyMap  = { left: 'flex-start', center: 'center', right: 'flex-end' };
+  const jc          = justifyMap[align || 'center'] || 'center';
 
   const prefix      = lastCorrect === true  ? L('kc.correct_prefix')
                     : lastCorrect === false ? L('kc.not_quite_prefix')
@@ -1220,7 +1224,9 @@ function kcPostSubmitFooter(ans, settings, key) {
         ${prefix ? `<span class="kc-feedback-prefix">${prefix}</span>` : ''}
         <span>${escapeHtml(explanation)}</span>
       </div>
-      ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">${L('kc.try_again')}</button>` : ''}
+      ${canRetry ? `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
+        <button class="btn btn-secondary btn-sm lp-kc-retry" data-kc-key="${key}">${L('kc.try_again')}</button>
+      </div>` : ''}
     </div>`;
 }
 
@@ -1258,7 +1264,7 @@ function learnerKcMultipleChoice(block, index, ctx) {
     ${kcSharedMC(d, ds, { editable: false, key, optionStates })}
     ${!submitted
       ? _kcFooter({ key, kcType: 'mc', disabled: !canSubmit, align })
-      : kcPostSubmitFooter(ans, settings, key)}
+      : kcPostSubmitFooter(ans, settings, key, align)}
   `);
 }
 
@@ -1288,7 +1294,7 @@ function learnerKcMultipleResponse(block, index, ctx) {
     ${kcSharedMR(d, ds, { editable: false, key, optionStates })}
     ${!submitted
       ? _kcFooter({ key, kcType: 'response', disabled: !(ans.selected || []).length, align })
-      : kcPostSubmitFooter(ans, settings, key)}
+      : kcPostSubmitFooter(ans, settings, key, align)}
   `);
 }
 
@@ -1319,7 +1325,7 @@ function learnerKcMatching(block, index, ctx) {
     ${kcSharedMatching(d, ds, { editable: false, key, matchStates: { left: leftStates }, locked })}
     ${!submitted
       ? _kcFooter({ key, kcType: 'matching', disabled: Object.keys(pairs).length !== left.length, align })
-      : kcPostSubmitFooter(ans, settings, key)}
+      : kcPostSubmitFooter(ans, settings, key, align)}
   `);
 }
 
@@ -1342,7 +1348,7 @@ function learnerKcOrdering(block, index, ctx) {
     ${kcSharedOrdering(d, ds, { editable: false, key, order, submitted, reveal, blockIndex: index })}
     ${!submitted
       ? _kcFooter({ key, kcType: 'ordering', disabled: false, align })
-      : kcPostSubmitFooter(ans, settings, key)}
+      : kcPostSubmitFooter(ans, settings, key, align)}
   `);
 }
 
@@ -1359,7 +1365,7 @@ function learnerKcFillGap(block, index, ctx) {
     ${kcSharedFillGap(d, ds, { editable: false, key, ans, submitted, reveal })}
     ${!submitted
       ? _kcFooter({ key, kcType: 'fill_gap', disabled: false, align })
-      : kcPostSubmitFooter(ans, settings, key)}
+      : kcPostSubmitFooter(ans, settings, key, align)}
   `);
 }
 
