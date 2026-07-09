@@ -521,6 +521,13 @@ const TranslationEngine = (function () {
     addCourse('description', course.description);
     addCourse('targetAudience', course.targetAudience);
     addCourse('language', course.language);
+    // learnerOutcomes — plain strings shown to learners on the landing page
+    (course.learnerOutcomes || []).forEach((outcome, i) => {
+      if (outcome) {
+        courseUnits.push({ id: sid('course', 'learnerOutcomes', i), text: String(outcome), richText: false });
+      }
+    });
+    // objectives — internal planning metadata ({verb, text}); text is translatable
     (course.objectives || []).forEach((obj, i) => {
       if (obj && obj.text) {
         courseUnits.push({ id: sid('course', 'objectives', i, 'text'), text: obj.text, richText: false });
@@ -830,6 +837,15 @@ ${files}
         result.applied++;
       }
     });
+    // learnerOutcomes — plain string array
+    (course.learnerOutcomes || []).forEach((_, i) => {
+      const id = sid('course', 'learnerOutcomes', i);
+      if (unitMap.has(id)) {
+        course.learnerOutcomes[i] = unitMap.get(id);
+        result.applied++;
+      }
+    });
+    // objectives — {verb, text} objects
     (course.objectives || []).forEach((obj, i) => {
       const id = sid('course', 'objectives', i, 'text');
       if (unitMap.has(id) && obj) {
@@ -918,7 +934,9 @@ ${files}
         items.forEach((_, i) => {
           const id = sid(bid, 'items', i, 'text');
           if (unitMap.has(id)) {
-            if (typeof d.items[i] === 'string') d.items[i] = { text: unitMap.get(id) };
+            // Preserve original type — strings stay strings, objects get .text updated.
+            // Converting string items to objects would mutate the schema and break D1 persistence.
+            if (typeof d.items[i] === 'string') d.items[i] = unitMap.get(id);
             else { if (!d.items[i]) d.items[i] = {}; d.items[i].text = unitMap.get(id); }
             result.applied++;
           }

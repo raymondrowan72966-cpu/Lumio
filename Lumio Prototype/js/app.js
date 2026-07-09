@@ -1887,8 +1887,11 @@ async function cloudPersistProject(id) {
     }
     saveLumioState();
   } catch (err) {
-    console.warn('[Lumio] Cloud persist failed for project', id, err);
-    toast('Could not save to cloud — check your connection', '⚠️');
+    const msg = err && err.message
+      ? err.message
+      : (err && err.status ? 'Server error ' + err.status : 'Check your connection');
+    console.warn('[Lumio] Cloud persist failed for project', id, 'status:', err && err.status, 'code:', err && err.code, 'msg:', msg, err);
+    toast('Could not save to cloud — ' + msg, '⚠️');
     return; // don't attempt asset sync if project save failed
   }
 

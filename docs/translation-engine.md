@@ -1,7 +1,7 @@
 # Lumio Translation Engine
 
-**Status:** Implemented (Sprint: Translation Engine — Phase 1: XLIFF Architecture)  
-**Last updated:** 2026-07-08
+**Status:** Implemented (Sprint: Translation Engine — Phase 2: Coverage, Label Engine & Persistence Audit)  
+**Last updated:** 2026-07-09
 
 ---
 
@@ -17,8 +17,12 @@ The Translation Engine is the single source of truth for all multilingual operat
 Course State (LumioState)
         │
         ▼
+  LabelEngine.setActivePack(course)          ← Phase 2: set UI string language
+        │  reads course.labelSet → sets _active pack
+        │
+        ▼
   TranslationEngine.extract(course)
-        │  returns FileGroup[]
+        │  returns FileGroup[]  (incl. learnerOutcomes — Phase 2)
         ▼
   TranslationEngine.generateXliff(course, opts)
         │  returns XLIFF 1.2 XML string
@@ -34,9 +38,20 @@ Course State (LumioState)
         ▼
   TranslationEngine.applyTranslation(course, parsed)
         │  mutates course + LumioState.lessons blocks in place
+        │  preserves string type for list block items (Phase 2 D1 fix)
         ▼
-  scheduleLumioSave()  →  persistence
+  scheduleLumioSave()  →  D1 persistence
 ```
+
+### Phase 2 additions at a glance
+
+| Area | What changed |
+|---|---|
+| **Label Engine** | New `labelEngine.js` — owns all learner-visible UI strings |
+| **`learnerOutcomes`** | Now extracted and applied as first-class translatable strings |
+| **D1 persistence fix** | List block items keep their original string type after `applyTranslation` |
+| **Builder UI** | Translation modal gains a Label Sets section |
+| **`course.labelSet`** | Per-course label pack selection persisted with workspace |
 
 ---
 
@@ -222,6 +237,13 @@ title                              ← lesson title
 {blockId}|scenes|{si}|choices|{ci}|feedback
 ```
 
+### Course-level IDs (Phase 2 additions)
+```
+course|learnerOutcomes|{n}       ← plain string shown to learners on landing page
+```
+
+`learnerOutcomes` is a flat string array (`string[]`). It is distinct from `objectives` (`{verb, text}[]`), which is internal planning metadata. Both are now extracted and applied.
+
 ### Phase 1 limitation — positional indices
 
 Array items (accordion panels, KC options, list items, flashcard pairs, etc.) currently use positional indices in their IDs. This means reordering items before re-importing will apply translations to the wrong positions.
@@ -269,11 +291,124 @@ The Translation Modal is accessible from the Course Landing page toolbar (betwee
 
 1. **Export** — language selectors (source and target), preserve HTML checkbox, Export XLIFF button.
 2. **Import** — drag-and-drop zone + Select File button, Validate button, validation stats, Apply button (enabled only when `ready: true`).
-3. **AI Translation** — reserved space, disabled, "Coming soon" badge.
+3. **Label Sets** *(Phase 2)* — select the active label pack for a course, export/import label XLIFF, create custom label packs. See §7a below.
+4. **AI Translation** — reserved space, disabled, "Coming soon" badge.
+
+### 7a. Label Sets UI (Phase 2)
+
+The Label Sets section is rendered inside the Translation Modal. Controls:
+
+| Control | Action |
+|---|---|
+| `<select id="tm-label-set">` | Pick a label pack — built-in (`en`, `es`, `fr`, `de`) or custom |
+| **Apply Label Set** | Saves `course.labelSet` and schedules a workspace save |
+| **Export Labels XLIFF** | Calls `LabelEngine.downloadXliff(packId)` — downloads the pack as XLIFF 1.2 |
+| **New Custom Pack** | Prompts for a name, calls `LabelEngine.createCustomPack(name, 'en')` |
+| **Import Labels XLIFF** | File input → `LabelEngine.importXliff(packId, xliffStr)` |
+
+Label packs are stored in `LumioState.labelPacks` and persisted with the workspace save (D1 + R2).
 
 ---
 
-## 8. Extension Points
+---
+
+## 8. Label Engine (Phase 2)
+
+`LabelEngine` (`js/labelEngine.js`) is a separate module that owns all learner-visible UI strings — navigation labels, sidebar headings, KC feedback messages, etc. It is **not** part of `TranslationEngine`; the two engines are complementary:
+
+| Engine | What it translates |
+|---|---|
+| `TranslationEngine` | Course *content* — block text, lesson titles, learning objectives |
+| `LabelEngine` | UI *chrome* — button labels, feedback strings, accessibility text |
+
+### Global `L()` function
+
+A module-level shim is declared in `labelEngine.js`:
+
+```js
+function L(key, vars) { return LabelEngine.L(key, vars); }
+```
+
+This makes label lookups available everywhere in the learner context without passing the course object through every call chain. `kcComponents.js` and `learnerPreview.js` both call `L()` directly.
+
+### Activation
+
+At the learner shell entry point (`learnerShell()` / `learnerShellProduction()`):
+
+```js
+LabelEngine.setActivePack(course);
+```
+
+This reads `course.labelSet` (e.g. `'en'`, `'es'`, `'custom_abc123'`) and sets the active pack. All subsequent `L()` calls use that pack until the next call to `setActivePack`.
+
+### Built-in language packs
+
+Four packs ship with the engine: `en`, `es`, `fr`, `de`. These are immutable — they cannot be deleted or overwritten.
+
+### Label hierarchy (resolution order)
+
+1. Active custom pack override (if the key exists)
+2. Built-in pack for `course.labelSet`
+3. English (`en`) fallback
+4. Raw key string (last resort — never shown to learners in practice)
+
+### Key reference
+
+| Namespace | Keys |
+|---|---|
+| `nav.*` | `start_course`, `continue_course`, `restart_course`, `next`, `previous`, `take_assessment`, `finish_course`, `next_assessment` |
+| `sidebar.*` | `progress`, `lessons`, `assessments`, `quiz` |
+| `kc.*` | `submit`, `try_again`, `replay`, `correct_prefix`, `not_quite_prefix`, `response_recorded`, `correct_feedback`, `incorrect_feedback`, `score` (supports `{n}` / `{total}` vars), `correct_label`, `wrong_label` |
+| `carousel.*` | `prev`, `next`, `prev_slide`, `next_slide`, `indicators` |
+| `a11y.*` | `open_nav`, `position` (supports `{n}` var), `move_up`, `move_down` |
+
+### Template variables
+
+```js
+L('kc.score', { n: 3, total: 5 })  // → "3 / 5 Correct"
+L('a11y.position', { n: 2 })       // → "Position 2"
+```
+
+### Custom label packs
+
+```js
+const id = LabelEngine.createCustomPack('My Brand', 'en'); // base from 'en'
+LabelEngine.updateCustomPack(id, { 'nav.next': 'Weiter →' });
+LabelEngine.downloadXliff(id);   // export for translator
+LabelEngine.importXliff(id, xliffStr);  // import translated file
+LabelEngine.deleteCustomPack(id);
+```
+
+Custom packs live in `LumioState.labelPacks` and are saved with the workspace.
+
+---
+
+## 9. D1 Persistence — List Block Fix (Phase 2)
+
+### Bug
+
+After calling `applyTranslation()`, saving to D1 failed with `"Could not save to cloud — Check your connection"`. The root cause was in `_applyBlock` for `list_bullet`, `list_numbered`, and `list_checkbox`:
+
+```js
+// Phase 1 — bug: converts string item to object, breaks D1 schema
+if (typeof d.items[i] === 'string') d.items[i] = { text: unitMap.get(id) };
+```
+
+Some courses store list items as plain strings (`["Item A", "Item B"]`). After apply, those strings became objects (`[{text: "Item A"}, {text: "Item B"}]`). The D1 schema validation rejected the changed shape, causing the cloud save to fail.
+
+### Fix
+
+```js
+// Phase 2 — fix: preserve the original item type
+if (typeof d.items[i] === 'string') d.items[i] = unitMap.get(id);
+else { if (!d.items[i]) d.items[i] = {}; d.items[i].text = unitMap.get(id); }
+```
+
+String items remain strings after translation apply. Object items have their `.text` property updated. D1 schema validation passes.
+
+---
+
+## 10. Extension Points
 
 ### AI Translation (`TranslationEngine.AI`)
 
@@ -320,21 +455,28 @@ The rendering layer will read from `course.translations[course.activeLocale]` fi
 
 ---
 
-## 9. Files
+## 11. Files
 
 | File | Role |
 |---|---|
 | `Lumio Prototype/js/translationEngine.js` | Core engine — extract, generateXliff, parseXliff, validateImport, applyTranslation |
-| `Lumio Prototype/js/screens/courseLanding.js` | Translate button in topbar + `openTranslationModal()` function |
-| `Lumio Prototype/index.html` | `<script src="js/translationEngine.js">` added after lessonBuilder.js |
+| `Lumio Prototype/js/labelEngine.js` | Label Engine — built-in packs, custom packs, `L()` global, label XLIFF *(Phase 2)* |
+| `Lumio Prototype/js/screens/courseLanding.js` | Translate button + `openTranslationModal()` with Label Sets section *(Phase 2)* |
+| `Lumio Prototype/js/shared/kcComponents.js` | KC submit/correct/wrong labels via `L()` *(Phase 2)* |
+| `Lumio Prototype/js/screens/learnerPreview.js` | `setActivePack()` call + all nav/sidebar/feedback labels via `L()` *(Phase 2)* |
+| `Lumio Prototype/js/app.js` | D1 error reporting improvement *(Phase 2)* |
+| `Lumio Prototype/index.html` | `<script src="js/labelEngine.js">` added before translationEngine.js *(Phase 2)* |
 | `docs/translation-engine.md` | This document |
 
 ---
 
-## 10. Rules for Future Development
+## 12. Rules for Future Development
 
 1. **Never bypass the engine** — all translation operations must go through `TranslationEngine`. No screen should build or parse XLIFF directly.
 2. **Never use positional IDs for course content that has stable block IDs** — block UUIDs (`blk_` prefix) are permanent; use them as the first segment of every trans-unit ID.
 3. **Keep extract/apply in sync** — every field added to `extractBlock()` must have a matching case in `_applyBlock()`. They are mirrors of each other.
 4. **HTML preservation is opt-in per field** — mark `richText: true` only for fields that are stored as HTML. Plain strings must not be wrapped in `<g>` markup.
 5. **Phase 2 migration** — search for `TODO(phase2-stable-ids)` to find all sites that need updating when array items gain stable IDs.
+6. **Label Engine is the only owner of UI strings** — never hardcode learner-visible labels (button text, feedback messages, aria-labels) in learnerPreview.js, kcComponents.js, or any other learner-context file. Always call `L(key)`.
+7. **`setActivePack` must be called before any render** — the learner shell entry points (`learnerShell`, `learnerShellProduction`) must call `LabelEngine.setActivePack(course)` before the first DOM write. Any new shell entry point must do the same.
+8. **`extract` and `apply` cover content; `LabelEngine` covers chrome** — do not add UI string keys to `TranslationEngine.extract`. Do not add course content to `LabelEngine`.

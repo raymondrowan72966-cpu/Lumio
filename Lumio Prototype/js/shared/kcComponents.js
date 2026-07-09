@@ -94,16 +94,17 @@ function _kcFooter(opts) {
   const align = opts.align || 'center';
   const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
   const jc = justifyMap[align] || 'center';
+  const submitLabel = (typeof L === 'function') ? L('kc.submit') : 'Submit';
   if (opts.editable) {
     return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
-      <button class="btn btn-primary btn-sm" disabled>Submit</button>
+      <button class="btn btn-primary btn-sm" disabled>${submitLabel}</button>
     </div>`;
   }
   return `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
     <button class="btn btn-primary btn-sm lp-kc-submit"
       data-kc-key="${opts.key || ''}"
       data-kc-type="${opts.kcType || ''}"
-      ${opts.disabled ? 'disabled' : ''}>Submit</button>
+      ${opts.disabled ? 'disabled' : ''}>${submitLabel}</button>
   </div>`;
 }
 
@@ -127,13 +128,15 @@ function kcSharedMC(d, ds, opts) {
         ${textHtml}
       </div>`;
     }
+    const _lCorrect = (typeof L === 'function') ? L('kc.correct_label') : 'Correct';
+    const _lWrong   = (typeof L === 'function') ? L('kc.wrong_label')   : 'Wrong';
     return `<label class="${cls}">
       <input type="radio" name="kc-${opts.key}" data-kc-key="${opts.key}" data-i="${i}"
         ${st.selected ? 'checked' : ''} ${st.disabled ? 'disabled' : ''} />
       <span class="kc-choice-indicator" aria-hidden="true"></span>
       ${textHtml}
-      ${st.correct ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
-      ${st.wrong   ? '<span class="kc-label-wrong">✕ Wrong</span>'   : ''}
+      ${st.correct ? `<span class="kc-label-correct">✓ ${_lCorrect}</span>` : ''}
+      ${st.wrong   ? `<span class="kc-label-wrong">✕ ${_lWrong}</span>`   : ''}
     </label>`;
   }).join('');
 
@@ -163,13 +166,15 @@ function kcSharedMR(d, ds, opts) {
         ${textHtml}
       </div>`;
     }
+    const _lCorrectMR = (typeof L === 'function') ? L('kc.correct_label') : 'Correct';
+    const _lWrongMR   = (typeof L === 'function') ? L('kc.wrong_label')   : 'Wrong';
     return `<label class="${cls}">
       <input type="checkbox" data-kc-key="${opts.key}" data-i="${i}"
         ${st.selected ? 'checked' : ''} ${st.disabled ? 'disabled' : ''} />
       <span class="kc-choice-indicator kc-choice-check" aria-hidden="true"></span>
       ${textHtml}
-      ${st.correct ? '<span class="kc-label-correct">✓ Correct</span>' : ''}
-      ${st.wrong   ? '<span class="kc-label-wrong">✕ Wrong</span>'   : ''}
+      ${st.correct ? `<span class="kc-label-correct">✓ ${_lCorrectMR}</span>` : ''}
+      ${st.wrong   ? `<span class="kc-label-wrong">✕ ${_lWrongMR}</span>`   : ''}
     </label>`;
   }).join('');
 

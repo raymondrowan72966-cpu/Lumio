@@ -198,14 +198,14 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
     <aside ${mobileDrawer ? 'id="lp-mobile-sidebar"' : ''} style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0; ${stickyStyle}${drawerStyle}">
       <div style="margin-bottom:16px;">
         <div class="flex items-center justify-between" style="margin-bottom:6px;">
-          <span style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400);">Course Progress</span>
+          <span style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400);">${L('sidebar.progress')}</span>
           <span class="text-sm" style="font-weight:600; color:var(--ink-700);">${pct}%</span>
         </div>
         <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
           <div style="width:${pct}%; height:100%; background:var(--theme-accent, var(--teal)); border-radius:99px; transition:width .3s;"></div>
         </div>
       </div>
-      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:8px;">Lessons</h4>
+      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:8px;">${L('sidebar.lessons')}</h4>
       <div class="flex-col gap-8">
         ${course.lessons.length ? course.lessons.map((l, li) => {
           const isComplete = progress.completedLessons.includes(l.id);
@@ -230,7 +230,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
         }).join('') : `<p class="text-sm text-muted">No lessons yet.</p>`}
       </div>
       ${course.assessments.length ? `
-      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin:20px 0 8px;">Assessments</h4>
+      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin:20px 0 8px;">${L('sidebar.assessments')}</h4>
       <div class="flex-col gap-8">
         ${course.assessments.map(a => {
           const allLessonsDone = course.lessons.length === 0 || course.lessons.every(l => progress.completedLessons.includes(l.id));
@@ -242,7 +242,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
             <span>${assessmentLocked ? '🔒' : '📝'}</span>
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.title}</div>
-              <div class="text-sm text-muted">${a.type || 'Quiz'}</div>
+              <div class="text-sm text-muted">${a.type || L('sidebar.quiz')}</div>
             </div>
           </div>`;
         }).join('')}
@@ -308,6 +308,7 @@ function wireMobileSidebar(app) {
    Used when LearnerUI.publishedMode is true. No authoring controls.
    CSS media query drives sidebar: sticky on wide viewports, drawer on narrow. */
 function learnerShellProduction(course, bodyHtml, opts = {}) {
+  if (typeof LabelEngine !== 'undefined') LabelEngine.setActivePack(course);
   const progress = ensureLearnerProgress(course.id);
   const app = document.getElementById('app');
   const activeLessonId = opts.activeLessonId || null;
@@ -324,7 +325,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
 
   const prodHeader = `
     <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
-      ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="Open navigation">☰</button>` : ''}
+      ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="${L('a11y.open_nav')}">☰</button>` : ''}
       ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Back</button>` : ''}
       <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
       ${progressBarHtml(course, progress)}
@@ -383,6 +384,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
 }
 
 function learnerShell(course, bodyHtml, opts = {}) {
+  if (typeof LabelEngine !== 'undefined') LabelEngine.setActivePack(course);
   if (LearnerUI.publishedMode) {
     learnerShellProduction(course, bodyHtml, opts);
     return;
@@ -644,7 +646,7 @@ function renderLearnerCourseOverview(course) {
   const progress = ensureLearnerProgress(course.id);
   const firstIncomplete = course.lessons.find(l => !progress.completedLessons.includes(l.id));
   const hasProgress = progress.completedLessons.length > 0;
-  const startLabel = !hasProgress ? 'Start Course' : (firstIncomplete ? 'Continue Course' : 'Restart Course');
+  const startLabel = !hasProgress ? L('nav.start_course') : (firstIncomplete ? L('nav.continue_course') : L('nav.restart_course'));
 
   // Continue Course resume priority: 1) resume.lessonId (if it points at this
   // course), 2) progress.lastLessonId, 3) first incomplete lesson, 4) first lesson.
@@ -754,8 +756,8 @@ function renderLearnerLesson(course, lessonId) {
   const nextAfterLastLesson = isLastLesson && hasAssessments ? course.assessments[0].id : null;
   const isLastAssessment = isAssessment && assessmentIdx === course.assessments.length - 1;
   const nextLabel = isAssessment
-    ? (isLastAssessment ? 'Finish Course ✓' : 'Next Assessment →')
-    : (isLastLesson ? (hasAssessments ? 'Take Assessment →' : 'Finish Course ✓') : 'Next →');
+    ? (isLastAssessment ? L('nav.finish_course') : L('nav.next_assessment'))
+    : (isLastLesson ? (hasAssessments ? L('nav.take_assessment') : L('nav.finish_course')) : L('nav.next'));
 
   const prevId = isAssessment
     ? (assessmentIdx > 0 ? course.assessments[assessmentIdx - 1].id : (course.lessons.length ? course.lessons[course.lessons.length - 1].id : null))
@@ -785,7 +787,7 @@ function renderLearnerLesson(course, lessonId) {
       ${renderLearnerBlocks(blocks, ctx)}
     </div>
     <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; min-height:72px; box-sizing:border-box;">
-      <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>← Previous</button>
+      <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>${L('nav.previous')}</button>
       <button class="btn btn-primary" id="lp-next" ${nextDisabled ? 'disabled title="Complete all required content above to continue"' : ''}>${nextLabel}</button>
     </div>
   `;
@@ -1099,11 +1101,11 @@ function learnerCarouselBlock(block, index, ctx) {
       ${slideHtml}
       ${textHtml}
       <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Previous slide">← Prev</button>
-        <div class="flex gap-8" role="group" aria-label="Slide indicators">
+        <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.prev_slide')}">${L('carousel.prev')}</button>
+        <div class="flex gap-8" role="group" aria-label="${L('carousel.indicators')}">
           ${slides.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
         </div>
-        <button class="btn btn-secondary btn-sm lp-carousel-next" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="Next slide">Next →</button>
+        <button class="btn btn-secondary btn-sm lp-carousel-next" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.next_slide')}">${L('carousel.next')}</button>
       </div>
     </div>`;
 }
@@ -1135,11 +1137,11 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
         ${q.author ? `<p class="text-sm mt-8" style="color:${qcTextColor}; opacity:0.7;${q.authorAlign ? ` text-align:${q.authorAlign};` : ''}">${richTextOut(q.author)}</p>` : ''}
       </div>
       <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Previous quote">← Prev</button>
-        <div class="flex gap-8" role="group" aria-label="Quote indicators">
+        <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.prev_quote')}">${L('carousel.prev')}</button>
+        <div class="flex gap-8" role="group" aria-label="${L('carousel.quote_inds')}">
           ${quotes.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
         </div>
-        <button class="btn btn-secondary btn-sm lp-quote-next" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="Next quote">Next →</button>
+        <button class="btn btn-secondary btn-sm lp-quote-next" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.next_quote')}">${L('carousel.next')}</button>
       </div>
     </div>`;
 }
@@ -1182,8 +1184,8 @@ function normalizeKcSettings(s) {
     showCorrectAnswer:   s.showCorrectAnswer || 'immediately',
     passingMode:         s.passingMode || 'all_correct',
     passingPercentage:   s.passingPercentage ?? 80,
-    correctFeedback:     s.correctFeedback   ?? 'Correct! Well done.',
-    incorrectFeedback:   s.incorrectFeedback ?? 'Not quite. Please try again.',
+    correctFeedback:     s.correctFeedback   ?? L('kc.correct_feedback'),
+    incorrectFeedback:   s.incorrectFeedback ?? L('kc.incorrect_feedback'),
   };
 }
 
@@ -1203,12 +1205,12 @@ function kcPostSubmitFooter(ans, settings, key) {
   const lastCorrect = ans && ans.lastCorrect;
   const canRetry    = !locked && settings.allowRetry;
 
-  const prefix      = lastCorrect === true  ? '✓ Correct'
-                    : lastCorrect === false ? '✕ Not quite'
+  const prefix      = lastCorrect === true  ? L('kc.correct_prefix')
+                    : lastCorrect === false ? L('kc.not_quite_prefix')
                     : '';
   const explanation = lastCorrect === true  ? settings.correctFeedback
                     : lastCorrect === false ? settings.incorrectFeedback
-                    : 'Response recorded.';
+                    : L('kc.response_recorded');
   const feedbackCls = lastCorrect === true  ? 'kc-feedback kc-feedback-correct'
                     : lastCorrect === false ? 'kc-feedback kc-feedback-incorrect'
                     : 'kc-feedback kc-feedback-neutral';
@@ -1218,7 +1220,7 @@ function kcPostSubmitFooter(ans, settings, key) {
         ${prefix ? `<span class="kc-feedback-prefix">${prefix}</span>` : ''}
         <span>${escapeHtml(explanation)}</span>
       </div>
-      ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">Try Again</button>` : ''}
+      ${canRetry ? `<button class="btn btn-secondary btn-sm mt-8 lp-kc-retry" data-kc-key="${key}">${L('kc.try_again')}</button>` : ''}
     </div>`;
 }
 
@@ -1394,10 +1396,10 @@ function learnerKcMatchingCards(block, index, ctx) {
   if (submitted) {
     const deckContent = `<div class="kc-mc-card kc-mc-top kc-mc-results-card"
       style="position:absolute; top:0; left:0; z-index:1; width:${CARD_SZ}px; height:${CARD_SZ}px; cursor:default;">
-      <div class="kc-mc-score-headline">${placedCount} / ${totalCount} Correct</div>
+      <div class="kc-mc-score-headline">${L('kc.score', {n: placedCount, total: totalCount})}</div>
       <button class="kc-mc-replay-btn" data-kc-key="${key}">
         <span class="kc-mc-replay-icon">↺</span>
-        REPLAY
+        ${L('kc.replay')}
       </button>
     </div>`;
 

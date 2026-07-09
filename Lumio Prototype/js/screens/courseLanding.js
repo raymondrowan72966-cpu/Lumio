@@ -8,6 +8,7 @@ function ensureCourseDesign(course) {
   }
   if (!course.landingLayout) course.landingLayout = 'A';
   if (!course.language) course.language = 'English';
+  if (!course.labelSet) course.labelSet = 'en';
   if (!course.publishHistory) course.publishHistory = [];
   if (!course.publishVersion) course.publishVersion = '1.0';
   ensureHeroDefaults(course);
@@ -812,6 +813,36 @@ function openTranslationModal(course) {
 
           <div style="border-top:1px solid var(--border);"></div>
 
+          <!-- Label Sets Section -->
+          <section>
+            <div class="flex items-center gap-8" style="margin-bottom:12px;">
+              <span style="font-size:15px;">🏷️</span>
+              <strong style="font-size:14px;">Learner Interface Labels</strong>
+            </div>
+            <p class="text-sm text-muted" style="margin-bottom:12px;">
+              Labels are the UI strings learners see — buttons, navigation, feedback messages.
+              Select a built-in language pack or create a custom one.
+            </p>
+            <div class="flex items-center gap-12" style="margin-bottom:10px;">
+              <label class="text-sm" style="min-width:120px;">Label set</label>
+              <select class="input" id="tm-label-set" style="flex:1;">
+                ${_labelPackOptions(course.labelSet)}
+              </select>
+            </div>
+            <div class="flex gap-8" style="flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-sm" id="tm-label-set-apply">✓ Apply Label Set</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-export">⬇ Export Labels XLIFF</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-create">+ New Custom Pack</button>
+            </div>
+            <div id="tm-label-import-zone" style="margin-top:10px; display:none;">
+              <p class="text-sm text-muted" style="margin-bottom:6px;">Upload translated labels XLIFF:</p>
+              <input type="file" id="tm-label-file-input" accept=".xlf,.xliff,text/xml" style="display:none;" />
+              <button class="btn btn-secondary btn-sm" id="tm-label-import-btn">📥 Import Labels XLIFF</button>
+            </div>
+          </section>
+
+          <div style="border-top:1px solid var(--border);"></div>
+
           <!-- Future / AI Section (reserved) -->
           <section style="opacity:0.5; pointer-events:none;">
             <div class="flex items-center gap-8" style="margin-bottom:8px;">
@@ -822,6 +853,18 @@ function openTranslationModal(course) {
             <p class="text-sm text-muted">
               One-click AI translation via OpenAI, Anthropic, Google, Azure, DeepL, or a local model.
               Translation memory will be applied automatically.
+            </p>
+          </section>
+
+          <!-- Future / Translation History (reserved) -->
+          <section style="opacity:0.5; pointer-events:none; padding-top:0;">
+            <div class="flex items-center gap-8" style="margin-bottom:8px;">
+              <span style="font-size:15px;">🕐</span>
+              <strong style="font-size:14px;">Translation History</strong>
+              <span class="text-sm text-muted" style="background:var(--surface-2); padding:2px 8px; border-radius:999px;">Coming soon</span>
+            </div>
+            <p class="text-sm text-muted">
+              View and restore previous translations. Multilingual course variants stored per-locale.
             </p>
           </section>
 
@@ -883,6 +926,15 @@ function openTranslationModal(course) {
     return langs.map(([code, name]) => {
       const sel = (selected && (selected.toLowerCase() === code || selected.toLowerCase() === name.toLowerCase())) ? ' selected' : '';
       return `<option value="${code}"${sel}>${escapeHtml(name)}</option>`;
+    }).join('');
+  }
+
+  function _labelPackOptions(selected) {
+    const packs = LabelEngine.getAllPacks();
+    return Object.values(packs).map(p => {
+      const sel = (p.id === (selected || 'en')) ? ' selected' : '';
+      const tag = p.custom ? ' (custom)' : '';
+      return `<option value="${escapeHtml(p.id)}"${sel}>${escapeHtml(p.name)}${tag}</option>`;
     }).join('');
   }
 
@@ -950,6 +1002,53 @@ function openTranslationModal(course) {
       overlay.remove();
       renderCourseLanding(course.id);
       toast(`Translation applied — ${result.applied} strings updated`, '✅');
+    });
+
+    // Label Sets — Apply
+    overlay.querySelector('#tm-label-set-apply')?.addEventListener('click', () => {
+      const sel = overlay.querySelector('#tm-label-set')?.value;
+      if (!sel) return;
+      course.labelSet = sel;
+      scheduleLumioSave();
+      toast('Label set applied — learner UI will use ' + (LabelEngine.getAllPacks()[sel] || {}).name, '🏷️');
+    });
+
+    // Label Sets — Export
+    overlay.querySelector('#tm-label-export')?.addEventListener('click', () => {
+      const sel = overlay.querySelector('#tm-label-set')?.value || 'en';
+      LabelEngine.downloadXliff(sel, { sourceLocale: 'en-us' });
+      toast('Labels XLIFF exported', '📤');
+    });
+
+    // Label Sets — Create Custom
+    overlay.querySelector('#tm-label-create')?.addEventListener('click', () => {
+      const base = overlay.querySelector('#tm-label-set')?.value || 'en';
+      const baseName = (LabelEngine.getAllPacks()[base] || {}).name || 'English';
+      const name = prompt(`Name for new custom label set (based on ${baseName}):`, baseName + ' (custom)');
+      if (!name) return;
+      LabelEngine.createCustomPack(name, base);
+      scheduleLumioSave();
+      renderModal(); // refresh select to show new pack
+      toast('Custom label set created: ' + name, '🏷️');
+    });
+
+    // Label Sets — Import file
+    overlay.querySelector('#tm-label-import-btn')?.addEventListener('click', () => {
+      overlay.querySelector('#tm-label-file-input')?.click();
+    });
+    overlay.querySelector('#tm-label-file-input')?.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const targetId = overlay.querySelector('#tm-label-set')?.value;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = LabelEngine.importXliff(targetId, ev.target.result, { name: f.name.replace(/\.xlf.*$/, '') });
+        if (!result.ok) { toast('Label import failed — check the file format', '❌'); return; }
+        scheduleLumioSave();
+        renderModal();
+        toast('Labels imported — ' + result.applied + ' strings updated', '✅');
+      };
+      reader.readAsText(f);
     });
 
     // Close on backdrop click
