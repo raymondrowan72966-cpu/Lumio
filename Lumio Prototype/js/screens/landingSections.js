@@ -84,7 +84,7 @@ function landingTextStyle(style) {
 function renderObjectivesSection(course, editable) {
   ensureLandingStyles(course);
   const style = course.landingStyles.objectives;
-  const heading = style.headingText || LANDING_SECTION_DEFAULTS.objectives.headingText;
+  const heading = style.headingText || (typeof L === 'function' ? L('landing.objectives_heading') : LANDING_SECTION_DEFAULTS.objectives.headingText);
   return `
     <div class="card card-pad mt-32 fade-in" style="${landingPanelStyle(style)}">
       <h3 style="${landingHeadingStyle(style)}">${heading}</h3>
@@ -103,15 +103,15 @@ function renderObjectivesSection(course, editable) {
 function renderCourseStructureSection(course) {
   ensureLandingStyles(course);
   const style = course.landingStyles.courseStructure;
-  const heading = style.headingText || LANDING_SECTION_DEFAULTS.courseStructure.headingText;
+  const heading = style.headingText || (typeof L === 'function' ? L('landing.structure_heading') : LANDING_SECTION_DEFAULTS.courseStructure.headingText);
   const items = [];
-  course.lessons.forEach((l, i) => items.push(`Lesson ${i + 1}: ${l.title}`));
-  course.assessments.forEach(a => items.push(`Assessment: ${a.title}`));
+  course.lessons.forEach((l, i) => items.push(`${typeof L === 'function' ? L('landing.lesson_prefix', {n: i + 1}) : 'Lesson ' + (i + 1) + ':'} ${l.title}`));
+  course.assessments.forEach(a => items.push(`${typeof L === 'function' ? L('landing.assessment_prefix') : 'Assessment:'} ${a.title}`));
   return `
     <div class="card card-pad mt-32 fade-in" style="${landingPanelStyle(style)}">
       <h3 style="${landingHeadingStyle(style)}">${heading}</h3>
       <div class="flex-col gap-8 mt-16">
-        ${items.length ? items.map(t => `<div style="${landingTextStyle(style)}">${t}</div>`).join('') : '<p class="text-sm text-muted">No lessons or assessments yet.</p>'}
+        ${items.length ? items.map(t => `<div style="${landingTextStyle(style)}">${t}</div>`).join('') : `<p class="text-sm text-muted">${typeof L === 'function' ? L('landing.no_content') : 'No lessons or assessments yet.'}</p>`}
       </div>
     </div>`;
 }
@@ -119,7 +119,7 @@ function renderCourseStructureSection(course) {
 function renderNavTipsSection(course, navTips) {
   ensureLandingStyles(course);
   const style = course.landingStyles.navTips;
-  const heading = style.headingText || LANDING_SECTION_DEFAULTS.navTips.headingText;
+  const heading = style.headingText || (typeof L === 'function' ? L('landing.navtips_heading') : LANDING_SECTION_DEFAULTS.navTips.headingText);
   return `
     <div class="ai-card mt-32 fade-in" style="${landingNavTipsPanelStyle(style)}">
       <div class="ai-spark" style="${landingNavTipsIconStyle(style)}">🧭</div>

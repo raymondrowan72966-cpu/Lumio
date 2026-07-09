@@ -22,14 +22,28 @@
 //   and differ only in whether editing controls are present. No separate
 //   "builder renderer" exists; the editable:true path IS the builder renderer.
 
-// ── Default instruction text — single source of truth per KC type ────────────
-// Applied when no author-customised instruction is stored in block.data.instruction.
-const KC_DEFAULT_INSTRUCTIONS = {
-  kc_matching:       'Tap an item on the left, then its match on the right.',
-  kc_ordering:       'Use the arrows to arrange these in the correct order.',
-  kc_fill_gap:       'Complete the missing word or phrase.',
-  kc_matching_cards: 'Drag each card to its correct category.',
-};
+// ── Default instruction text — resolved through Label Engine at call time ─────
+// Returns the active-language default instruction for each KC type.
+// These are the strings shown when the author has not customised the instruction
+// field. L() falls back to English if the Label Engine has not loaded yet.
+function kcDefaultInstruction(type) {
+  if (typeof L !== 'function') {
+    const fallbacks = {
+      kc_matching:       'Tap an item on the left, then its match on the right.',
+      kc_ordering:       'Use the arrows to arrange these in the correct order.',
+      kc_fill_gap:       'Complete the missing word or phrase.',
+      kc_matching_cards: 'Drag each card to its correct category.',
+    };
+    return fallbacks[type] || '';
+  }
+  const keyMap = {
+    kc_matching:       'kc.default_instruction.matching',
+    kc_ordering:       'kc.default_instruction.ordering',
+    kc_fill_gap:       'kc.default_instruction.fill_gap',
+    kc_matching_cards: 'kc.default_instruction.matching_cards',
+  };
+  return L(keyMap[type] || type);
+}
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
@@ -113,7 +127,7 @@ function _kcFooter(opts) {
 function kcSharedMC(d, ds, opts) {
   opts = opts || {};
   const options = normalizeKcOptions(d);
-  const questionHtml = _kcHeading(d.question || 'Which of the following is correct?', { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
+  const questionHtml = _kcHeading(d.question || (typeof L === 'function' ? L('kc.question_mc') : 'Which of the following is correct?'), { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
 
   const optionsHtml = options.map((o, i) => {
     const st = (opts.optionStates && opts.optionStates[i]) || {};
@@ -151,7 +165,7 @@ function kcSharedMC(d, ds, opts) {
 function kcSharedMR(d, ds, opts) {
   opts = opts || {};
   const options = normalizeKcOptions(d);
-  const questionHtml = _kcHeading(d.question || 'Select all that apply.', { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
+  const questionHtml = _kcHeading(d.question || (typeof L === 'function' ? L('kc.question_mr') : 'Select all that apply.'), { field: 'kcQuestion', placeholder: 'Enter your question…', editable: opts.editable, asLegend: !opts.editable });
 
   const optionsHtml = options.map((o, i) => {
     const st = (opts.optionStates && opts.optionStates[i]) || {};
@@ -229,7 +243,7 @@ function kcSharedMatching(d, ds, opts) {
 
   const instruction = (d.instruction !== undefined && d.instruction !== null)
     ? d.instruction
-    : KC_DEFAULT_INSTRUCTIONS.kc_matching;
+    : kcDefaultInstruction('kc_matching');
 
   return `
     ${_kcHeading(instruction, { field: 'kcInstruction', placeholder: 'Enter instruction text…', editable: opts.editable })}
@@ -247,7 +261,7 @@ function kcSharedOrdering(d, ds, opts) {
 
   const instruction = (d.instruction !== undefined && d.instruction !== null)
     ? d.instruction
-    : KC_DEFAULT_INSTRUCTIONS.kc_ordering;
+    : kcDefaultInstruction('kc_ordering');
 
   if (opts.editable) {
     return `
@@ -255,10 +269,10 @@ function kcSharedOrdering(d, ds, opts) {
       <div class="flex-col gap-8">
         ${items.map((item, i) => `
           <div class="kc-order-item">
-            <span class="kc-order-num" aria-label="Position ${i + 1}">${i + 1}</span>
+            <span class="kc-order-num" aria-label="${typeof L === 'function' ? L('a11y.position', {n: i+1}) : 'Position ' + (i+1)}">${i + 1}</span>
             ${_kcEditableText(item, 'kcItem', i, 'Step…')}
-            <button class="btn-icon" disabled aria-label="Move up" style="opacity:0.35;">↑</button>
-            <button class="btn-icon" disabled aria-label="Move down" style="opacity:0.35;">↓</button>
+            <button class="btn-icon" disabled aria-label="${typeof L === 'function' ? L('a11y.move_up') : 'Move up'}" style="opacity:0.35;">↑</button>
+            <button class="btn-icon" disabled aria-label="${typeof L === 'function' ? L('a11y.move_down') : 'Move down'}" style="opacity:0.35;">↓</button>
           </div>`).join('')}
       </div>`;
   }
@@ -275,13 +289,13 @@ function kcSharedOrdering(d, ds, opts) {
         const inWrongPos   = reveal && itemIdx !== pos;
         return `
         <div class="kc-order-item${inCorrectPos ? ' correct' : ''}${inWrongPos ? ' wrong' : ''}">
-          <span class="kc-order-num" aria-label="Position ${pos + 1}">${pos + 1}</span>
+          <span class="kc-order-num" aria-label="${typeof L === 'function' ? L('a11y.position', {n: pos+1}) : 'Position ' + (pos+1)}">${pos + 1}</span>
           <span style="flex:1;">${escapeHtml(items[itemIdx])}</span>
           ${!submitted ? `
             <button class="btn-icon lp-order-up" data-kc-key="${opts.key}" data-block-index="${opts.blockIndex}" data-i="${pos}"
-              ${pos === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+              ${pos === 0 ? 'disabled' : ''} aria-label="${typeof L === 'function' ? L('a11y.move_up') : 'Move up'}">↑</button>
             <button class="btn-icon lp-order-down" data-kc-key="${opts.key}" data-block-index="${opts.blockIndex}" data-i="${pos}"
-              ${pos === order.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+              ${pos === order.length - 1 ? 'disabled' : ''} aria-label="${typeof L === 'function' ? L('a11y.move_down') : 'Move down'}">↓</button>
           ` : ''}
           ${inCorrectPos ? '<span class="kc-label-correct">✓</span>' : ''}
           ${inWrongPos   ? '<span class="kc-label-wrong">✕</span>'   : ''}
@@ -298,7 +312,7 @@ function kcSharedFillGap(d, ds, opts) {
 
   const instruction = (d.instruction !== undefined && d.instruction !== null)
     ? d.instruction
-    : KC_DEFAULT_INSTRUCTIONS.kc_fill_gap;
+    : kcDefaultInstruction('kc_fill_gap');
 
   if (opts.editable) {
     return `
@@ -308,7 +322,7 @@ function kcSharedFillGap(d, ds, opts) {
         data-placeholder="Enter the sentence with ____ marking the gap…"
         style="outline:none; margin-top:8px;"
       >${richTextOut(d.text || '')}</div>
-      <input class="kc-fill-input" disabled placeholder="Type your answer…" style="margin-top:12px;" />`;
+      <input class="kc-fill-input" disabled placeholder="${typeof L === 'function' ? L('kc.fill_placeholder') : 'Type your answer…'}" style="margin-top:12px;" />`;
   }
 
   const text = d.text || 'Complete this sentence: ____.';
@@ -322,14 +336,14 @@ function kcSharedFillGap(d, ds, opts) {
     const firstAccepted = (Array.isArray(d.answers) && d.answers[0])
       ? d.answers[0]
       : (d.answer || '').split('|')[0].trim();
-    return firstAccepted ? `<div class="text-xs text-muted mt-4">Accepted answer: ${escapeHtml(firstAccepted)}</div>` : '';
+    return firstAccepted ? `<div class="text-xs text-muted mt-4">${typeof L === 'function' ? L('kc.accepted_answer', {answer: escapeHtml(firstAccepted)}) : 'Accepted answer: ' + escapeHtml(firstAccepted)}</div>` : '';
   })();
 
   return `
     ${instructionHtml}
     <p class="kc-question" style="margin-top:${instruction ? '8px' : '0'};">${richTextOut(text)}</p>
     <input class="kc-fill-input lp-kc-fillgap-input" data-kc-key="${opts.key}"
-      placeholder="Type your answer…"
+      placeholder="${typeof L === 'function' ? L('kc.fill_placeholder') : 'Type your answer…'}"
       value="${(ans.response || '').replace(/"/g, '&quot;')}"
       ${submitted ? 'disabled' : ''} />
     ${revealHtml}`;

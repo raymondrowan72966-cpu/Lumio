@@ -93,6 +93,39 @@ const LabelEngine = (function () {
     'a11y.move_down':       'Move down',
     'a11y.selected':        '(selected)',
     'a11y.locked':          'Locked',
+    'a11y.content_revealed':'Additional content revealed below.',
+    // Navigation (extended)
+    'nav.back':             '← Back',
+    'nav.next_tooltip':     'Complete all required content above to continue',
+    // Lesson states
+    'lesson.no_content':    'This lesson has no content yet',
+    // Continue block
+    'continue.label':       'Continue',
+    'continue.revealed':    '✓ Continued',
+    // Video
+    'video.mark_watched':   'Mark video as watched',
+    'video.marked_watched': '✓ Marked as watched',
+    // KC — default instructions (shown when author leaves field blank)
+    'kc.default_instruction.matching':       'Tap an item on the left, then its match on the right.',
+    'kc.default_instruction.ordering':       'Use the arrows to arrange these in the correct order.',
+    'kc.default_instruction.fill_gap':       'Complete the missing word or phrase.',
+    'kc.default_instruction.matching_cards': 'Drag each card to its correct category.',
+    // KC — default question fallbacks
+    'kc.question_mc':       'Which of the following is correct?',
+    'kc.question_mr':       'Select all that apply.',
+    // KC — fill gap
+    'kc.fill_placeholder':  'Type your answer…',
+    'kc.accepted_answer':   'Accepted answer: {answer}',
+    // KC — matching cards
+    'kc.mc_drop_here':      'Drop here',
+    'kc.mc_tap_hint':       'or tap a category to place the selected card',
+    // Landing page
+    'landing.objectives_heading': 'By the end of this course, you will be able to:',
+    'landing.navtips_heading':    'Navigation Tips',
+    'landing.structure_heading':  'This course covers the following:',
+    'landing.lesson_prefix':      'Lesson {n}:',
+    'landing.assessment_prefix':  'Assessment:',
+    'landing.no_content':         'No lessons or assessments yet.',
   };
 
   const ES = {
@@ -144,6 +177,30 @@ const LabelEngine = (function () {
     'a11y.move_down':       'Mover abajo',
     'a11y.selected':        '(seleccionado)',
     'a11y.locked':          'Bloqueado',
+    'a11y.content_revealed':'Contenido adicional revelado abajo.',
+    'nav.back':             '← Atrás',
+    'nav.next_tooltip':     'Completa el contenido requerido arriba para continuar',
+    'lesson.no_content':    'Esta lección no tiene contenido todavía',
+    'continue.label':       'Continuar',
+    'continue.revealed':    '✓ Continuado',
+    'video.mark_watched':   'Marcar vídeo como visto',
+    'video.marked_watched': '✓ Marcado como visto',
+    'kc.default_instruction.matching':       'Toca un elemento de la izquierda y luego su coincidencia de la derecha.',
+    'kc.default_instruction.ordering':       'Usa las flechas para ordenar correctamente estos elementos.',
+    'kc.default_instruction.fill_gap':       'Completa la palabra o frase que falta.',
+    'kc.default_instruction.matching_cards': 'Arrastra cada tarjeta a su categoría correcta.',
+    'kc.question_mc':       '¿Cuál de las siguientes opciones es correcta?',
+    'kc.question_mr':       'Selecciona todas las que apliquen.',
+    'kc.fill_placeholder':  'Escribe tu respuesta…',
+    'kc.accepted_answer':   'Respuesta aceptada: {answer}',
+    'kc.mc_drop_here':      'Soltar aquí',
+    'kc.mc_tap_hint':       'o toca una categoría para colocar la tarjeta seleccionada',
+    'landing.objectives_heading': 'Al finalizar este curso, serás capaz de:',
+    'landing.navtips_heading':    'Consejos de navegación',
+    'landing.structure_heading':  'Este curso cubre lo siguiente:',
+    'landing.lesson_prefix':      'Lección {n}:',
+    'landing.assessment_prefix':  'Evaluación:',
+    'landing.no_content':         'Aún no hay lecciones ni evaluaciones.',
   };
 
   const FR = {
@@ -195,6 +252,30 @@ const LabelEngine = (function () {
     'a11y.move_down':       'Descendre',
     'a11y.selected':        '(sélectionné)',
     'a11y.locked':          'Verrouillé',
+    'a11y.content_revealed':'Contenu supplémentaire révélé ci-dessous.',
+    'nav.back':             '← Retour',
+    'nav.next_tooltip':     'Complétez tout le contenu requis ci-dessus pour continuer',
+    'lesson.no_content':    'Cette leçon n\'a pas encore de contenu',
+    'continue.label':       'Continuer',
+    'continue.revealed':    '✓ Continué',
+    'video.mark_watched':   'Marquer la vidéo comme vue',
+    'video.marked_watched': '✓ Marquée comme vue',
+    'kc.default_instruction.matching':       'Appuyez sur un élément à gauche, puis sur sa correspondance à droite.',
+    'kc.default_instruction.ordering':       'Utilisez les flèches pour disposer ces éléments dans le bon ordre.',
+    'kc.default_instruction.fill_gap':       'Complétez le mot ou la phrase manquant(e).',
+    'kc.default_instruction.matching_cards': 'Faites glisser chaque carte vers sa catégorie correcte.',
+    'kc.question_mc':       'Laquelle des propositions suivantes est correcte ?',
+    'kc.question_mr':       'Sélectionnez tout ce qui s\'applique.',
+    'kc.fill_placeholder':  'Tapez votre réponse…',
+    'kc.accepted_answer':   'Réponse acceptée : {answer}',
+    'kc.mc_drop_here':      'Déposer ici',
+    'kc.mc_tap_hint':       'ou appuyez sur une catégorie pour y placer la carte sélectionnée',
+    'landing.objectives_heading': 'À la fin de ce cours, vous serez capable de :',
+    'landing.navtips_heading':    'Conseils de navigation',
+    'landing.structure_heading':  'Ce cours couvre les éléments suivants :',
+    'landing.lesson_prefix':      'Leçon {n} :',
+    'landing.assessment_prefix':  'Évaluation :',
+    'landing.no_content':         'Aucune leçon ni évaluation pour l\'instant.',
   };
 
   const DE = {
@@ -246,6 +327,30 @@ const LabelEngine = (function () {
     'a11y.move_down':       'Nach unten',
     'a11y.selected':        '(ausgewählt)',
     'a11y.locked':          'Gesperrt',
+    'a11y.content_revealed':'Zusätzlicher Inhalt unten aufgedeckt.',
+    'nav.back':             '← Zurück',
+    'nav.next_tooltip':     'Schließen Sie den erforderlichen Inhalt oben ab, um fortzufahren',
+    'lesson.no_content':    'Diese Lektion hat noch keinen Inhalt',
+    'continue.label':       'Weiter',
+    'continue.revealed':    '✓ Fortgesetzt',
+    'video.mark_watched':   'Video als angesehen markieren',
+    'video.marked_watched': '✓ Als angesehen markiert',
+    'kc.default_instruction.matching':       'Tippen Sie auf ein Element links, dann auf seine Entsprechung rechts.',
+    'kc.default_instruction.ordering':       'Verwenden Sie die Pfeile, um diese in der richtigen Reihenfolge anzuordnen.',
+    'kc.default_instruction.fill_gap':       'Vervollständigen Sie das fehlende Wort oder die Phrase.',
+    'kc.default_instruction.matching_cards': 'Ziehen Sie jede Karte in ihre richtige Kategorie.',
+    'kc.question_mc':       'Welche der folgenden Aussagen ist richtig?',
+    'kc.question_mr':       'Wählen Sie alles Zutreffende aus.',
+    'kc.fill_placeholder':  'Geben Sie Ihre Antwort ein…',
+    'kc.accepted_answer':   'Akzeptierte Antwort: {answer}',
+    'kc.mc_drop_here':      'Hier ablegen',
+    'kc.mc_tap_hint':       'oder tippen Sie auf eine Kategorie, um die ausgewählte Karte zu platzieren',
+    'landing.objectives_heading': 'Nach diesem Kurs werden Sie in der Lage sein:',
+    'landing.navtips_heading':    'Navigationstipps',
+    'landing.structure_heading':  'Dieser Kurs behandelt Folgendes:',
+    'landing.lesson_prefix':      'Lektion {n}:',
+    'landing.assessment_prefix':  'Prüfung:',
+    'landing.no_content':         'Noch keine Lektionen oder Prüfungen.',
   };
 
   const BUILT_IN = {
@@ -444,6 +549,57 @@ ${units}
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // ── Coverage Auditor ──────────────────────────────────────────
+  //
+  // Developer utility — call LabelEngine.auditCoverage() from the browser
+  // console to verify label completeness across all built-in packs.
+  // Part of future Platform Audit Sprints.
+
+  function auditCoverage() {
+    const enKeys = Object.keys(EN);
+    const totalKeys = enKeys.length;
+    const packs = { EN, ES, FR, DE };
+    const packNames = { EN: 'English', ES: 'Español', FR: 'Français', DE: 'Deutsch' };
+    const report = {
+      totalKeys,
+      packs: {},
+      missingByPack: {},
+      allKeysComplete: true,
+    };
+
+    Object.entries(packs).forEach(([id, pack]) => {
+      const packKeys = Object.keys(pack);
+      const missing = enKeys.filter(k => !(k in pack));
+      const extra   = packKeys.filter(k => !(k in EN));
+      report.packs[id] = {
+        name: packNames[id],
+        defined: packKeys.length,
+        missing: missing.length,
+        extra: extra.length,
+        coveragePct: Math.round(((packKeys.length - extra.length) / totalKeys) * 100),
+      };
+      if (missing.length) {
+        report.missingByPack[id] = missing;
+        report.allKeysComplete = false;
+      }
+    });
+
+    // Summary table
+    console.group('[LabelEngine] Coverage Audit');
+    console.log(`Total keys (EN baseline): ${totalKeys}`);
+    Object.entries(report.packs).forEach(([id, p]) => {
+      const status = p.missing === 0 ? '✅' : '⚠️';
+      console.log(`${status} ${p.name} (${id}): ${p.coveragePct}% — ${p.defined} defined, ${p.missing} missing, ${p.extra} extra`);
+    });
+    if (!report.allKeysComplete) {
+      console.warn('Missing keys by pack:', report.missingByPack);
+    } else {
+      console.log('✅ All packs complete — 100% coverage');
+    }
+    console.groupEnd();
+    return report;
+  }
+
   // ── Public API ────────────────────────────────────────────────
 
   return {
@@ -464,6 +620,8 @@ ${units}
     downloadXliff,
     // Data
     BUILT_IN,
+    // Developer utilities
+    auditCoverage,
     // Internal for testing
     _active: function () { return _active; },
     _activeId: function () { return _activeId; },

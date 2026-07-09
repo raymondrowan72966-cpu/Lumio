@@ -227,7 +227,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
               <div class="text-sm text-muted">${l.duration || ''}</div>
             </div>
           </div>`;
-        }).join('') : `<p class="text-sm text-muted">No lessons yet.</p>`}
+        }).join('') : `<p class="text-sm text-muted">${L('nav.no_lessons')}</p>`}
       </div>
       ${course.assessments.length ? `
       <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin:20px 0 8px;">${L('sidebar.assessments')}</h4>
@@ -326,7 +326,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
   const prodHeader = `
     <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
       ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="${L('a11y.open_nav')}">☰</button>` : ''}
-      ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Back</button>` : ''}
+      ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.back')}</button>` : ''}
       <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
       ${progressBarHtml(course, progress)}
     </header>`;
@@ -666,7 +666,7 @@ function renderLearnerCourseOverview(course) {
       ${renderHeroSection(course, {
         editable: false,
         ctaId: 'lp-start',
-        ctaLabel: course.lessons.length ? startLabel + ' →' : 'No lessons yet',
+        ctaLabel: course.lessons.length ? startLabel + ' →' : L('nav.no_lessons'),
         ctaDisabled: !course.lessons.length,
       })}
 
@@ -782,13 +782,13 @@ function renderLearnerLesson(course, lessonId) {
       <div class="flex items-center justify-between mb-16" style="padding:0 22px;">
         <h2 style="font-size:calc(var(--theme-font-size, 16px) + 4px); font-family:var(--theme-font-display, var(--font-display));">${lesson.title}</h2>
         ${lesson.duration ? `<span class="pill pill-grey">${lesson.duration}</span>` : ''}
-        ${isAssessment ? '<span class="pill pill-cyan">Assessment</span>' : ''}
+        ${isAssessment ? `<span class="pill pill-cyan">${L('sidebar.assessment')}</span>` : ''}
       </div>
       ${renderLearnerBlocks(blocks, ctx)}
     </div>
     <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; min-height:72px; box-sizing:border-box;">
       <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>${L('nav.previous')}</button>
-      <button class="btn btn-primary" id="lp-next" ${nextDisabled ? 'disabled title="Complete all required content above to continue"' : ''}>${nextLabel}</button>
+      <button class="btn btn-primary" id="lp-next" ${nextDisabled ? `disabled title="${L('nav.next_tooltip')}"` : ''}>${nextLabel}</button>
     </div>
   `;
 
@@ -897,7 +897,7 @@ function renderLearnerBlocks(blocks, ctx) {
     return `
       <div style="padding:60px 30px; background:var(--surface-0); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:none; text-align:center;">
         <div style="font-size:40px;">📭</div>
-        <h3 class="mt-16" style="font-size:16px;">This lesson has no content yet</h3>
+        <h3 class="mt-16" style="font-size:16px;">${L('lesson.no_content')}</h3>
       </div>`;
   }
 
@@ -1014,7 +1014,7 @@ function refreshNextButtonState(ctx) {
   const revealed = LearnerUI.revealedContinues[ctx.lessonId] || new Set();
   const disabled = !CompletionEngine.isLessonReadyForNext(blocks, ctx, revealed);
   btn.disabled = disabled;
-  btn.title = disabled ? 'Complete all required content above to continue' : '';
+  btn.title = disabled ? L('nav.next_tooltip') : '';
 }
 
 /* ---- Continue (progression gate) ---- */
@@ -1029,10 +1029,10 @@ function learnerContinueBlock(block, index, ctx) {
   return `
     <div style="${continueWrapperStyle(ds)} display:flex; flex-direction:column; align-items:${justifyMap[align] || 'center'}; gap:8px;">
       ${revealed
-        ? `<span class="pill pill-grey">✓ Continued</span>`
-        : `<button class="btn lumio-continue-btn lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}" style="${continueButtonStyle(ds)} ${locked ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${locked ? 'disabled' : ''}>${richTextOut(d.label || 'Continue')}</button>`}
+        ? `<span class="pill pill-grey">${L('continue.revealed')}</span>`
+        : `<button class="btn lumio-continue-btn lp-continue" data-lesson="${ctx.lessonId}" data-index="${index}" style="${continueButtonStyle(ds)} ${locked ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${locked ? 'disabled' : ''}>${richTextOut(d.label || L('continue.label'))}</button>`}
       ${locked && d.hint ? `<p class="text-sm text-muted lumio-continue-hint" style="text-align:${align}; margin:0;">${escapeHtml(d.hint)}</p>` : ''}
-      <span aria-live="polite" style="${srOnlyStyle}">${revealed ? 'Additional content revealed below.' : ''}</span>
+      <span aria-live="polite" style="${srOnlyStyle}">${revealed ? L('a11y.content_revealed') : ''}</span>
     </div>`;
 }
 
@@ -1058,7 +1058,7 @@ function learnerVideoBlock(block, index, ctx) {
   const watched = !!(ctx.progress.blockProgress && ctx.progress.blockProgress[ctx.lessonId + ':' + index] && ctx.progress.blockProgress[ctx.lessonId + ':' + index].watched);
   return `${html}
     <div class="mt-8" style="text-align:center;">
-      <button class="btn btn-secondary btn-sm lp-mark-watched" data-block-index="${index}" ${watched ? 'disabled' : ''}>${watched ? '✓ Marked as watched' : 'Mark video as watched'}</button>
+      <button class="btn btn-secondary btn-sm lp-mark-watched" data-block-index="${index}" ${watched ? 'disabled' : ''}>${watched ? L('video.marked_watched') : L('video.mark_watched')}</button>
     </div>`;
 }
 
@@ -1404,7 +1404,7 @@ function learnerKcMatchingCards(block, index, ctx) {
     </div>`;
 
     const baseInstruction = (d.instruction !== undefined && d.instruction !== null)
-      ? d.instruction : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
+      ? d.instruction : kcDefaultInstruction('kc_matching_cards');
     return learnerKcWrap(ds, `
       <p class="kc-question" style="visibility:hidden;">${richTextOut(baseInstruction || '')}</p>
       <div class="kc-mc-deck" style="width:${DECK_W}px; height:${DECK_H}px;">${deckContent}</div>
@@ -1461,7 +1461,7 @@ function learnerKcMatchingCards(block, index, ctx) {
           <span>${escapeHtml(feedback.text || '')}</span>
         </div>`;
       } else {
-        zoneContent = `<div class="kc-mc-zone-empty">Drop here</div>`;
+        zoneContent = `<div class="kc-mc-zone-empty">${L('kc.mc_drop_here')}</div>`;
       }
       return `<div class="kc-mc-cat-wrap">
         <div class="kc-mc-zone${isOver ? ' drag-over' : ''}${isFeedback ? (feedback.correct ? ' kc-mc-zone-correct' : ' kc-mc-zone-incorrect') : ''}" data-kc-mc-zone-key="${key}" data-kc-mc-zone-cat="${ci}">
@@ -1473,9 +1473,9 @@ function learnerKcMatchingCards(block, index, ctx) {
   </div>`;
 
   const baseInstruction = (d.instruction !== undefined && d.instruction !== null)
-    ? d.instruction : KC_DEFAULT_INSTRUCTIONS.kc_matching_cards;
+    ? d.instruction : kcDefaultInstruction('kc_matching_cards');
   const hintHtml = selectedCard !== null
-    ? `<p class="text-sm text-muted" style="margin-top:-4px; margin-bottom:4px;">or tap a category to place the selected card</p>`
+    ? `<p class="text-sm text-muted" style="margin-top:-4px; margin-bottom:4px;">${L('kc.mc_tap_hint')}</p>`
     : '';
 
   return learnerKcWrap(ds, `

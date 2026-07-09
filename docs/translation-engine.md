@@ -1,6 +1,6 @@
 # Lumio Translation Engine
 
-**Status:** Implemented (Sprint: Translation Engine — Phase 2: Coverage, Label Engine & Persistence Audit)  
+**Status:** Implemented (Sprint: Label Engine Completion — 100% Learner Label Coverage)  
 **Last updated:** 2026-07-09
 
 ---
@@ -352,15 +352,22 @@ Four packs ship with the engine: `en`, `es`, `fr`, `de`. These are immutable —
 3. English (`en`) fallback
 4. Raw key string (last resort — never shown to learners in practice)
 
-### Key reference
+### Key reference (72 keys — 100% coverage across en / es / fr / de)
 
 | Namespace | Keys |
 |---|---|
-| `nav.*` | `start_course`, `continue_course`, `restart_course`, `next`, `previous`, `take_assessment`, `finish_course`, `next_assessment` |
-| `sidebar.*` | `progress`, `lessons`, `assessments`, `quiz` |
-| `kc.*` | `submit`, `try_again`, `replay`, `correct_prefix`, `not_quite_prefix`, `response_recorded`, `correct_feedback`, `incorrect_feedback`, `score` (supports `{n}` / `{total}` vars), `correct_label`, `wrong_label` |
-| `carousel.*` | `prev`, `next`, `prev_slide`, `next_slide`, `indicators` |
-| `a11y.*` | `open_nav`, `position` (supports `{n}` var), `move_up`, `move_down` |
+| `nav.*` | `start_course`, `continue_course`, `restart_course`, `next`, `previous`, `take_assessment`, `finish_course`, `next_assessment`, `no_lessons`, `return`, `back`, `next_tooltip` |
+| `sidebar.*` | `progress`, `lessons`, `assessments`, `quiz`, `assessment` |
+| `lesson.*` | `no_content` |
+| `continue.*` | `label`, `revealed` |
+| `video.*` | `mark_watched`, `marked_watched` |
+| `kc.*` | `submit`, `try_again`, `replay`, `correct_prefix`, `not_quite_prefix`, `response_recorded`, `correct_feedback`, `incorrect_feedback`, `score` (`{n}`,`{total}`), `correct_label`, `wrong_label`, `question_mc`, `question_mr`, `fill_placeholder`, `accepted_answer` (`{answer}`), `mc_drop_here`, `mc_tap_hint`, `default_instruction.matching`, `default_instruction.ordering`, `default_instruction.fill_gap`, `default_instruction.matching_cards` |
+| `carousel.*` | `prev`, `next`, `prev_slide`, `next_slide`, `indicators`, `prev_quote`, `next_quote`, `quote_inds` |
+| `flashcard.*` | `flip`, `front`, `back` |
+| `audio.*` | `play`, `pause`, `transcript` |
+| `complete.*` | `all_done`, `well_done` |
+| `a11y.*` | `open_nav`, `position` (`{n}`), `move_up`, `move_down`, `selected`, `locked`, `content_revealed` |
+| `landing.*` | `objectives_heading`, `navtips_heading`, `structure_heading`, `lesson_prefix` (`{n}`), `assessment_prefix`, `no_content` |
 
 ### Template variables
 
@@ -368,6 +375,28 @@ Four packs ship with the engine: `en`, `es`, `fr`, `de`. These are immutable —
 L('kc.score', { n: 3, total: 5 })  // → "3 / 5 Correct"
 L('a11y.position', { n: 2 })       // → "Position 2"
 ```
+
+### Naming standards
+
+Key names follow a strict `namespace.descriptor` or `namespace.sub_namespace.descriptor` pattern:
+
+- **Namespace** reflects the UI region or block type: `nav`, `sidebar`, `kc`, `carousel`, `flashcard`, `audio`, `video`, `landing`, `lesson`, `continue`, `complete`, `a11y`.
+- **Descriptor** is `snake_case`, specific, and unambiguous.
+- **Sub-namespace** is used when a namespace has a logical group (e.g. `kc.default_instruction.*`).
+- **Template vars** use `{snake_case}` placeholder syntax.
+
+**Architectural rule:** No learner-visible string may be hardcoded. Every string must exist as a key in the Label Engine, resolve through `L()`, and be present in all four built-in packs. Hardcoded learner text is an architectural violation.
+
+### Coverage auditor
+
+`LabelEngine.auditCoverage()` is a developer utility callable from the browser console. It produces a per-pack coverage report against the English baseline:
+
+```js
+LabelEngine.auditCoverage()
+// → { totalKeys: 72, packs: { EN: {coveragePct:100,...}, ES: {...}, ... }, allKeysComplete: true }
+```
+
+Run this after any Label Engine addition to verify all four packs are complete. Include in future Platform Audit Sprints.
 
 ### Custom label packs
 
@@ -480,3 +509,5 @@ The rendering layer will read from `course.translations[course.activeLocale]` fi
 6. **Label Engine is the only owner of UI strings** — never hardcode learner-visible labels (button text, feedback messages, aria-labels) in learnerPreview.js, kcComponents.js, or any other learner-context file. Always call `L(key)`.
 7. **`setActivePack` must be called before any render** — the learner shell entry points (`learnerShell`, `learnerShellProduction`) must call `LabelEngine.setActivePack(course)` before the first DOM write. Any new shell entry point must do the same.
 8. **`extract` and `apply` cover content; `LabelEngine` covers chrome** — do not add UI string keys to `TranslationEngine.extract`. Do not add course content to `LabelEngine`.
+9. **All four built-in packs must be updated together** — every new key added to `EN` must have an equivalent entry in `ES`, `FR`, and `DE` in the same commit. Run `LabelEngine.auditCoverage()` before committing to verify.
+10. **Key naming must follow the established namespace convention** — see Naming Standards above. No abbreviations, no camelCase descriptors, no generic names like `label` or `text` without a qualifying namespace.
