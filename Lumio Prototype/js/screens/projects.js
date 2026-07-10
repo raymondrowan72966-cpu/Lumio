@@ -685,6 +685,7 @@ function duplicateProject(id) {
   copy.submittedAt = null;
   copy.reviewComments = null;
   copy.reviewHistory = [];
+  copy._cloud = false; // treat as new — cloudPersistProject will POST, not PUT
 
   const srcCourse = LumioState.courses && LumioState.courses[id];
   if (srcCourse) {
@@ -711,7 +712,7 @@ function duplicateProject(id) {
 
   const idx = LumioState.projects.findIndex(x => x.id === id);
   LumioState.projects.splice(idx + 1, 0, copy);
-  saveLumioState();
+  persistCourse(newId); // POST to D1 (copy._cloud=false) then sets _cloud=true
   renderProjects();
   toast(`Duplicated "${baseTitle}"`, '⧉');
 }
