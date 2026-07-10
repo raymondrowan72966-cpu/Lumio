@@ -228,10 +228,13 @@ async function buildExportPackage(course, triggerBtn, adapter) {
     // Serialize the active label pack so the published runtime can resolve L()
     // without bundling the full LabelEngine authoring module. Falls back to the
     // English built-in if the course has no labelSet or the pack is not found.
+    // EN labels are merged as a base so the published L() stub inherits the same
+    // EN fallback that LabelEngine.L() provides in Preview via BUILT_IN.en.labels.
     const _allPacks = LabelEngine.getAllPacks();
     const _activePackId = course.labelSet || 'en';
+    const _enLabels = (_allPacks['en'] || {}).labels || {};
     const _activePack = (_allPacks[_activePackId] || _allPacks['en'] || {}).labels || {};
-    const labelPackJson = JSON.stringify(_activePack);
+    const labelPackJson = JSON.stringify(Object.assign({}, _enLabels, _activePack));
 
     const bootstrapScript = adapter.buildBootstrapScript();
 
