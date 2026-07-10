@@ -412,7 +412,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
     <header id="lp-header" class="flex items-center justify-between" style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0; gap:16px; flex-wrap:wrap;">
       <div class="flex items-center gap-12" style="min-width:0;">
         <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="lp-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
-        ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">← Return to Course</button>` : ''}
+        ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.return')}</button>` : ''}
         <strong style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
         <span class="pill pill-indigo">👁️ Learner Preview</span>
       </div>
@@ -445,7 +445,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       `;
     } else if (isMobile) {
       // Fullscreen mobile: drawer sidebar overlaying device frame
-      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ Lessons</button>` : '';
+      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ ${L('nav.open_lessons')}</button>` : '';
       const mobileBodyHtml = !isOverview ? `
         <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
           ${mobileMenuBtn}

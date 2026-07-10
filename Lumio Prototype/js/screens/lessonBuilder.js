@@ -2189,7 +2189,7 @@ function renderBlockContent(block, editable) {
           <div class="lumio-video-fallback" style="display:none;">${fallbackCard}</div>`;
         }
       } else {
-        videoInner = `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file or add an embed URL.' : 'Video unavailable.'}</div></div>`;
+        videoInner = `<div class="flex items-center gap-12"><span style="font-size:22px;">🎬</span><div class="text-sm text-muted">${editable ? 'No video uploaded — use the Content tab to upload a video file or add an embed URL.' : (typeof L === 'function' ? L('video.unavailable') : 'Video unavailable')}</div></div>`;
       }
 
       const videoShowCaption = editable || d.caption;
@@ -2693,7 +2693,7 @@ function videoEmbedFallbackCard(embed, d) {
     ${thumb}
     <div style="padding:16px; text-align:center;">
       <div style="font-weight:600; margin-bottom:10px;">${title}</div>
-      <a href="${embed.watchUrl}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">▶ Watch Video</a>
+      <a href="${embed.watchUrl}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">▶ ${typeof L === 'function' ? L('video.watch_link') : 'Watch Video'}</a>
     </div>
   </div>`;
 }
