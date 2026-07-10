@@ -258,6 +258,33 @@ const LumioAPI = (function () {
   };
 
   // -------------------------------------------------------------------------
+  // workspace — Step 9: Workspace Resource Persistence
+  // Generic GET / PUT for workspace-owned resources (label packs, etc.).
+  // All methods require an active session (HttpOnly cookies sent automatically).
+  // -------------------------------------------------------------------------
+  var workspace = {
+    /**
+     * Fetch all resources of a given type for the authenticated workspace.
+     * @param {string} type  e.g. 'labelPacks'
+     * @returns {Promise<Record<string, object>>}
+     */
+    getResources: function (type) {
+      return get('/workspace/resources/' + encodeURIComponent(type));
+    },
+
+    /**
+     * Full sync: client sends all items it has; server upserts and returns
+     * the canonical set (with version metadata attached by the server).
+     * @param {string}                 type   e.g. 'labelPacks'
+     * @param {Record<string, object>} items  id → resource object
+     * @returns {Promise<Record<string, object>>}
+     */
+    syncResources: function (type, items) {
+      return request('PUT', '/workspace/resources/' + encodeURIComponent(type), { items });
+    },
+  };
+
+  // -------------------------------------------------------------------------
   // projects — Step 7: Cloud Project Persistence
   // All methods require an active session (HttpOnly cookies sent automatically).
   // -------------------------------------------------------------------------
@@ -388,6 +415,7 @@ const LumioAPI = (function () {
     health,
     auth,
     workspaces,
+    workspace,
     projects,
     courses,
     lessons,

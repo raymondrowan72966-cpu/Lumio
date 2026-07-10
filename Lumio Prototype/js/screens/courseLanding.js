@@ -1029,6 +1029,7 @@ function openTranslationModal(course) {
       if (!name) return;
       LabelEngine.createCustomPack(name, base);
       persistCourse(course.id);
+      cloudSyncWorkspace('labelPacks');
       renderModal(); // refresh select to show new pack
       toast('Custom label set created: ' + name, '🏷️');
     });
@@ -1046,6 +1047,7 @@ function openTranslationModal(course) {
         const result = LabelEngine.importXliff(targetId, ev.target.result, { name: f.name.replace(/\.xlf.*$/, '') });
         if (!result.ok) { toast('Label import failed — check the file format', '❌'); return; }
         persistCourse(course.id);
+        cloudSyncWorkspace('labelPacks');
         renderModal();
         toast('Labels imported — ' + result.applied + ' strings updated', '✅');
       };

@@ -90,8 +90,8 @@ export class ProjectRepository {
       `INSERT INTO courses
          (id, workspace_id, title, description, audience, duration,
           objectives, learner_outcomes, theme_id, theme_design,
-          landing_layout, hero_image, hero_settings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          landing_layout, hero_image, hero_settings, label_set, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          title            = excluded.title,
          description      = excluded.description,
@@ -104,6 +104,7 @@ export class ProjectRepository {
          landing_layout   = excluded.landing_layout,
          hero_image       = excluded.hero_image,
          hero_settings    = excluded.hero_settings,
+         label_set        = excluded.label_set,
          updated_at       = excluded.updated_at`,
       [
         projectId,
@@ -119,6 +120,7 @@ export class ProjectRepository {
         data.landingLayout || 'A',
         JSON.stringify(data.heroImage || {}),
         JSON.stringify(data.heroSettings || {}),
+        data.labelSet || null,
         now,
         now,
       ],
@@ -212,6 +214,7 @@ function rowToCourse(row) {
     landingLayout:  row.landing_layout,
     heroImage:      _parseJson(row.hero_image, null),
     heroSettings:   _parseJson(row.hero_settings, null),
+    labelSet:       row.label_set || null,
   };
 }
 

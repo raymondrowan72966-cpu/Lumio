@@ -1105,6 +1105,7 @@ const LUMIO_PERSISTED_KEYS = [
   'currentUser', 'workspace', 'adminUsers', 'invitations',
   'users', 'workspaces', 'workspaceMemberships', 'session',
   'notifications', 'statusFilter', 'passwordResets',
+  'labelPacks',
 ];
 
 // Generates a stable local learner identifier in the form "local-xxxxxxxx".
@@ -1827,6 +1828,58 @@ async function _loadCloudProjects() {
   }
 }
 
+// Registry of workspace-owned resource types. Each entry maps a camelCase key
+// (used as the URL segment and as the LumioState property name) to its config.
+// Extend here to add Themes, Branding, Settings — the sync and load functions
+// below iterate this registry automatically; no other code needs to change.
+const WORKSPACE_RESOURCES = {
+  labelPacks: { stateKey: 'labelPacks' },
+};
+
+/**
+ * Push all items of a given workspace resource type to D1.
+ * No-ops if the user is not authenticated.  Safe to call fire-and-forget;
+ * errors are surfaced as a toast but do not propagate to the caller.
+ *
+ * @param {string} resourceType  key in WORKSPACE_RESOURCES, e.g. 'labelPacks'
+ */
+async function cloudSyncWorkspace(resourceType) {
+  if (!isCloudUser()) return;
+  const def = WORKSPACE_RESOURCES[resourceType];
+  if (!def) return;
+  const items = LumioState[def.stateKey] || {};
+  try {
+    const serverItems = await LumioAPI.workspace.syncResources(resourceType, items);
+    // Merge server metadata (version, updatedAt, etc.) back into local state.
+    if (serverItems && typeof serverItems === 'object') {
+      LumioState[def.stateKey] = serverItems;
+      saveLumioState();
+    }
+  } catch (err) {
+    console.warn('[Lumio] Workspace sync failed for', resourceType, err);
+    toast('Could not sync workspace resources — ' + (err.message || 'Check your connection'), '⚠️');
+  }
+}
+
+/**
+ * Load all workspace resource types from D1 and merge into LumioState.
+ * Called alongside _loadCloudProjects() on login / session restore.
+ * Silently no-ops per resource type on network error — local cache is kept.
+ */
+async function _loadCloudWorkspace() {
+  for (const [type, def] of Object.entries(WORKSPACE_RESOURCES)) {
+    try {
+      const items = await LumioAPI.workspace.getResources(type);
+      if (items && typeof items === 'object') {
+        LumioState[def.stateKey] = items;
+      }
+    } catch (err) {
+      console.warn('[Lumio] Could not load workspace resource', type, err);
+    }
+  }
+  saveLumioState();
+}
+
 /**
  * Fetch course + lessons for a project from D1 and populate the in-memory cache.
  * Called by openProject() when a cloud project's course hasn't been loaded yet.
@@ -2229,8 +2282,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         download: function (assetId) { return LumioAPI.assets.getBlob(assetId); },
       });
       // Replace localStorage project cache with D1 source of truth.
-      // Awaited before render() so the first paint shows cloud projects.
-      await _loadCloudProjects();
+      // Awaited before render() so the first paint shows cloud projects and
+      // workspace resources (label packs, etc.).
+      await Promise.all([_loadCloudProjects(), _loadCloudWorkspace()]);
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
       LumioSession.clear();
