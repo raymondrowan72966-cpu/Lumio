@@ -872,7 +872,7 @@ function renderLearnerLesson(course, lessonId) {
         progress.courseCompletedAt = Date.now();
         scheduleLumioSave();
         navigate('#/learner/' + course.id);
-        setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
+        setTimeout(() => toast(L('complete.all_done'), '🎉'), 50);
       } else {
         navigate('#/learner/' + course.id + '/' + course.assessments[assessmentIdx + 1].id);
       }
@@ -884,7 +884,7 @@ function renderLearnerLesson(course, lessonId) {
         progress.courseCompletedAt = Date.now();
         scheduleLumioSave();
         navigate('#/learner/' + course.id);
-        setTimeout(() => toast('🎉 Course complete!', '🎉'), 50);
+        setTimeout(() => toast(L('complete.all_done'), '🎉'), 50);
       }
     } else {
       navigate('#/learner/' + course.id + '/' + course.lessons[lessonIdx + 1].id);

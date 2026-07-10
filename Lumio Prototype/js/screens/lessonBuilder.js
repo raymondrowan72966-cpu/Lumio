@@ -516,7 +516,7 @@ function flashcardFaceContent(face, i, faceName, ce, editable) {
   // Placing handlers here (not on .flip-card) means: clicking text, images,
   // whitespace or selections never flips the card, and typing Space/Enter
   // inside a contenteditable cannot bubble to a card-level keydown handler.
-  const flipIcon = `<button class="flip-card-flipicon" type="button" aria-label="Flip card" aria-pressed="false" onclick="event.stopPropagation(); var fc=this.closest('.flip-card'); var f=fc.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(fc,'flipped',${i}); try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();var fc=this.closest('.flip-card');var f=fc.classList.toggle('flipped');this.setAttribute('aria-pressed',f);lumioRecordProgress(fc,'flipped',${i});try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}}">↻</button>`;
+  const flipIcon = `<button class="flip-card-flipicon" type="button" aria-label="${typeof L === 'function' ? L('flashcard.flip') : 'Flip card'}" aria-pressed="false" onclick="event.stopPropagation(); var fc=this.closest('.flip-card'); var f=fc.classList.toggle('flipped'); this.setAttribute('aria-pressed',f); lumioRecordProgress(fc,'flipped',${i}); try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();var fc=this.closest('.flip-card');var f=fc.classList.toggle('flipped');this.setAttribute('aria-pressed',f);lumioRecordProgress(fc,'flipped',${i});try{var cb=fc.closest('.canvas-block');if(cb)BuilderUI.flashcardFlipState[cb.dataset.index+'-'+${i}]=f;}catch(e){}}">↻</button>`;
   // Builder always keeps the field present (so an empty face stays
   // click-to-edit); learner-facing contexts only render it when there's
   // genuinely something to show — this is what removes the reserved
@@ -2130,7 +2130,7 @@ function renderBlockContent(block, editable) {
 
       const transcriptHtml = d.transcript
         ? `<details class="audio-transcript mt-12">
-            <summary style="cursor:pointer; font-weight:600; font-size:13px;">Transcript</summary>
+            <summary style="cursor:pointer; font-weight:600; font-size:13px;">${typeof L === 'function' ? L('audio.transcript') : 'Transcript'}</summary>
             <div class="text-sm mt-8" style="white-space:pre-wrap; line-height:1.6;">${escapeHtml(d.transcript)}</div>
           </details>`
         : '';
@@ -2199,7 +2199,7 @@ function renderBlockContent(block, editable) {
 
       const videoTranscriptHtml = d.transcript
         ? `<details class="audio-transcript mt-12">
-            <summary style="cursor:pointer; font-weight:600; font-size:13px;">Transcript</summary>
+            <summary style="cursor:pointer; font-weight:600; font-size:13px;">${typeof L === 'function' ? L('audio.transcript') : 'Transcript'}</summary>
             <div class="text-sm mt-8" style="white-space:pre-wrap; line-height:1.6;">${escapeHtml(d.transcript)}</div>
           </details>`
         : '';
@@ -2362,9 +2362,9 @@ function renderBlockContent(block, editable) {
               <div class="text-sm" style="${textTypographyStyle(ds, 14, 'body')}">${richTextOut(h.body)}</div>
               ${itemMediaExtrasHtml(h)}
               ${hotspots.length > 1 ? `<div class="lumio-hotspot-nav">
-                <button class="btn btn-secondary btn-sm lumio-hotspot-prev" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, -1)">← Prev</button>
-                <span class="lumio-hotspot-counter">${i + 1} of ${hotspots.length}</span>
-                <button class="btn btn-secondary btn-sm lumio-hotspot-next" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, 1)">Next →</button>
+                <button class="btn btn-secondary btn-sm lumio-hotspot-prev" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, -1)">${typeof L === 'function' ? L('nav.previous') : '← Previous'}</button>
+                <span class="lumio-hotspot-counter">${typeof L === 'function' ? L('nav.counter', {current: i + 1, total: hotspots.length}) : (i + 1) + ' of ' + hotspots.length}</span>
+                <button class="btn btn-secondary btn-sm lumio-hotspot-next" onclick="event.stopPropagation(); lumioHotspotPanelNav(this, 1)">${typeof L === 'function' ? L('nav.next') : 'Next →'}</button>
               </div>` : ''}
             </div>`).join('')}
         </div>
@@ -2394,18 +2394,18 @@ function renderBlockContent(block, editable) {
         <div class="lumio-process-panel" style="${quoteCardBgStyle(ds)} color:${textColor}; border-radius:${radius}; border:${interactiveBorderStyle(ds)};">
           ${items.map((item, i) => `<div class="lumio-process-step ${i === currentStep ? 'active' : ''}" data-step="${i}">
             ${itemImageHtml(item, 200)}
-            ${showNumbers ? `<div class="lumio-process-stepnum">Step ${i + 1}</div>` : ''}
+            ${showNumbers ? `<div class="lumio-process-stepnum">${typeof L === 'function' ? L('process.step') : 'Step'} ${i + 1}</div>` : ''}
             <${headingTag} class="editable-text" data-role="title" data-field="itemTitle" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step ${i + 1}" style="margin:4px 0 6px; color:${textColor};">${richTextOut(item.title || (editable ? '' : 'Step ' + (i + 1)))}</${headingTag}>
             <div class="editable-text text-sm" data-role="body" data-field="itemBody" data-list="items" data-iindex="${i}" data-richtext="true" ${ce} data-placeholder="Step description...">${richTextOut(item.body || '')}</div>
             ${itemMediaExtrasHtml(item)}
           </div>`).join('')}
         </div>
         <div class="lumio-process-nav flex items-center justify-between mt-12">
-          <button class="btn btn-secondary btn-sm lumio-process-prev" ${items.length <= 1 || currentStep === 0 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), -1)">← Back</button>
+          <button class="btn btn-secondary btn-sm lumio-process-prev" ${items.length <= 1 || currentStep === 0 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), -1)">${typeof L === 'function' ? L('nav.back') : '← Back'}</button>
           <div class="lumio-process-indicators flex items-center gap-6" data-style="${indicatorStyle}">
             ${items.map((item, i) => `<span class="lumio-process-dot ${i === currentStep ? 'active' : ''}" data-step="${i}" onclick="event.stopPropagation(); lumioProcessGoto(this.closest('.lumio-process'), ${i})">${indicatorStyle === 'numbers' ? (i + 1) : ''}</span>`).join('')}
           </div>
-          <button class="btn btn-secondary btn-sm lumio-process-next" ${items.length <= 1 || currentStep === items.length - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), 1)">Next →</button>
+          <button class="btn btn-secondary btn-sm lumio-process-next" ${items.length <= 1 || currentStep === items.length - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); lumioProcessNav(this.closest('.lumio-process'), 1)">${typeof L === 'function' ? L('nav.next') : 'Next →'}</button>
         </div>
       </div>`;
     }
@@ -2517,7 +2517,7 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click flip icon to flip</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : '↻ Click flip icon to flip'}</div>` : ''}
             </div>
           `).join('')}
         </div>
@@ -2546,13 +2546,13 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">↻ Click flip icon to flip</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : '↻ Click flip icon to flip'}</div>` : ''}
             </div>
           `).join('')}
           <div class="flex items-center justify-between mt-12">
-            <button class="btn btn-secondary btn-sm fcs-prev" onclick="event.stopPropagation(); lumioFcsNav(this,-1)">← Prev</button>
+            <button class="btn btn-secondary btn-sm fcs-prev" onclick="event.stopPropagation(); lumioFcsNav(this,-1)">${typeof L === 'function' ? L('nav.previous') : '← Previous'}</button>
             <span class="text-sm text-muted fcs-progress">1 / ${items.length}</span>
-            <button class="btn btn-secondary btn-sm fcs-next" onclick="event.stopPropagation(); lumioFcsNav(this,1)">Next →</button>
+            <button class="btn btn-secondary btn-sm fcs-next" onclick="event.stopPropagation(); lumioFcsNav(this,1)">${typeof L === 'function' ? L('nav.next') : 'Next →'}</button>
           </div>
         </div>
       </div>`;
@@ -2600,7 +2600,7 @@ function renderBlockContent(block, editable) {
       const align = ds.align || 'center';
       const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
       return `<div style="${continueWrapperStyle(ds)} display:flex; justify-content:${justifyMap[align] || 'center'};">
-        <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || 'Continue')}</span></button>
+        <button class="btn lumio-continue-btn" style="${btnStyle}"><span class="editable-text" data-field="label" data-richtext="true" ${ce} data-placeholder="Continue" style="display:inline-block;">${richTextOut(d.label || (typeof L === 'function' ? L('continue.label') : 'Continue'))}</span></button>
       </div>`;
     }
     case 'numbered_divider': {
