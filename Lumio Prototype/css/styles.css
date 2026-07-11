@@ -2122,3 +2122,36 @@ button { font-family: var(--font-body); cursor: pointer; }
 .ws-logo--sidebar-large { max-width: 140px; height: auto; }
 .ws-logo--compact       { width: 32px; height: 32px; cursor: pointer; }
 .ws-logo--welcome       { max-width: 240px; max-height: 240px; margin: 0 auto; }
+
+/* ── Platform Icon Infrastructure (Sprint 6) ─────────────────── */
+/* ic--lumio: emoji pack — inherits font-size from context, no special sizing */
+.ic--lumio { line-height: 1; }
+
+/* ic--svg: SVG pack container — sizes the SVG to match context font-size */
+.ic--svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.ic--svg svg { width: 1em; height: 1em; display: block; }
+
+/* Nav icons use --ws-icon as stroke colour when SVG pack is active */
+.nav-item .ic--svg { color: var(--ws-icon, var(--ink-700)); }
+.nav-item.active .ic--svg { color: var(--ws-icon, var(--ws-primary, var(--indigo))); }
+
+/* ic--missing: stable layout placeholder for unregistered semantic IDs.
+   Fixed dimensions prevent layout shift. Low opacity ensures it is
+   visually neutral. Never contains text — developers see console.warn instead. */
+.ic--missing {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.25;
+  vertical-align: middle;
+  flex-shrink: 0;
+}

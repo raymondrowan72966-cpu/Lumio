@@ -1929,6 +1929,341 @@ function renderWorkspaceLogo(slot, opts = {}) {
   return `<img src="${src}" alt="Workspace logo" class="ws-logo ws-logo--${slot}"${idAttr} />`;
 }
 
+/* ── Platform Icon Infrastructure ─────────────────────────────── */
+
+// Private SVG inner content for each semantic ID (24×24 viewBox, stroke-based).
+// Only platformIcon() reads this. Pages must never reference _IC_PATHS directly.
+const _IC_PATHS = {
+  'projects':       '<path d="M2 8h20v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z"/><path d="M2 8V6a2 2 0 0 1 2-2h3.5L9 4h6l1.5 2H20a2 2 0 0 1 2 2"/>',
+  'hub':            '<path d="M22 10v1a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  'recent':         '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  'settings':       '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  'notifications':  '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  'sign-out':       '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  'success':        '<polyline points="20 6 9 17 4 12"/>',
+  'check':          '<polyline points="20 6 9 17 4 12"/>',
+  'info':           '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  'warning':        '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  'error':          '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+  'ai':             '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  'export-pack':    '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  'publish':        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  'submit-review':  '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  'review':         '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  'preview':        '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  'progress':       '<line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>',
+  'edit':           '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  'duplicate':      '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  'share':          '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+  'delete':         '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  'archive':        '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  'restore':        '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.75"/>',
+  'reject':         '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  'search':         '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  'email':          '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/>',
+  'password':       '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  'lock':           '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  'key':            '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  'save':           '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+  'cloud':          '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  'fullscreen':     '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
+  'close':          '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  'menu':           '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  'device-desktop': '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  'device-mobile':  '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+  'device-tablet':  '<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+  'notes':          '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  'globe':          '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  'rocket':         '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
+  'lightbulb':      '<line x1="9" y1="21" x2="15" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M12 3a7 7 0 0 1 7 7 7 7 0 0 0-4 6H9a7 7 0 0 0-4-6 7 7 0 0 1 7-7z"/>',
+  'arrow-up':       '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
+  'arrow-down':     '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+  'chevron-right':  '<polyline points="9 18 15 12 9 6"/>',
+  'chevron-left':   '<polyline points="15 18 9 12 15 6"/>',
+  'chevron-down':   '<polyline points="6 9 12 15 18 9"/>',
+};
+
+// Emoji for the Lumio (default) icon pack.
+const _IC_EMOJI = {
+  'projects':       '🗂️',
+  'hub':            '🎓',
+  'recent':         '⏱️',
+  'settings':       '⚙️',
+  'notifications':  '🔔',
+  'sign-out':       '↩️',
+  'success':        '✅',
+  'check':          '✓',
+  'info':           'ℹ️',
+  'warning':        '⚠️',
+  'error':          '❌',
+  'ai':             '✨',
+  'export-pack':    '📦',
+  'publish':        '📤',
+  'submit-review':  '📤',
+  'review':         '👀',
+  'preview':        '👁️',
+  'progress':       '⏳',
+  'edit':           '✏️',
+  'duplicate':      '⧉',
+  'share':          '🔗',
+  'delete':         '🗑️',
+  'archive':        '🗄️',
+  'restore':        '↩️',
+  'reject':         '↩️',
+  'search':         '🔍',
+  'email':          '✉️',
+  'password':       '🔒',
+  'lock':           '🔒',
+  'key':            '🔑',
+  'save':           '💾',
+  'cloud':          '☁️',
+  'fullscreen':     '⛶',
+  'close':          '✕',
+  'menu':           '☰',
+  'device-desktop': '🖥️',
+  'device-mobile':  '📱',
+  'device-tablet':  '📲',
+  'notes':          '📝',
+  'globe':          '🌐',
+  'rocket':         '🚀',
+  'lightbulb':      '💡',
+  'arrow-up':       '↑',
+  'arrow-down':     '↓',
+  'chevron-right':  '▸',
+  'chevron-left':   '◂',
+  'chevron-down':   '▾',
+  // Shell / UI IDs
+  'back':               '←',
+  'collapse-left':      '«',
+  'expand-right':       '»',
+  'drag-handle':        '⠿',
+  'flip':               '↻',
+  'more-options':       '⋯',
+  'align-left':         '⟸',
+  'align-center':       '≡',
+  'align-right':        '⟹',
+  'folder':             '📁',
+  'person':             '👤',
+  'team':               '👥',
+  'tag':                '🏷️',
+  'target':             '🎯',
+  'celebration':        '🎉',
+  'download':           '⬇',
+  'play':               '▶',
+  'upload-media':       '⬆',
+  'replace-media':      '🔄',
+  'image-placeholder':  '🖼️',
+  'video-placeholder':  '▶',
+  'audio-placeholder':  '🔊',
+  'word-count':         '#',
+  'remove':             '×',
+  // Block category IDs
+  'cat-recommended':     '✨',
+  'cat-text':            '📝',
+  'cat-statements':      '💬',
+  'cat-quotes':          '“',
+  'cat-lists':           '☰',
+  'cat-images':          '🖼️',
+  'cat-gallery':         '🎞️',
+  'cat-multimedia':      '🎬',
+  'cat-interactive':     '🧩',
+  'cat-charts':          '📊',
+  'cat-dividers':        '➖',
+  'cat-knowledge-checks':'✅',
+  // Block tile IDs
+  'block-heading':            'H',
+  'block-heading-paragraph':  'H¶',
+  'block-paragraph':          '¶',
+  'block-columns':            '▥',
+  'block-table':              '▦',
+  'block-statement-info':     'ℹ️',
+  'block-statement-tip':      '💡',
+  'block-statement-success':  '✅',
+  'block-statement-warning':  '⚠️',
+  'block-statement-error':    '⛔',
+  'block-statement-note':     '📝',
+  'block-quote':              '“',
+  'block-quote-image':        '“🖼',
+  'block-quote-carousel':     '🔄',
+  'block-list-numbered':      '1.',
+  'block-list-checkbox':      '☑',
+  'block-list-bullet':        '•',
+  'block-image':              '🖼',
+  'block-image-text':         '🖼¶',
+  'block-text-on-image':      '🖼T',
+  'block-carousel':           '🔄',
+  'block-grid':               '▦',
+  'block-audio':              '🔊',
+  'block-video':              '▶',
+  'block-file':               '📎',
+  'block-accordion':          '⬇',
+  'block-tabs':               '🗂',
+  'block-hotspot':            '📍',
+  'block-process':            '➡',
+  'block-scenario':           '🌳',
+  'block-flashcard-grid':     '🗃',
+  'block-flashcard-stack':    '🗂',
+  'block-button':             '🔘',
+  'block-chart-bar':          '📊',
+  'block-chart-line':         '📈',
+  'block-chart-pie':          '🥧',
+  'block-divider-continue':   '⏵',
+  'block-divider-numbered':   '①',
+  'block-divider-line':       '—',
+  'block-divider-spacer':     '⬜',
+  'block-kc-multiple-choice':  '◉',
+  'block-kc-multiple-response':'☑',
+  'block-kc-matching':         '⇄',
+  'block-kc-matching-cards':   '⊞',
+  'block-kc-fill-blank':       '▭',
+  'block-kc-ordering':         '↕',
+  // Media type category IDs (media picker tabs and dropzones)
+  'media-type-image':    '🖼️',
+  'media-type-audio':    '🎵',
+  'media-type-video':    '🎬',
+  'media-type-document': '📎',
+};
+
+// Published pack identifiers. Only 'lumio', 'outline', 'sketch' are implemented.
+// Reserved names route to 'lumio' until a future sprint implements them.
+const ICON_PACKS = {
+  lumio:     'lumio',
+  outline:   'outline',
+  sketch:    'sketch',
+  // reserved — not yet implemented:
+  corporate: 'corporate',
+  minimal:   'minimal',
+  rounded:   'rounded',
+  filled:    'filled',
+};
+
+// Artwork Completeness Contract — architectural invariant, not a runtime feature.
+// COMPLETE: every registered semantic ID has artwork in this pack.
+// INCOMPLETE: some semantic IDs are awaiting artwork (Lumio emoji fallback active).
+// RESERVED: pack is defined but no artwork work has begun.
+// A pack may not ship to production while its status is INCOMPLETE or RESERVED.
+const ICON_PACK_STATUS = {
+  lumio:     'COMPLETE',    // canonical fallback — every ID has a Lumio emoji
+  outline:   'INCOMPLETE',  // 47 / 133 IDs have SVG paths; awaiting Artwork Migration sprint
+  sketch:    'INCOMPLETE',  // 47 / 133 IDs have SVG paths; awaiting Artwork Migration sprint
+  corporate: 'RESERVED',
+  minimal:   'RESERVED',
+  rounded:   'RESERVED',
+  filled:    'RESERVED',
+};
+
+function _resolveIconPack() {
+  const id = LumioState.workspaceIdentity?.iconPack?.packId;
+  if (id === 'outline' || id === 'sketch') return id;
+  return 'lumio';
+}
+
+/**
+ * Returns an HTML string for a platform icon by semantic ID.
+ *
+ * Fallback chain:
+ *   Requested pack (SVG)  →  Lumio pack (emoji)  →  ic--missing placeholder
+ *
+ * Pages must never decide which icon, emoji, SVG, or colour to use —
+ * only this function knows those details.
+ */
+function platformIcon(semanticId) {
+  const pack = _resolveIconPack();
+
+  // SVG packs: try requested pack artwork first, then fall through to Lumio
+  if (pack === 'outline' || pack === 'sketch') {
+    const paths = _IC_PATHS[semanticId];
+    if (paths) {
+      const sw  = pack === 'sketch' ? '2.5' : '2';
+      const cls = `ic ic--svg ic--${pack}`;
+      return `<span class="${cls}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg></span>`;
+    }
+    // SVG artwork missing for this ID — fall through to Lumio pack
+  }
+
+  // Lumio pack: canonical fallback for all packs
+  const emoji = _IC_EMOJI[semanticId];
+  if (emoji) {
+    return `<span class="ic ic--lumio">${emoji}</span>`;
+  }
+
+  // Unknown semantic ID — developer diagnostic; never exposes ID to users
+  console.warn('[platformIcon] Unknown semantic ID: "' + semanticId + '". Register it in _IC_EMOJI before use.');
+  return `<span class="ic ic--missing" aria-hidden="true"></span>`;
+}
+
+/**
+ * Development-only validation helper. Run from the browser console:
+ *   validateIconRegistry()
+ *
+ * Checks:
+ *   • every ID in _IC_PATHS also exists in _IC_EMOJI (no orphan SVG paths)
+ *   • reports which IDs have SVG artwork and which are awaiting artwork
+ *
+ * No user-facing behaviour. No side effects on the running app.
+ */
+function validateIconRegistry() {
+  const emojiIds = Object.keys(_IC_EMOJI);
+  const pathIds  = Object.keys(_IC_PATHS);
+  const emojiSet = new Set(emojiIds);
+  const pathSet  = new Set(pathIds);
+  const errors   = [];
+  const warnings = [];
+
+  // Orphan SVG paths: in _IC_PATHS but absent from _IC_EMOJI
+  pathIds.forEach(function(id) {
+    if (!emojiSet.has(id)) {
+      errors.push('Orphan SVG path (no Lumio emoji registered): "' + id + '"');
+    }
+  });
+
+  // IDs with full artwork (SVG paths present)
+  const withArtwork    = emojiIds.filter(function(id) { return pathSet.has(id); });
+  // IDs awaiting SVG artwork (Lumio emoji only)
+  const awaitingArtwork = emojiIds.filter(function(id) { return !pathSet.has(id); });
+
+  // Pack completeness — cross-reference ICON_PACK_STATUS with actual counts
+  var total = emojiIds.length;
+  var packReport = {
+    lumio:   { count: total, total: total, status: ICON_PACK_STATUS.lumio },
+    outline: { count: withArtwork.length, total: total, status: ICON_PACK_STATUS.outline },
+    sketch:  { count: withArtwork.length, total: total, status: ICON_PACK_STATUS.sketch },
+  };
+
+  console.group('[validateIconRegistry]');
+  if (errors.length) {
+    console.group('ERRORS (' + errors.length + ')');
+    errors.forEach(function(e) { console.error(e); });
+    console.groupEnd();
+  }
+  if (warnings.length) {
+    console.group('WARNINGS (' + warnings.length + ')');
+    warnings.forEach(function(w) { console.warn(w); });
+    console.groupEnd();
+  }
+  console.info('Total semantic IDs  : ' + total);
+  console.info('SVG artwork ready   : ' + withArtwork.length + ' — ' + withArtwork.join(', '));
+  console.info('Awaiting SVG artwork: ' + awaitingArtwork.length + ' — ' + awaitingArtwork.join(', '));
+
+  console.group('Pack Completeness');
+  Object.keys(packReport).forEach(function(packId) {
+    var r = packReport[packId];
+    var pct = Math.round((r.count / r.total) * 100);
+    var label = r.status === 'COMPLETE'
+      ? '✓ COMPLETE'
+      : '✗ INCOMPLETE — blocked from release until Artwork Migration sprint completes';
+    console.info(packId + ' : ' + r.count + ' / ' + r.total + ' (' + pct + '%) — ' + label);
+  });
+  console.groupEnd();
+
+  if (errors.length === 0 && warnings.length === 0) {
+    console.info('Registry valid — no errors or warnings.');
+  }
+  console.groupEnd();
+
+  return { errors: errors, warnings: warnings, emojiIds: emojiIds, pathIds: pathIds, withArtwork: withArtwork, awaitingArtwork: awaitingArtwork, packReport: packReport };
+}
+
 /**
  * Return the workspace identity object from LumioState, initialising it with
  * Lumio defaults if it has never been set.  This is the ONLY place the default
@@ -2648,16 +2983,16 @@ function confirmLeaveModal(message, onConfirm) {
    ──────────────────────────────────────────────────────────── */
 const NotifySystem = (() => {
   const _TYPE_META = {
-    success:  { icon: '✅', duration: 3500 },
-    info:     { icon: 'ℹ️', duration: 4000 },
-    warning:  { icon: '⚠️', duration: 6000 },
-    error:    { icon: '❌', duration: null  },
-    ai:       { icon: '✨', duration: 4000 },
-    export:   { icon: '📦', duration: 4000 },
-    publish:  { icon: '📤', duration: 4000 },
-    system:   { icon: '🔔', duration: 4000 },
-    review:   { icon: '👀', duration: 4000 },
-    progress: { icon: '⏳', duration: null  },
+    success:  { iconId: 'success',       duration: 3500 },
+    info:     { iconId: 'info',          duration: 4000 },
+    warning:  { iconId: 'warning',       duration: 6000 },
+    error:    { iconId: 'error',         duration: null  },
+    ai:       { iconId: 'ai',            duration: 4000 },
+    export:   { iconId: 'export-pack',   duration: 4000 },
+    publish:  { iconId: 'publish',       duration: 4000 },
+    system:   { iconId: 'notifications', duration: 4000 },
+    review:   { iconId: 'review',        duration: 4000 },
+    progress: { iconId: 'progress',      duration: null  },
   };
 
   // Which types persist to the notification centre
@@ -2716,7 +3051,8 @@ const NotifySystem = (() => {
       id: generateUniqueId('n'), userId: uid,
       message: opts.message,
       detail: opts.detail || null,
-      icon: opts.icon || meta.icon,
+      icon: opts.icon || null,
+      iconId: meta.iconId,
       type,
       projectId: opts.projectId || null,
       dest: opts.dest || null,
@@ -2747,10 +3083,10 @@ const NotifySystem = (() => {
   }
 
   function _render(id, opts) {
-    const type  = opts.type || 'info';
-    const meta  = _TYPE_META[type] || _TYPE_META.info;
-    const icon  = opts.icon !== undefined ? opts.icon : meta.icon;
-    const dur   = opts.duration !== undefined ? opts.duration : meta.duration;
+    const type     = opts.type || 'info';
+    const meta     = _TYPE_META[type] || _TYPE_META.info;
+    const iconHtml = opts.icon !== undefined ? opts.icon : platformIcon(meta.iconId);
+    const dur      = opts.duration !== undefined ? opts.duration : meta.duration;
     const isErr = type === 'error';
 
     const div = document.createElement('div');
@@ -2763,7 +3099,7 @@ const NotifySystem = (() => {
     ).join('');
 
     div.innerHTML = `
-      ${icon ? `<span class="notify-icon">${icon}</span>` : ''}
+      ${iconHtml ? `<span class="notify-icon">${iconHtml}</span>` : ''}
       <div class="notify-body">
         <span class="notify-msg">${escapeHtml(opts.message)}</span>
         ${opts.detail ? `<span class="notify-detail">${escapeHtml(opts.detail)}</span>` : ''}
@@ -2823,10 +3159,10 @@ const NotifySystem = (() => {
 
     el.className = `notify-item notify-${type}`;
     const meta = _TYPE_META[type] || _TYPE_META.success;
-    const newIcon = meta.icon;
+    const newIconHtml = platformIcon(meta.iconId);
 
     const iconEl = el.querySelector('.notify-icon');
-    if (iconEl) iconEl.textContent = newIcon;
+    if (iconEl) iconEl.innerHTML = newIconHtml;
 
     const msgEl = el.querySelector('.notify-msg');
     if (msgEl) msgEl.textContent = msg || opts.message;
@@ -2846,7 +3182,7 @@ const NotifySystem = (() => {
       entry.timer = setTimeout(() => _leave(id), newDur);
     }
     if (_PERSIST_TYPES.has(type)) {
-      _persist({ message: msg || opts.message, projectId: opts.projectId, icon: newIcon, dest: opts.dest }, type);
+      _persist({ message: msg || opts.message, projectId: opts.projectId, dest: opts.dest }, type);
     }
   }
 
@@ -2903,8 +3239,8 @@ function ambientBlobs(colors) {
 
 /* ---------------- APP SHELL ---------------- */
 const NAV_ITEMS = [
-  { id: 'projects', label: 'Projects', icon: '🗂️', hash: '#/projects' },
-  { id: 'hub', label: 'ID Academy', icon: '🎓', hash: '#/hub' },
+  { id: 'projects', label: 'Projects', iconId: 'projects', hash: '#/projects' },
+  { id: 'hub', label: 'ID Academy', iconId: 'hub', hash: '#/hub' },
 ];
 
 function renderShell(activeId, contentHtml, opts = {}) {
@@ -2919,29 +3255,29 @@ function renderShell(activeId, contentHtml, opts = {}) {
         </div>
         ${NAV_ITEMS.map(item => `
           <div class="nav-item ${item.id === activeId ? 'active' : ''}" data-nav="${item.hash}">
-            <span class="ic">${item.icon}</span>
+            ${platformIcon(item.iconId)}
             <span>${item.label}</span>
           </div>
         `).join('')}
         <div class="nav-section-label">Workspace</div>
         <div class="nav-item ${activeId === 'recent' ? 'active' : ''}" data-nav="#/recent">
-          <span class="ic">⏱️</span><span>Recent</span>
+          ${platformIcon('recent')}<span>Recent</span>
         </div>
         <div class="nav-item ${activeId === 'trash' ? 'active' : ''}" data-nav="#/trash">
-          <span class="ic">🗑️</span><span>Trash</span>
+          ${platformIcon('delete')}<span>Trash</span>
         </div>
         ${canAccessWorkspaceSettings() ? `
         <div class="nav-item ${activeId === 'workspace-settings' ? 'active' : ''}" data-nav="#/workspace-settings">
-          <span class="ic">⚙️</span><span>Workspace Settings</span>
+          ${platformIcon('settings')}<span>Workspace Settings</span>
         </div>
         ` : ''}
         <div style="flex:1"></div>
         <div class="nav-item" id="notif-bell-trigger" style="position:relative;">
-          <span class="ic">🔔</span><span>Notifications</span>
+          ${platformIcon('notifications')}<span>Notifications</span>
           ${myUnreadNotificationCount() > 0 ? `<span class="pill pill-magenta" style="margin-left:auto; min-width:20px; text-align:center; padding:2px 6px;">${myUnreadNotificationCount()}</span>` : ''}
         </div>
         <div class="nav-item" data-nav="#/login">
-          <span class="ic">↩️</span><span>Sign out</span>
+          ${platformIcon('sign-out')}<span>Sign out</span>
         </div>
         <div class="nav-item ${activeId === 'profile' ? 'active' : ''}" data-nav="#/profile" style="border-top:1px solid var(--border); margin-top:8px; border-radius:0;">
           ${avatarHtml(getCurrentUser() || {})}
@@ -3032,9 +3368,9 @@ function _navTo(dest) {
 function openNotificationsPanel() {
   if (document.querySelector('.notif-centre')) return;
 
-  const _TYPE_ICONS = {
-    review: '👀', error: '❌', warning: '⚠️', success: '✅',
-    ai: '✨', export: '📦', publish: '📤', system: '🔔', info: 'ℹ️',
+  const _TYPE_ICON_IDS = {
+    review: 'review', error: 'error', warning: 'warning', success: 'success',
+    ai: 'ai', export: 'export-pack', publish: 'publish', system: 'notifications', info: 'info',
   };
 
   function _timeAgo(ts) {
@@ -3073,12 +3409,14 @@ function openNotificationsPanel() {
       return;
     }
     list$.innerHTML = items.map(n => {
-      const icon = n.icon || _TYPE_ICONS[n.type] || '🔔';
+      const iconHtml = n.iconId
+        ? platformIcon(n.iconId)
+        : (n.icon || platformIcon(_TYPE_ICON_IDS[n.type] || 'notifications'));
       const canNav = !!(n.dest || n.projectId);
       return `
         <div class="notif-centre-item ${n.read ? '' : 'unread'} ${canNav ? 'clickable' : ''}"
              data-nid="${n.id}" data-pid="${n.projectId || ''}">
-          <span class="nc-icon">${icon}</span>
+          <span class="nc-icon">${iconHtml}</span>
           <div class="nc-body">
             <div class="nc-msg">${escapeHtml(n.message)}</div>
             ${n.detail ? `<div class="nc-detail">${escapeHtml(n.detail)}</div>` : ''}

@@ -222,7 +222,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
           return `
           <div class="lp-nav-lesson ${l.id === activeLessonId ? 'selected' : ''} ${lessonLocked ? 'locked' : ''}" data-lesson="${l.id}" data-locked="${lessonLocked}"
             style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${l.id === activeLessonId ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${lessonLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
-            ${lessonLocked ? `<span style="font-size:14px;">🔒</span>` : lessonDonut(state)}
+            ${lessonLocked ? `<span style="font-size:14px;">${platformIcon('lock')}</span>` : lessonDonut(state)}
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.title}</div>
               <div class="text-sm text-muted">${l.duration || ''}</div>
@@ -240,7 +240,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
           return `
           <div class="lp-nav-assessment ${isActive ? 'selected' : ''} ${assessmentLocked ? 'locked' : ''}" data-lesson="${a.id}" data-locked="${assessmentLocked}"
             style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid ${isActive ? 'var(--theme-primary, var(--indigo))' : 'var(--border)'}; box-shadow:none; ${assessmentLocked ? 'opacity:0.55; cursor:not-allowed;' : 'cursor:pointer;'}">
-            <span>${assessmentLocked ? '🔒' : '📝'}</span>
+            <span>${assessmentLocked ? platformIcon('lock') : platformIcon('notes')}</span>
             <div style="flex:1; min-width:0;">
               <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.title}</div>
               <div class="text-sm text-muted">${a.type || L('sidebar.quiz')}</div>
@@ -252,9 +252,9 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
 }
 
 const LEARNER_DEVICE_FRAMES = {
-  desktop: { width: '1080px', label: '🖥️ Desktop' },
-  tablet:  { width: '768px',  label: '📱 Tablet' },
-  mobile:  { width: '390px',  label: '📲 Mobile' },
+  desktop: { width: '1080px', labelKey: 'device-desktop', labelText: 'Desktop' },
+  tablet:  { width: '768px',  labelKey: 'device-tablet',  labelText: 'Tablet'  },
+  mobile:  { width: '390px',  labelKey: 'device-mobile',  labelText: 'Mobile'  },
 };
 
 function learnerDeviceFrameStyle(device) {
@@ -270,7 +270,7 @@ function learnerDeviceFrameStyle(device) {
 function learnerDeviceSwitcherHtml(device) {
   return `
     <div class="seg-control" id="lp-device-switch" style="flex:0 0 auto; width:auto;">
-      ${Object.entries(LEARNER_DEVICE_FRAMES).map(([key, f]) => `<button data-val="${key}" class="${device === key ? 'active' : ''}" title="${f.label}" style="flex:0 0 auto; padding:8px 10px; white-space:nowrap;">${f.label}</button>`).join('')}
+      ${Object.entries(LEARNER_DEVICE_FRAMES).map(([key, f]) => `<button data-val="${key}" class="${device === key ? 'active' : ''}" title="${f.labelText}" style="flex:0 0 auto; padding:8px 10px; white-space:nowrap;">${platformIcon(f.labelKey)} ${f.labelText}</button>`).join('')}
     </div>`;
 }
 
@@ -326,7 +326,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
 
   const prodHeader = `
     <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
-      ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="${L('a11y.open_nav')}">☰</button>` : ''}
+      ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="${L('a11y.open_nav')}">${platformIcon('menu')}</button>` : ''}
       ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.back')}</button>` : ''}
       <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
       ${progressBarHtml(course, progress)}
@@ -414,13 +414,13 @@ function learnerShell(course, bodyHtml, opts = {}) {
         ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'lp-logo' })}
         ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.return')}</button>` : ''}
         <strong style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
-        <span class="pill pill-indigo">👁️ Learner Preview</span>
+        <span class="pill pill-indigo">${platformIcon('preview')} Learner Preview</span>
       </div>
       <div class="flex items-center gap-16" style="flex-wrap:wrap;">
         ${learnerDeviceSwitcherHtml(device)}
-        <button class="btn btn-secondary btn-sm" id="lp-fullscreen">⛶ Full Screen Preview</button>
+        <button class="btn btn-secondary btn-sm" id="lp-fullscreen">${platformIcon('fullscreen')} Full Screen Preview</button>
         ${progressBarHtml(course, progress)}
-        <button class="btn btn-secondary btn-sm" id="lp-exit">✕ Exit Preview</button>
+        <button class="btn btn-secondary btn-sm" id="lp-exit">${platformIcon('close')} Exit Preview</button>
       </div>
     </header>`;
 
@@ -434,7 +434,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       app.innerHTML = `
         <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
           <div id="lp-header" style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface-0);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="display:flex;">
             ${sidebarHtml}
@@ -445,7 +445,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       `;
     } else if (isMobile) {
       // Fullscreen mobile: drawer sidebar overlaying device frame
-      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ ${L('nav.open_lessons')}</button>` : '';
+      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} ${L('nav.open_lessons')}</button>` : '';
       const mobileBodyHtml = !isOverview ? `
         <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
           ${mobileMenuBtn}
@@ -454,7 +454,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       app.innerHTML = `
         <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
           <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center;">
             ${sidebarHtml}
@@ -471,7 +471,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
       app.innerHTML = `
         <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
           <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">✕ Exit Full Screen</button>
+            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="flex:1; display:flex; min-height:0;">
             ${sidebarHtml}
@@ -531,7 +531,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
     // Normal mobile: drawer sidebar overlaying device frame, ☰ Lessons button in-frame
     const mobileBodyHtml = !isOverview ? `
       <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
-        <button class="btn btn-secondary btn-sm" id="lp-menu-toggle">☰ Lessons</button>
+        <button class="btn btn-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} Lessons</button>
         ${progressBarHtml(course, progress)}
       </div>${bodyHtml}` : bodyHtml;
     app.innerHTML = `
@@ -872,7 +872,7 @@ function renderLearnerLesson(course, lessonId) {
         progress.courseCompletedAt = Date.now();
         scheduleLumioSave();
         navigate('#/learner/' + course.id);
-        setTimeout(() => toast(L('complete.all_done'), '🎉'), 50);
+        setTimeout(() => NotifySystem.notify({ message: L('complete.all_done'), type: 'success' }), 50);
       } else {
         navigate('#/learner/' + course.id + '/' + course.assessments[assessmentIdx + 1].id);
       }
@@ -884,7 +884,7 @@ function renderLearnerLesson(course, lessonId) {
         progress.courseCompletedAt = Date.now();
         scheduleLumioSave();
         navigate('#/learner/' + course.id);
-        setTimeout(() => toast(L('complete.all_done'), '🎉'), 50);
+        setTimeout(() => NotifySystem.notify({ message: L('complete.all_done'), type: 'success' }), 50);
       }
     } else {
       navigate('#/learner/' + course.id + '/' + course.lessons[lessonIdx + 1].id);
@@ -1462,7 +1462,7 @@ function learnerKcMatchingCards(block, index, ctx) {
       let zoneContent;
       if (isFeedback) {
         const fbClass = feedback.correct ? 'kc-mc-feedback-correct' : 'kc-mc-feedback-incorrect';
-        const fbIcon = feedback.correct ? '✓' : '✕';
+        const fbIcon = feedback.correct ? platformIcon('check') : platformIcon('close');
         zoneContent = `<div class="kc-mc-feedback-card ${fbClass}">
           <span class="kc-mc-feedback-icon">${fbIcon}</span>
           <span>${escapeHtml(feedback.text || '')}</span>

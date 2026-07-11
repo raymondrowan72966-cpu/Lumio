@@ -16,7 +16,7 @@ const MEDIA_PICKER_KINDS = {
     formatsLabel: 'PNG, JPG, JPEG, WEBP, GIF, SVG',
     maxLabel: _formatUploadLimit(UPLOAD_LIMITS.image),
     noun: 'image',
-    icon: '🖼️',
+    iconId: 'media-type-image',
     errorLabel: 'a PNG, JPG, JPEG, WEBP, GIF, or SVG image',
     defaultMime: 'image/png',
   },
@@ -28,7 +28,7 @@ const MEDIA_PICKER_KINDS = {
     formatsLabel: 'MP3, WAV, M4A, OGG',
     maxLabel: _formatUploadLimit(UPLOAD_LIMITS.audio),
     noun: 'audio file',
-    icon: '🎵',
+    iconId: 'media-type-audio',
     errorLabel: 'an MP3, WAV, M4A, or OGG audio file',
     defaultMime: 'audio/mpeg',
   },
@@ -40,7 +40,7 @@ const MEDIA_PICKER_KINDS = {
     formatsLabel: 'MP4, WEBM, MOV',
     maxLabel: _formatUploadLimit(UPLOAD_LIMITS.video),
     noun: 'video',
-    icon: '🎬',
+    iconId: 'media-type-video',
     errorLabel: 'an MP4, WEBM, or MOV video file',
     defaultMime: 'video/mp4',
   },
@@ -61,7 +61,7 @@ const MEDIA_PICKER_KINDS = {
     formatsLabel: 'PDF, DOCX, PPTX, XLSX, CSV, TXT, ZIP',
     maxLabel: _formatUploadLimit(UPLOAD_LIMITS.document),
     noun: 'document',
-    icon: '📎',
+    iconId: 'media-type-document',
     errorLabel: 'a PDF, DOCX, PPTX, XLSX, CSV, TXT, or ZIP file',
     defaultMime: 'application/octet-stream',
   },
@@ -158,7 +158,7 @@ function openMediaPicker(opts) {
         </div>`;
       } else if (kind === 'audio') {
         preview = `<div class="mp-audio-preview" style="padding:16px; text-align:center;">
-             <div style="font-size:32px;">${cfg.icon}</div>
+             <div style="font-size:32px;">${platformIcon(cfg.iconId)}</div>
              <div class="text-sm mt-8" style="word-break:break-all;">${escapeHtml(state.fileName || 'Audio file')}</div>
              <audio controls src="${state.src}" style="width:100%; margin-top:12px;"></audio>
            </div>`;
@@ -169,14 +169,14 @@ function openMediaPicker(opts) {
            </div>`;
       } else {
         preview = `<div class="mp-file-preview" style="padding:24px; text-align:center;">
-             <div style="font-size:32px;">${cfg.icon}</div>
+             <div style="font-size:32px;">${platformIcon(cfg.iconId)}</div>
              <div class="text-sm mt-8" style="word-break:break-all;">${escapeHtml(state.fileName || 'File')}</div>
              ${state.size ? `<div class="text-sm text-muted mt-4">${formatFileSize(state.size)}</div>` : ''}
            </div>`;
       }
     } else {
       preview = `<div class="mp-dropzone-empty">
-             <div class="mp-dropzone-icon">${cfg.icon}</div>
+             <div class="mp-dropzone-icon">${platformIcon(cfg.iconId)}</div>
              <p class="text-sm text-muted mt-8">Drag &amp; drop ${isImage ? 'an image' : kind === 'audio' ? 'an audio file' : kind === 'video' ? 'a video file' : 'a file'} here, or browse</p>
            </div>`;
     }
@@ -192,8 +192,8 @@ function openMediaPicker(opts) {
           </div>
           <input type="file" id="mp-file-input" accept="${mediaPickerFileAccept(opts)}" style="display:none" />
           <div class="flex gap-12 mt-12" style="flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" id="mp-browse">${state.src ? `🔄 Replace ${nounCap}` : '📤 Browse File'}</button>
-            ${state.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="mp-remove">🗑️ Remove ${nounCap}</button>` : ''}
+            <button class="btn btn-secondary btn-sm" id="mp-browse">${state.src ? `${platformIcon('replace-media')} Replace ${nounCap}` : `${platformIcon('upload-media')} Browse File`}</button>
+            ${state.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="mp-remove">${platformIcon('delete')} Remove ${nounCap}</button>` : ''}
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: ${cfg.formatsLabel} · Max size ${cfg.maxLabel}.</div>
           <div id="mp-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>

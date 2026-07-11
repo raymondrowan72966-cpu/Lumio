@@ -105,14 +105,14 @@ function paintLogin() {
         <div class="field">
           <label>Email Address</label>
           <div class="input-icon-wrap">
-            <span class="icon">✉️</span>
+            <span class="icon">${platformIcon('email')}</span>
             <input class="input" id="login-email" type="email" placeholder="you@company.com" />
           </div>
         </div>
         <div class="field">
           <label>Password</label>
           <div class="input-icon-wrap" style="position:relative;">
-            <span class="icon">🔒</span>
+            <span class="icon">${platformIcon('password')}</span>
             <input class="input" id="login-password" type="password" placeholder="${isRegister ? 'Create a password (min. 8 characters)' : 'Enter your password'}" />
           </div>
         </div>
@@ -261,7 +261,7 @@ function paintForgotPassword() {
       <div class="field">
         <label>Email Address</label>
         <div class="input-icon-wrap">
-          <span class="icon">✉️</span>
+          <span class="icon">${platformIcon('email')}</span>
           <input class="input" id="forgot-email" type="email" placeholder="you@company.com" />
         </div>
       </div>

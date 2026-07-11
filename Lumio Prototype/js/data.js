@@ -4,9 +4,9 @@
 
 const LumioData = {
   folders: [
-    { id: 'f1', name: 'Onboarding', color: 'indigo', icon: '📁' },
-    { id: 'f2', name: 'Compliance', color: 'orange', icon: '📁' },
-    { id: 'f3', name: 'Product Training', color: 'magenta', icon: '📁' },
+    { id: 'f1', name: 'Onboarding', color: 'indigo', semanticId: 'folder' },
+    { id: 'f2', name: 'Compliance', color: 'orange', semanticId: 'folder' },
+    { id: 'f3', name: 'Product Training', color: 'magenta', semanticId: 'folder' },
   ],
 
   // gradient thumbnail presets, rotated across cards
@@ -756,77 +756,77 @@ const LumioData = {
   // BLOCK LIBRARY DEFINITION
   // ============================================================
   blockLibrary: [
-    { category: 'Recommended', dynamic: true, icon: '✨', blocks: [] },
-    { category: 'Text', icon: '📝', blocks: [
-      { id: 'heading', name: 'Heading', icon: 'H' },
-      { id: 'heading_paragraph', name: 'Heading & Paragraph', icon: 'H¶' },
-      { id: 'paragraph', name: 'Paragraph', icon: '¶' },
-      { id: 'columns', name: 'Columns', icon: '▥' },
-      { id: 'table', name: 'Table', icon: '▦' },
+    { category: 'Recommended', dynamic: true, semanticId: 'cat-recommended', blocks: [] },
+    { category: 'Text', semanticId: 'cat-text', blocks: [
+      { id: 'heading', name: 'Heading', semanticId: 'block-heading' },
+      { id: 'heading_paragraph', name: 'Heading & Paragraph', semanticId: 'block-heading-paragraph' },
+      { id: 'paragraph', name: 'Paragraph', semanticId: 'block-paragraph' },
+      { id: 'columns', name: 'Columns', semanticId: 'block-columns' },
+      { id: 'table', name: 'Table', semanticId: 'block-table' },
     ]},
-    { category: 'Statements', icon: '💬', blocks: [
-      { id: 'stmt_info', name: 'Information', icon: 'ℹ️' },
-      { id: 'stmt_tip', name: 'Tip', icon: '💡' },
-      { id: 'stmt_success', name: 'Success', icon: '✅' },
-      { id: 'stmt_warning', name: 'Warning', icon: '⚠️' },
-      { id: 'stmt_error', name: 'Error / Critical Alert', icon: '⛔' },
-      { id: 'stmt_note', name: 'Note', icon: '📝' },
+    { category: 'Statements', semanticId: 'cat-statements', blocks: [
+      { id: 'stmt_info', name: 'Information', semanticId: 'block-statement-info' },
+      { id: 'stmt_tip', name: 'Tip', semanticId: 'block-statement-tip' },
+      { id: 'stmt_success', name: 'Success', semanticId: 'block-statement-success' },
+      { id: 'stmt_warning', name: 'Warning', semanticId: 'block-statement-warning' },
+      { id: 'stmt_error', name: 'Error / Critical Alert', semanticId: 'block-statement-error' },
+      { id: 'stmt_note', name: 'Note', semanticId: 'block-statement-note' },
     ]},
-    { category: 'Quotes', icon: '”', blocks: [
-      { id: 'quote1', name: 'Quote Style 1', icon: '”' },
-      { id: 'quote2', name: 'Quote Style 2', icon: '”' },
-      { id: 'quote3', name: 'Quote Style 3', icon: '”' },
-      { id: 'quote4', name: 'Quote Style 4', icon: '”' },
-      { id: 'quote_image', name: 'Quote on Image', icon: '🖼”' },
-      { id: 'quote_carousel', name: 'Quote Carousel', icon: '🔄' },
+    { category: 'Quotes', semanticId: 'cat-quotes', blocks: [
+      { id: 'quote1', name: 'Quote Style 1', semanticId: 'block-quote' },
+      { id: 'quote2', name: 'Quote Style 2', semanticId: 'block-quote' },
+      { id: 'quote3', name: 'Quote Style 3', semanticId: 'block-quote' },
+      { id: 'quote4', name: 'Quote Style 4', semanticId: 'block-quote' },
+      { id: 'quote_image', name: 'Quote on Image', semanticId: 'block-quote-image' },
+      { id: 'quote_carousel', name: 'Quote Carousel', semanticId: 'block-quote-carousel' },
     ]},
-    { category: 'Lists', icon: '☰', blocks: [
-      { id: 'list_numbered', name: 'Numbered', icon: '1.' },
-      { id: 'list_checkbox', name: 'Checkbox', icon: '☑' },
-      { id: 'list_bullet', name: 'Bullet', icon: '•' },
+    { category: 'Lists', semanticId: 'cat-lists', blocks: [
+      { id: 'list_numbered', name: 'Numbered', semanticId: 'block-list-numbered' },
+      { id: 'list_checkbox', name: 'Checkbox', semanticId: 'block-list-checkbox' },
+      { id: 'list_bullet', name: 'Bullet', semanticId: 'block-list-bullet' },
     ]},
-    { category: 'Images', icon: '🖼️', blocks: [
-      { id: 'image', name: 'Image', icon: '🖼' },
-      { id: 'image_text', name: 'Image & Text', icon: '🖼¶' },
-      { id: 'text_on_image', name: 'Text on Image', icon: '🖼T' },
+    { category: 'Images', semanticId: 'cat-images', blocks: [
+      { id: 'image', name: 'Image', semanticId: 'block-image' },
+      { id: 'image_text', name: 'Image & Text', semanticId: 'block-image-text' },
+      { id: 'text_on_image', name: 'Text on Image', semanticId: 'block-text-on-image' },
     ]},
-    { category: 'Gallery', icon: '🎞️', blocks: [
-      { id: 'carousel', name: 'Carousel', icon: '🔄' },
-      { id: 'column_grid', name: 'Column Grid', icon: '▦' },
+    { category: 'Gallery', semanticId: 'cat-gallery', blocks: [
+      { id: 'carousel', name: 'Carousel', semanticId: 'block-carousel' },
+      { id: 'column_grid', name: 'Column Grid', semanticId: 'block-grid' },
     ]},
-    { category: 'Multimedia', icon: '🎬', blocks: [
-      { id: 'audio', name: 'Audio', icon: '🔊' },
-      { id: 'video', name: 'Video', icon: '▶' },
-      { id: 'file', name: 'File Attachment', icon: '📎' },
+    { category: 'Multimedia', semanticId: 'cat-multimedia', blocks: [
+      { id: 'audio', name: 'Audio', semanticId: 'block-audio' },
+      { id: 'video', name: 'Video', semanticId: 'block-video' },
+      { id: 'file', name: 'File Attachment', semanticId: 'block-file' },
     ]},
-    { category: 'Interactive', icon: '🧩', blocks: [
-      { id: 'accordion', name: 'Accordion', icon: '⬇' },
-      { id: 'tabs', name: 'Tabs', icon: '🗂' },
-      { id: 'labelled_graphic', name: 'Labelled Graphics', icon: '📍' },
-      { id: 'process', name: 'Process', icon: '➡' },
-      { id: 'scenario', name: 'Scenario', icon: '🌳' },
-      { id: 'flashcard_grid', name: 'Flashcard Grid', icon: '🗃' },
-      { id: 'flashcard_stack', name: 'Flashcard Stack', icon: '🗂' },
-      { id: 'button', name: 'Button', icon: '🔘' },
+    { category: 'Interactive', semanticId: 'cat-interactive', blocks: [
+      { id: 'accordion', name: 'Accordion', semanticId: 'block-accordion' },
+      { id: 'tabs', name: 'Tabs', semanticId: 'block-tabs' },
+      { id: 'labelled_graphic', name: 'Labelled Graphics', semanticId: 'block-hotspot' },
+      { id: 'process', name: 'Process', semanticId: 'block-process' },
+      { id: 'scenario', name: 'Scenario', semanticId: 'block-scenario' },
+      { id: 'flashcard_grid', name: 'Flashcard Grid', semanticId: 'block-flashcard-grid' },
+      { id: 'flashcard_stack', name: 'Flashcard Stack', semanticId: 'block-flashcard-stack' },
+      { id: 'button', name: 'Button', semanticId: 'block-button' },
     ]},
-    { category: 'Charts', icon: '📊', blocks: [
-      { id: 'chart_bar', name: 'Bar', icon: '📊' },
-      { id: 'chart_line', name: 'Line', icon: '📈' },
-      { id: 'chart_pie', name: 'Pie', icon: '🥧' },
+    { category: 'Charts', semanticId: 'cat-charts', blocks: [
+      { id: 'chart_bar', name: 'Bar', semanticId: 'block-chart-bar' },
+      { id: 'chart_line', name: 'Line', semanticId: 'block-chart-line' },
+      { id: 'chart_pie', name: 'Pie', semanticId: 'block-chart-pie' },
     ]},
-    { category: 'Dividers', icon: '➖', blocks: [
-      { id: 'continue', name: 'Continue', icon: '⏵' },
-      { id: 'numbered_divider', name: 'Numbered Divider', icon: '①' },
-      { id: 'line_divider', name: 'Line Divider', icon: '—' },
-      { id: 'spacer', name: 'Spacer', icon: '⬜' },
+    { category: 'Dividers', semanticId: 'cat-dividers', blocks: [
+      { id: 'continue', name: 'Continue', semanticId: 'block-divider-continue' },
+      { id: 'numbered_divider', name: 'Numbered Divider', semanticId: 'block-divider-numbered' },
+      { id: 'line_divider', name: 'Line Divider', semanticId: 'block-divider-line' },
+      { id: 'spacer', name: 'Spacer', semanticId: 'block-divider-spacer' },
     ]},
-    { category: 'Knowledge Checks', icon: '✅', blocks: [
-      { id: 'kc_multiple_choice', name: 'Multiple Choice', icon: '◉' },
-      { id: 'kc_multiple_response', name: 'Multiple Response', icon: '☑' },
-      { id: 'kc_matching', name: 'Matching', icon: '⇄' },
-      { id: 'kc_matching_cards', name: 'Matching Cards', icon: '⊞' },
-      { id: 'kc_fill_gap', name: 'Fill the Gap', icon: '▭' },
-      { id: 'kc_ordering', name: 'Ordering', icon: '↕' },
+    { category: 'Knowledge Checks', semanticId: 'cat-knowledge-checks', blocks: [
+      { id: 'kc_multiple_choice', name: 'Multiple Choice', semanticId: 'block-kc-multiple-choice' },
+      { id: 'kc_multiple_response', name: 'Multiple Response', semanticId: 'block-kc-multiple-response' },
+      { id: 'kc_matching', name: 'Matching', semanticId: 'block-kc-matching' },
+      { id: 'kc_matching_cards', name: 'Matching Cards', semanticId: 'block-kc-matching-cards' },
+      { id: 'kc_fill_gap', name: 'Fill the Gap', semanticId: 'block-kc-fill-blank' },
+      { id: 'kc_ordering', name: 'Ordering', semanticId: 'block-kc-ordering' },
     ]},
   ],
 

@@ -80,10 +80,10 @@ function renderLessonBuilder(lessonId) {
     const app = document.getElementById('app');
     app.innerHTML = `
       <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:40px;">
-        <div style="font-size:40px;">👁️</div>
+        <div style="font-size:40px;">${platformIcon('preview')}</div>
         <h2 style="font-size:20px;">View Only Access</h2>
         <p class="text-sm text-muted" style="max-width:420px;">You have view-only access to this project and cannot edit its content. Ask the project owner for edit access if you need to make changes.</p>
-        <button class="btn btn-primary" id="view-only-return">← Return to Course</button>
+        <button class="btn btn-primary" id="view-only-return">${platformIcon('back')} Return to Course</button>
       </div>
     `;
     app.querySelector('#view-only-return').addEventListener('click', () => navigate('#/course/' + course.id));
@@ -148,14 +148,14 @@ function renderBuilderTopbar(course, lesson) {
     <div class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0;">
       <div class="flex items-center gap-16" style="min-width:0; flex:1; overflow:hidden;">
         ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'builder-logo' })}
-        <button class="btn btn-ghost btn-sm" id="back-to-course" title="Back to ${course ? course.title : 'Course'}" style="flex-shrink:0; white-space:nowrap;">← Back to Course</button>
+        <button class="btn btn-ghost btn-sm" id="back-to-course" title="Back to ${course ? course.title : 'Course'}" style="flex-shrink:0; white-space:nowrap;">${platformIcon('back')} Back to Course</button>
         <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" title="${escapeHtml(lesson ? lesson.title : 'Untitled Lesson')}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:17px; color:var(--ink-900); min-width:0; flex:1; padding:6px 8px; text-overflow:ellipsis; margin-right:12px;" />
       </div>
       <div class="flex items-center gap-12" style="flex-shrink:0;">
-        <span class="text-sm text-muted" id="save-status">Saved ✓</span>
-        <button class="btn btn-secondary btn-sm" id="cloud-save-btn" title="Save to cloud" style="display:none;">☁ Save</button>
-        <button class="btn btn-secondary btn-sm" id="preview-lesson">👁️ Preview</button>
-        <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, var(--violet-tint-md), rgba(6,182,212,0.08)); border-color:var(--violet-border);' : ''}">✨ AI Assistant</button>
+        <span class="text-sm text-muted" id="save-status">Saved ${platformIcon('check')}</span>
+        <button class="btn btn-secondary btn-sm" id="cloud-save-btn" title="Save to cloud" style="display:none;">${platformIcon('cloud')} Save</button>
+        <button class="btn btn-secondary btn-sm" id="preview-lesson">${platformIcon('preview')} Preview</button>
+        <button class="btn ${BuilderUI.aiOpen ? 'btn-primary' : 'btn-secondary'} btn-sm" id="toggle-ai" style="${!BuilderUI.aiOpen ? 'background:linear-gradient(135deg, var(--violet-tint-md), rgba(6,182,212,0.08)); border-color:var(--violet-border);' : ''}">${platformIcon('ai')} AI Assistant</button>
       </div>
     </div>
   `;
@@ -185,7 +185,7 @@ function renderBlockLibrary(lesson, course) {
   if (BuilderUI.leftCollapsed) {
     return `
       <div style="width:48px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
-        <button class="btn-icon" id="expand-library" title="Expand library">»</button>
+        <button class="btn-icon" id="expand-library" title="Expand library">${platformIcon('expand-right')}</button>
       </div>
     `;
   }
@@ -196,16 +196,16 @@ function renderBlockLibrary(lesson, course) {
     <div style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; min-height:0;">
       <div style="padding:14px; border-bottom:1px solid var(--border);" class="flex items-center gap-8">
         <div class="input-icon-wrap" style="flex:1;">
-          <span class="icon">🔍</span>
+          <span class="icon">${platformIcon('search')}</span>
           <input class="input" id="block-search" placeholder="Search blocks..." />
         </div>
-        <button class="btn-icon" id="collapse-library" title="Collapse">«</button>
+        <button class="btn-icon" id="collapse-library" title="Collapse">${platformIcon('collapse-left')}</button>
       </div>
       <div style="flex:1; overflow-y:auto; padding:8px 10px;" id="block-library-scroll">
         <div class="block-category" data-cat="Recommended">
           <div class="cat-header" data-cat="Recommended">
-            <span>✨ Recommended for this lesson</span>
-            <span class="caret">${BuilderUI.expanded['Recommended'] ? '▾' : '▸'}</span>
+            <span>${platformIcon('cat-recommended')} Recommended for this lesson</span>
+            <span class="caret">${BuilderUI.expanded['Recommended'] ? platformIcon('chevron-down') : platformIcon('chevron-right')}</span>
           </div>
           <div class="cat-body ${BuilderUI.expanded['Recommended'] ? 'expanded' : ''}">
             ${rec.map(b => blockTile(b)).join('')}
@@ -218,8 +218,8 @@ function renderBlockLibrary(lesson, course) {
     html += `
         <div class="block-category" data-cat="${cat.category}">
           <div class="cat-header" data-cat="${cat.category}">
-            <span>${cat.icon} ${cat.category}</span>
-            <span class="caret">${expanded ? '▾' : '▸'}</span>
+            <span>${platformIcon(cat.semanticId)} ${cat.category}</span>
+            <span class="caret">${expanded ? platformIcon('chevron-down') : platformIcon('chevron-right')}</span>
           </div>
           <div class="cat-body ${expanded ? 'expanded' : ''}">
             ${cat.blocks.map(b => blockTile(b)).join('')}
@@ -356,7 +356,7 @@ function sharedLayoutStyles() {
 
 function blockTile(b) {
   return `<div class="block-tile" draggable="true" data-block-id="${b.id}" data-block-name="${b.name}">
-    <span class="tile-icon">${b.icon}</span>
+    <span class="tile-icon">${platformIcon(b.semanticId)}</span>
     <span>${b.name}</span>
   </div>`;
 }
@@ -809,9 +809,9 @@ function renderListItemsHtml(block, ds, items, editable, opts) {
       marker = renderCheckboxMarker(ds, checked, i, opts.key);
     }
     const controls = editable ? `<div class="flex gap-4 list-item-controls" style="flex-shrink:0;">
-        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-up" data-itemindex="${i}" title="Move item up" aria-label="Move item up" ${i === 0 ? 'disabled' : ''} style="opacity:${i === 0 ? '0.4' : '1'};">↑</button>
-        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-down" data-itemindex="${i}" title="Move item down" aria-label="Move item down" ${i === items.length - 1 ? 'disabled' : ''} style="opacity:${i === items.length - 1 ? '0.4' : '1'};">↓</button>
-        <button class="btn-icon list-item-remove" data-itemindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="width:22px; height:22px; background:rgba(0,0,0,0.08); border:none; border-radius:4px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>
+        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-up" data-itemindex="${i}" title="Move item up" aria-label="Move item up" ${i === 0 ? 'disabled' : ''} style="opacity:${i === 0 ? '0.4' : '1'};">${platformIcon('arrow-up')}</button>
+        <button class="btn-icon btn-icon-xs btn-icon-dark list-item-move-down" data-itemindex="${i}" title="Move item down" aria-label="Move item down" ${i === items.length - 1 ? 'disabled' : ''} style="opacity:${i === items.length - 1 ? '0.4' : '1'};">${platformIcon('arrow-down')}</button>
+        <button class="btn-icon list-item-remove" data-itemindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="width:22px; height:22px; background:rgba(0,0,0,0.08); border:none; border-radius:4px; opacity:${items.length <= 1 ? '0.4' : '1'};">${platformIcon('remove')}</button>
       </div>` : '';
     return `<div class="list-item-row flex items-start gap-4" data-itemindex="${i}" role="listitem" style="margin-bottom:8px;">
       ${marker}
@@ -1198,8 +1198,8 @@ function renderBlockWrapper(block, index, total, nextBlock) {
   const alignStyle = ds.align ? `text-align:${ds.align};` : '';
   const radiusStyle = ds.radius ? `border-radius:${RADIUS_MAP[ds.radius] || 'var(--theme-radius, var(--r-lg))'};` : 'border-radius:var(--theme-radius, var(--r-lg));';
   const moveButtons = `
-        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" aria-label="Move block up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===0?'0.4':'1'};">↑</button>
-        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" aria-label="Move block down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===total-1?'0.4':'1'};">↓</button>`;
+        <button class="btn-icon move-up-btn" data-index="${index}" title="Move up" aria-label="Move block up" ${index===0?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===0?'0.4':'1'};">${platformIcon('arrow-up')}</button>
+        <button class="btn-icon move-down-btn" data-index="${index}" title="Move down" aria-label="Move block down" ${index===total-1?'disabled':''} style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; opacity:${index===total-1?'0.4':'1'};">${platformIcon('arrow-down')}</button>`;
   const { treatment } = DesignSystem.resolveBlockStyle(block);
   // Pure visual dividers carry no content for assistive technology to announce.
   const DECORATIVE_DIVIDER_TYPES = new Set(['line_divider', 'numbered_divider']);
@@ -1231,10 +1231,10 @@ function renderBlockWrapper(block, index, total, nextBlock) {
     <div class="canvas-block ${isSelected ? 'selected' : ''}" data-index="${index}" data-block-id="${block.id || ''}" style="${wrapperStyle}"${ariaHidden}>
       <div class="block-toolbar" style="position:absolute; top:-34px; left:0; display:${isExpanded ? 'flex':'none'}; gap:4px; z-index:10;">
         <span class="drag-handle" draggable="true" data-index="${index}" title="Drag to reorder"
-          style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">⠿ ${blockLabel(block.type)}</span>
-        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">✨</button>
-        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">⧉</button>
-        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">✕</button>${moveButtons}
+          style="background:var(--ink-900); color:#fff; border-radius:6px; padding:2px 8px; font-size:11px; cursor:grab;">${platformIcon('drag-handle')} ${blockLabel(block.type)}</span>
+        <button class="btn-icon ai-rewrite-btn" data-index="${index}" title="AI rewrite" aria-label="AI rewrite this block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">${platformIcon('ai')}</button>
+        <button class="btn-icon dup-block-btn" data-index="${index}" title="Duplicate" aria-label="Duplicate block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">${platformIcon('duplicate')}</button>
+        <button class="btn-icon del-block-btn" data-index="${index}" title="Delete" aria-label="Delete block" style="width:26px; height:26px; background:var(--ink-900); color:#fff; border:none; box-shadow:none;">${platformIcon('delete')}</button>${moveButtons}
       </div>
       <div class="block-content-area" style="padding:3px 22px; ${alignStyle} ${textBlockExtraStyle(block)}${statementBlockExtraStyle(block)}${quoteBlockExtraStyle(block)}${listBlockExtraStyle(block)}">
         ${renderBlockContent(block, true)}
@@ -1396,9 +1396,9 @@ function ensureRichTextToolbar() {
     </select>
     <input type="color" class="rt-color" title="Font colour" value="#000000" />
     <span class="rt-sep"></span>
-    <button type="button" class="rt-btn" data-cmd="align" data-val="left" title="Align left">⟸</button>
-    <button type="button" class="rt-btn" data-cmd="align" data-val="center" title="Align centre">≡</button>
-    <button type="button" class="rt-btn" data-cmd="align" data-val="right" title="Align right">⟹</button>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="left" title="Align left">${platformIcon('align-left')}</button>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="center" title="Align centre">${platformIcon('align-center')}</button>
+    <button type="button" class="rt-btn" data-cmd="align" data-val="right" title="Align right">${platformIcon('align-right')}</button>
   `;
   document.body.appendChild(el);
   RichTextToolbar.el = el;
@@ -2089,7 +2089,7 @@ function renderBlockContent(block, editable) {
       return `<div style="${interactiveSpacingStyle(ds)} display:grid; grid-template-columns:repeat(${columns},1fr); gap:12px;">
         ${items.map((item, i) => `
           <div class="card card-pad text-center" style="position:relative; border:${cgBorder};">
-            ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">×</button>` : ''}
+            ${editable ? `<button class="btn-icon grid-item-remove" data-gindex="${i}" title="Remove item" aria-label="Remove item" ${items.length <= 1 ? 'disabled' : ''} style="position:absolute; top:4px; right:4px; width:22px; height:22px; line-height:1; background:rgba(0,0,0,0.08); border:none; border-radius:50%; cursor:pointer; font-size:13px; opacity:${items.length <= 1 ? '0.4' : '1'};">${platformIcon('remove')}</button>` : ''}
             ${item.imageUrl
               ? `<img src="${AssetStore.resolveMediaSrc(item.imageUrl)}" alt="" class="${editable ? 'block-image' : 'image-zoom-trigger'}" data-zoom-src="${AssetStore.resolveMediaSrc(item.imageUrl)}" data-zoom-alt="${escapeHtml(item.title || '')}" data-gindex="${i}" style="width:100%; aspect-ratio:16/9; height:auto; object-fit:cover; border-radius:${cgRadius}; border:${cgBorder}; display:block; cursor:${editable ? 'pointer' : 'zoom-in'};"/>`
               : imagePlaceholder(item.title || 'Item', 150)}
@@ -2356,7 +2356,7 @@ function renderBlockContent(block, editable) {
               onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
               onclick="event.stopPropagation(); lumioHotspotToggle(this, ${i})" aria-label="${escapeHtml(h.title || 'Hotspot ' + (i + 1))}">${markerGlyph(i)}</button>`).join('')}
           ${hotspots.map((h, i) => `<div class="lumio-hotspot-panel" data-hindex="${i}" style="display:none;" onclick="event.stopPropagation();">
-              <button class="lumio-hotspot-close" onclick="event.stopPropagation(); lumioHotspotToggle(this.parentElement.parentElement.querySelector('.lumio-hotspot[data-hindex=\\'${i}\\']'), ${i})">×</button>
+              <button class="lumio-hotspot-close" onclick="event.stopPropagation(); lumioHotspotToggle(this.parentElement.parentElement.querySelector('.lumio-hotspot[data-hindex=\\'${i}\\']'), ${i})">${platformIcon('close')}</button>
               <h4 style="margin:0 0 6px; ${textTypographyStyle(ds, 16, 'title')}">${escapeHtml(h.title || '')}</h4>
               ${itemImageHtml(h, 140)}
               <div class="text-sm" style="${textTypographyStyle(ds, 14, 'body')}">${richTextOut(h.body)}</div>
@@ -2517,7 +2517,7 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : '↻ Click flip icon to flip'}</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : `${platformIcon('flip')} Click flip icon to flip`}</div>` : ''}
             </div>
           `).join('')}
         </div>
@@ -2546,7 +2546,7 @@ function renderBlockContent(block, editable) {
                   </div>
                 </div>
               </div>
-              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : '↻ Click flip icon to flip'}</div>` : ''}
+              ${flipHint ? `<div class="text-sm text-muted text-center mt-4">${typeof L === 'function' ? L('flashcard.flip_hint') : `${platformIcon('flip')} Click flip icon to flip`}</div>` : ''}
             </div>
           `).join('')}
           <div class="flex items-center justify-between mt-12">
@@ -3042,7 +3042,7 @@ function renderRightPanel(blocks, course, lesson) {
   if (BuilderUI.rightCollapsed) {
     return `
       <div style="width:48px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
-        <button class="btn-icon" id="expand-right" title="Expand panel">«</button>
+        <button class="btn-icon" id="expand-right" title="Expand panel">${platformIcon('collapse-left')}</button>
       </div>
     `;
   }
@@ -3054,7 +3054,7 @@ function renderRightPanel(blocks, course, lesson) {
       <div style="width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
         <div class="flex items-center justify-between">
           <h3 class="text-sm" style="font-weight:700;">Lesson Insights</h3>
-          <button class="btn-icon" id="collapse-right" title="Collapse panel">»</button>
+          <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('expand-right')}</button>
         </div>
         <label class="flex items-center gap-8 text-sm mt-12" style="cursor:pointer;">
           <input type="checkbox" id="toggle-insights" ${BuilderUI.showInsights ? 'checked' : ''}/> Show Lesson Insights
@@ -3079,7 +3079,7 @@ function renderRightPanel(blocks, course, lesson) {
           <div class="tab ${BuilderUI.rightTab==='design'?'active':''}" data-rtab="design">Design</div>
           <div class="tab ${BuilderUI.rightTab==='settings'?'active':''}" data-rtab="settings">Settings</div>
         </div>
-        <button class="btn-icon" id="collapse-right" title="Collapse panel">»</button>
+        <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('expand-right')}</button>
       </div>
       <div style="padding:18px; flex:1; overflow-y:auto;" id="right-panel-scroll">
         ${renderRightTabContent(block, BuilderUI.selected, course)}
@@ -3102,23 +3102,23 @@ function lessonInsights(blocks, course, lesson) {
       <div style="height:6px; background:#fff; border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
     </div>
     <div class="card card-pad mt-12">
-      <div class="flex justify-between items-center text-sm"><span>🎯 ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>
+      <div class="flex justify-between items-center text-sm"><span>${platformIcon('target')} ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>
       <p class="text-sm mt-8">${objIndices.length > 0 ? `${objIndices.length} objective${objIndices.length > 1 ? 's' : ''} linked` : 'Not linked to an objective yet'}</p>
       <button class="btn btn-secondary btn-sm mt-8 w-full" id="link-objective">${objIndices.length > 0 ? 'Link objectives' : 'Link an objective'}</button>
     </div>
     <div class="card card-pad mt-12">
-      <div class="text-sm flex justify-between"><span>📖 Estimated read time</span><span>~${Math.max(1,Math.round(wordEstimate/130))} min</span></div>
-      <div class="text-sm flex justify-between mt-8"><span>✅ Knowledge checks</span><span>${kcCount}</span></div>
-      <div class="text-sm flex justify-between mt-8"><span>🖼️ Visual blocks</span><span>${imgCount}</span></div>
+      <div class="text-sm flex justify-between"><span>${platformIcon('notes')} Estimated read time</span><span>~${Math.max(1,Math.round(wordEstimate/130))} min</span></div>
+      <div class="text-sm flex justify-between mt-8"><span>${platformIcon('success')} Knowledge checks</span><span>${kcCount}</span></div>
+      <div class="text-sm flex justify-between mt-8"><span>${platformIcon('image-placeholder')} Visual blocks</span><span>${imgCount}</span></div>
     </div>
     ${blocks.length > 0 && imgCount === 0 ? `
     <div class="ai-card mt-12">
-      <div class="ai-spark">💡</div>
+      <div class="ai-spark">${platformIcon('lightbulb')}</div>
       <div><p class="text-sm">This lesson is text-heavy. Consider adding an Image, Statement, or Knowledge Check to break it up.</p></div>
     </div>` : ''}
     ${kcCount === 0 && blocks.length > 2 ? `
     <div class="ai-card mt-12">
-      <div class="ai-spark">✨</div>
+      <div class="ai-spark">${platformIcon('ai')}</div>
       <div><p class="text-sm">No knowledge check yet. <a href="#" id="ai-add-kc">Generate one from this lesson</a>.</p></div>
     </div>` : ''}
   `;
@@ -3224,9 +3224,9 @@ function renderTextBlockPanel(block, index) {
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Text Formatting</p>
       <div class="flex gap-8">
-        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;">B</button>
-        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;">I</button>
-        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;">U</button>
+        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;"><b>B</b></button>
+        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;"><i>I</i></button>
+        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;"><u>U</u></button>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Theme Font</p>
       <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
@@ -3417,9 +3417,9 @@ function renderStatementBlockPanel(block, index) {
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Text Formatting</p>
       <div class="flex gap-8">
-        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;">B</button>
-        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;">I</button>
-        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;">U</button>
+        <button class="btn-icon text-fmt-btn ${ds.bold ? 'active' : ''}" data-fmt="bold" aria-pressed="${!!ds.bold}" style="font-weight:700;"><b>B</b></button>
+        <button class="btn-icon text-fmt-btn ${ds.italic ? 'active' : ''}" data-fmt="italic" aria-pressed="${!!ds.italic}" style="font-style:italic;"><i>I</i></button>
+        <button class="btn-icon text-fmt-btn ${ds.underline ? 'active' : ''}" data-fmt="underline" aria-pressed="${!!ds.underline}" style="text-decoration:underline;"><u>U</u></button>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Theme Font</p>
       <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
@@ -4015,10 +4015,10 @@ function chartContentPanel(block, d, isPie) {
       <div class="flex gap-8 items-center">
         <input class="input chart-field" type="number" data-field="value" data-iindex="${i}" value="${it.value}" placeholder="${valueHeading}" style="flex:1;" />
         <div class="flex gap-4">
-          <button class="btn-icon chart-row-up" data-iindex="${i}" title="Move up" aria-label="Move row up">↑</button>
-          <button class="btn-icon chart-row-down" data-iindex="${i}" title="Move down" aria-label="Move row down">↓</button>
-          <button class="btn-icon chart-row-duplicate" data-iindex="${i}" title="Duplicate" aria-label="Duplicate row">⧉</button>
-          <button class="btn-icon chart-row-remove" data-iindex="${i}" title="Delete" aria-label="Delete row">🗑️</button>
+          <button class="btn-icon chart-row-up" data-iindex="${i}" title="Move up" aria-label="Move row up">${platformIcon('arrow-up')}</button>
+          <button class="btn-icon chart-row-down" data-iindex="${i}" title="Move down" aria-label="Move row down">${platformIcon('arrow-down')}</button>
+          <button class="btn-icon chart-row-duplicate" data-iindex="${i}" title="Duplicate" aria-label="Duplicate row">${platformIcon('duplicate')}</button>
+          <button class="btn-icon chart-row-remove" data-iindex="${i}" title="Delete" aria-label="Delete row">${platformIcon('delete')}</button>
         </div>
       </div>
     </div>`).join('');
@@ -4264,9 +4264,9 @@ function kcOrderingContentPanel(block, d) {
           <div class="flex items-center gap-6" data-i="${i}">
             <span class="pill pill-grey" style="flex-shrink:0; min-width:22px; text-align:center; font-size:11px;">${i + 1}</span>
             <input class="input kc-item-text" data-i="${i}" value="${escapeHtml(item)}" placeholder="Item…" style="flex:1; font-size:13px;" />
-            <button class="btn-icon kc-item-up"   data-i="${i}" title="Move up"   ${i === 0 ? 'disabled' : ''}>↑</button>
-            <button class="btn-icon kc-item-down" data-i="${i}" title="Move down" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
-            <button class="btn-icon kc-item-delete" data-i="${i}" title="Remove" ${items.length <= 2 ? 'disabled' : ''}>✕</button>
+            <button class="btn-icon kc-item-up"   data-i="${i}" title="Move up"   ${i === 0 ? 'disabled' : ''}>${platformIcon('arrow-up')}</button>
+            <button class="btn-icon kc-item-down" data-i="${i}" title="Move down" ${i === items.length - 1 ? 'disabled' : ''}>${platformIcon('arrow-down')}</button>
+            <button class="btn-icon kc-item-delete" data-i="${i}" title="Remove" ${items.length <= 2 ? 'disabled' : ''}>${platformIcon('remove')}</button>
           </div>
         `).join('')}
       </div>
@@ -5156,10 +5156,10 @@ function flashcardContentPanel(block, d) {
       <div class="flex items-center justify-between mb-8">
         <div class="prop-section-title" style="margin:0;">Card ${i + 1}</div>
         <div class="flex gap-4">
-          ${iconBtn('lumio-item-move-up', i, 'Move up', i === 0, '↑')}
-          ${iconBtn('lumio-item-move-down', i, 'Move down', i === items.length - 1, '↓')}
-          ${iconBtn('lumio-item-duplicate', i, 'Duplicate card', false, '⧉')}
-          ${iconBtn('lumio-item-remove', i, 'Delete card', items.length <= 1, '×')}
+          ${iconBtn('lumio-item-move-up', i, 'Move up', i === 0, platformIcon('arrow-up'))}
+          ${iconBtn('lumio-item-move-down', i, 'Move down', i === items.length - 1, platformIcon('arrow-down'))}
+          ${iconBtn('lumio-item-duplicate', i, 'Duplicate card', false, platformIcon('duplicate'))}
+          ${iconBtn('lumio-item-remove', i, 'Delete card', items.length <= 1, platformIcon('remove'))}
         </div>
       </div>
       ${['front', 'back'].map(face => `
@@ -5167,8 +5167,8 @@ function flashcardContentPanel(block, d) {
           <label>${face === 'front' ? 'Front' : 'Back'}</label>
           <p class="text-sm text-muted mb-4">Click directly on the ${face} text on the canvas to edit it.</p>
           <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? '🔄 Change Image' : '📤 Add Image'}</button>
-            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove text-destructive" data-findex="${i}" data-face="${face}">🗑️ Remove Image</button>` : ''}
+            <button class="btn btn-secondary btn-sm flashcard-face-image-trigger" data-findex="${i}" data-face="${face}">${item[face].image ? `${platformIcon('replace-media')} Change Image` : `${platformIcon('upload-media')} Add Image`}</button>
+            ${item[face].image ? `<button class="btn btn-ghost btn-sm flashcard-face-image-remove text-destructive" data-findex="${i}" data-face="${face}">${platformIcon('delete')} Remove Image</button>` : ''}
           </div>
           ${item[face].image ? `
             <p class="text-sm text-muted mb-4 mt-8">Image layout</p>
@@ -5428,10 +5428,10 @@ function itemManageToolbar(listKey, i, count) {
   const iconBtn = (cls, title, disabled, label) =>
     `<button class="btn-icon ${cls}" data-list="${listKey}" data-iindex="${i}" title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   return `<div class="flex gap-4">
-    ${iconBtn('lumio-item-move-up', 'Move up', i === 0, '↑')}
-    ${iconBtn('lumio-item-move-down', 'Move down', i === count - 1, '↓')}
-    ${iconBtn('lumio-item-duplicate', 'Duplicate', false, '⧉')}
-    ${iconBtn('lumio-item-remove', 'Delete', count <= 1, '×')}
+    ${iconBtn('lumio-item-move-up', 'Move up', i === 0, platformIcon('arrow-up'))}
+    ${iconBtn('lumio-item-move-down', 'Move down', i === count - 1, platformIcon('arrow-down'))}
+    ${iconBtn('lumio-item-duplicate', 'Duplicate', false, platformIcon('duplicate'))}
+    ${iconBtn('lumio-item-remove', 'Delete', count <= 1, platformIcon('remove'))}
   </div>`;
 }
 
@@ -5690,8 +5690,8 @@ function scenarioContentPanel(block, d) {
   const iconBtn = (cls, sindex, title, disabled, label, cindex) =>
     `<button class="btn-icon ${cls}" data-sindex="${sindex}" ${cindex !== undefined ? `data-cindex="${cindex}"` : ''} title="${title}" aria-label="${title}" ${disabled ? 'disabled' : ''} style="width:22px; height:22px; background:var(--ink-900); color:#fff; border:none; box-shadow:none; border-radius:4px; opacity:${disabled ? '0.4' : '1'};">${label}</button>`;
   const mediaBtn = (sindex, field, kind, title, current) => `
-    <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `🔄 Change ${title}` : `📤 Add ${title}`}</button>
-    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove text-destructive" data-sindex="${sindex}" data-field="${field}">🗑️ Remove</button>` : ''}`;
+    <button class="btn btn-secondary btn-sm lumio-scene-media-trigger" data-sindex="${sindex}" data-field="${field}" data-kind="${kind}" data-title="${title}">${current ? `${platformIcon('replace-media')} Change ${title}` : `${platformIcon('upload-media')} Add ${title}`}</button>
+    ${current ? `<button class="btn btn-ghost btn-sm lumio-scene-media-remove text-destructive" data-sindex="${sindex}" data-field="${field}">${platformIcon('delete')} Remove</button>` : ''}`;
   return scenes.map((scene, i) => `
     <div class="prop-section">
       <div class="flex items-center justify-between mb-8">
@@ -5716,9 +5716,9 @@ function scenarioContentPanel(block, d) {
             <div class="flex items-center justify-between mb-4">
               <span class="text-sm text-muted">Choice ${ci + 1}</span>
               <div class="flex gap-4">
-                ${iconBtn('lumio-choice-move-up', i, 'Move up', ci === 0, '↑', ci)}
-                ${iconBtn('lumio-choice-move-down', i, 'Move down', ci === scene.choices.length - 1, '↓', ci)}
-                ${iconBtn('lumio-choice-remove', i, 'Delete', false, '×', ci)}
+                ${iconBtn('lumio-choice-move-up', i, 'Move up', ci === 0, platformIcon('arrow-up'), ci)}
+                ${iconBtn('lumio-choice-move-down', i, 'Move down', ci === scene.choices.length - 1, platformIcon('arrow-down'), ci)}
+                ${iconBtn('lumio-choice-remove', i, 'Delete', false, platformIcon('remove'), ci)}
               </div>
             </div>
             <div class="field"><label>Choice Text</label><input class="input lumio-choice-text" data-sindex="${i}" data-cindex="${ci}" data-field="text" value="${escapeHtml(c.text || '')}" /></div>
@@ -6078,7 +6078,7 @@ function contentFields(fields) {
 function aiActions(includeImage) {
   return `
     <div class="flex gap-8 mt-8" style="flex-wrap:wrap;">
-      <button class="btn btn-secondary btn-sm ai-action" data-action="rewrite">✨ Rewrite</button>
+      <button class="btn btn-secondary btn-sm ai-action" data-action="rewrite">${platformIcon('ai')} Rewrite</button>
       <button class="btn btn-secondary btn-sm ai-action" data-action="simplify">Simplify</button>
       <button class="btn btn-secondary btn-sm ai-action" data-action="shorten">Shorten</button>
       ${includeImage ? `<button class="btn btn-secondary btn-sm ai-action" data-action="alt">Generate alt text</button>` : ''}
@@ -6096,8 +6096,8 @@ function renderAIPanel(lesson, blocks) {
   return `
     <div style="position:fixed; top:0; right:0; bottom:0; width:340px; background:var(--surface-0); border-left:1px solid var(--border); box-shadow:var(--elevation-2); z-index:60; display:flex; flex-direction:column;" class="fade-in">
       <div class="flex items-center justify-between" style="padding:14px 16px; border-bottom:1px solid var(--border);">
-        <div class="flex items-center gap-8"><div class="ai-spark">✨</div><strong>Lumio AI Assistant</strong></div>
-        <button class="btn-icon" id="close-ai">✕</button>
+        <div class="flex items-center gap-8"><div class="ai-spark">${platformIcon('ai')}</div><strong>Lumio AI Assistant</strong></div>
+        <button class="btn-icon" id="close-ai">${platformIcon('close')}</button>
       </div>
       <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;" id="chat-log">
         ${messages.map(m => `
@@ -6149,13 +6149,13 @@ function bindBuilderEvents(course, lesson, blocks) {
     cloudSaveBtn.style.display = '';
     cloudSaveBtn.addEventListener('click', async () => {
       cloudSaveBtn.disabled = true;
-      cloudSaveBtn.textContent = '☁ Saving…';
+      cloudSaveBtn.innerHTML = `${platformIcon('cloud')} Saving…`;
       try {
         await persistCourse(course.id);
-        cloudSaveBtn.textContent = '☁ Saved ✓';
-        setTimeout(() => { cloudSaveBtn.textContent = '☁ Save'; cloudSaveBtn.disabled = false; }, 2000);
+        cloudSaveBtn.innerHTML = `${platformIcon('cloud')} Saved ✓`;
+        setTimeout(() => { cloudSaveBtn.innerHTML = `${platformIcon('cloud')} Save`; cloudSaveBtn.disabled = false; }, 2000);
       } catch (_) {
-        cloudSaveBtn.textContent = '☁ Save';
+        cloudSaveBtn.innerHTML = `${platformIcon('cloud')} Save`;
         cloudSaveBtn.disabled = false;
       }
     });
@@ -6380,7 +6380,7 @@ function bindBuilderEvents(course, lesson, blocks) {
   }));
   app.querySelectorAll('.ai-rewrite-btn').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    toast('✨ Lumio rewrote this block for clarity', '✨');
+    NotifySystem.notify({ message: 'Lumio rewrote this block for clarity', type: 'ai' });
   }));
 
   // Right panel tabs
@@ -8032,14 +8032,14 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelectorAll('.ai-action').forEach(btn => btn.addEventListener('click', () => {
     const action = btn.dataset.action;
     const labels = { rewrite: 'Rewrote for clarity', simplify: 'Simplified language', shorten: 'Shortened text', alt: 'Generated alt text' };
-    toast('✨ ' + labels[action], '✨');
+    NotifySystem.notify({ message: labels[action], type: 'ai' });
   }));
   app.querySelector('#ai-add-kc')?.addEventListener('click', (e) => {
     e.preventDefault();
     blocks.push({ id: generateBlockId(), type: 'kc_multiple_choice', data: LumioAI.generateKnowledgeCheckBlockData(lesson.title) });
     renderLessonBuilder(lesson.id);
     NotifySystem.notify({
-      message: '✨ Knowledge check added',
+      message: 'Knowledge check added',
       detail: lesson.title,
       type: 'ai',
       dest: { route: 'lesson', lessonId: lesson.id, blockIndex: blocks.length - 1 },
@@ -8163,14 +8163,14 @@ function flashSaveStatus() {
   if (!status) return;
   status.textContent = 'Saving...';
   clearTimeout(window._saveTimeout);
-  window._saveTimeout = setTimeout(() => { if (status) status.textContent = 'Saved ✓'; }, 600);
+  window._saveTimeout = setTimeout(() => { if (status) status.innerHTML = `Saved ${platformIcon('check')}`; }, 600);
 }
 
 function aiDraftLesson(lesson, blocks) {
   const wrap = document.getElementById('lesson-canvas');
   wrap.innerHTML = `
     <div class="text-center" style="padding:60px;">
-      <div class="ai-spark" style="margin:0 auto 16px; width:40px; height:40px;">✨</div>
+      <div class="ai-spark" style="margin:0 auto 16px; width:40px; height:40px;">${platformIcon('ai')}</div>
       <p class="text-muted">Lumio is drafting your lesson...</p>
     </div>`;
   setTimeout(() => {
@@ -8182,7 +8182,7 @@ function aiDraftLesson(lesson, blocks) {
     );
     renderLessonBuilder(lesson.id);
     NotifySystem.notify({
-      message: '✨ Lesson structure drafted',
+      message: 'Lesson structure drafted',
       detail: lesson.title + ' — click to open and review',
       type: 'ai',
       dest: { route: 'lesson', lessonId: lesson.id, blockIndex: 0 },

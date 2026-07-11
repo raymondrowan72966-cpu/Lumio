@@ -63,7 +63,7 @@ function renderProjects() {
       </div>
       <div class="flex items-center gap-12">
         <div class="input-icon-wrap" style="width:240px;">
-          <span class="icon">🔍</span>
+          <span class="icon">${platformIcon('search')}</span>
           <input class="input" id="search-input" placeholder="Search projects..." value="${LumioState.searchQuery}" />
         </div>
         <select class="input" id="status-filter" style="width:140px;">
@@ -531,9 +531,9 @@ function popoverAt(btn, itemsHtml, opts) {
   return menu;
 }
 
-function menuItem(label, icon, danger, disabled) {
+function menuItem(label, iconId, danger, disabled) {
   return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? '0.45' : '1'}; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ink-700);'}">
-    <span>${icon}</span><span>${label}</span></div>`;
+    ${platformIcon(iconId)}<span>${label}</span></div>`;
 }
 
 function openProjectMenu(btn, id) {
@@ -548,32 +548,32 @@ function openProjectMenu(btn, id) {
   if (!viewOnly && (p.status === 'draft' || p.status === 'rejected') && canSubmitForReview(p)) {
     const ready = courseSubmissionReadiness(p).ready;
     const label = p.status === 'rejected' ? 'Resubmit For Review' : 'Submit For Review';
-    workflowItems.push(`<div data-action="submit_for_review"${!ready ? ' data-disabled="1"' : ''}>${menuItem(label, '📤', false, !ready)}</div>`);
+    workflowItems.push(`<div data-action="submit_for_review"${!ready ? ' data-disabled="1"' : ''}>${menuItem(label, 'submit-review', false, !ready)}</div>`);
   }
   if (p.status === 'in_review' && canApproveReject()) {
-    workflowItems.push(`<div data-action="approve">${menuItem('Approve', '✅')}</div>`);
-    workflowItems.push(`<div data-action="reject">${menuItem('Reject', '↩️')}</div>`);
+    workflowItems.push(`<div data-action="approve">${menuItem('Approve', 'approve')}</div>`);
+    workflowItems.push(`<div data-action="reject">${menuItem('Reject', 'reject')}</div>`);
   }
   if (p.status === 'published' && canArchiveProject()) {
-    workflowItems.push(`<div data-action="archive">${menuItem('Archive', '🗄️')}</div>`);
+    workflowItems.push(`<div data-action="archive">${menuItem('Archive', 'archive')}</div>`);
   }
   if (p.status === 'archived' && canRestoreProject()) {
-    workflowItems.push(`<div data-action="restore">${menuItem('Restore to Draft', '↩️')}</div>`);
+    workflowItems.push(`<div data-action="restore">${menuItem('Restore to Draft', 'restore')}</div>`);
   }
 
   const menu = popoverAt(btn, `
-    ${!viewOnly ? `<div data-action="rename">${menuItem('Rename', '✏️')}</div>` : ''}
-    <div data-action="duplicate">${menuItem('Duplicate', '⧉')}</div>
-    ${!viewOnly ? `<div data-action="share">${menuItem('Share', '🔗')}</div>` : ''}
+    ${!viewOnly ? `<div data-action="rename">${menuItem('Rename', 'edit')}</div>` : ''}
+    <div data-action="duplicate">${menuItem('Duplicate', 'duplicate')}</div>
+    ${!viewOnly ? `<div data-action="share">${menuItem('Share', 'share')}</div>` : ''}
     ${!viewOnly ? `
     <div class="menu-item move-parent" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px;">
-      <span>📁</span><span>Move to...</span>
+      <span>${platformIcon('folder')}</span><span>Move to...</span>
     </div>
     <div class="move-options" style="display:none;">${folderOptions}</div>` : ''}
-    <div data-action="preview">${menuItem('Open Learner Preview', '👁️')}</div>
-    <div data-action="export">${menuItem('Export Backup (.lumio)', '📦')}</div>
+    <div data-action="preview">${menuItem('Open Learner Preview', 'preview')}</div>
+    <div data-action="export">${menuItem('Export Backup (.lumio)', 'export-pack')}</div>
     ${workflowItems.length ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div>${workflowItems.join('')}` : ''}
-    ${!viewOnly ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div><div data-action="delete">${menuItem('Delete', '🗑️', true)}</div>` : ''}
+    ${!viewOnly ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div><div data-action="delete">${menuItem('Delete', 'delete', true)}</div>` : ''}
   `);
 
   ['submit_for_review', 'approve', 'reject', 'archive', 'restore'].forEach(action => {
@@ -616,7 +616,7 @@ function openProjectMenu(btn, id) {
       p.folder = opt.dataset.folder || null;
       closePopovers();
       renderProjects();
-      toast(`Moved "${projectDisplayTitle(p)}" to ${opt.dataset.folder ? LumioState.folders.find(f=>f.id===opt.dataset.folder).name : 'Uncategorized'}`, '📁');
+      NotifySystem.notify({ message: `Moved "${projectDisplayTitle(p)}" to ${opt.dataset.folder ? LumioState.folders.find(f=>f.id===opt.dataset.folder).name : 'Uncategorized'}`, type: 'success' });
     });
   });
   menu.querySelector('[data-action="rename"]').addEventListener('click', () => {
@@ -748,8 +748,8 @@ function confirmDeleteProject(id) {
 function openFolderMenu(btn, folderId) {
   const f = LumioState.folders.find(x => x.id === folderId);
   const menu = popoverAt(btn, `
-    <div data-action="edit">${menuItem('Edit Folder', '✏️')}</div>
-    <div data-action="delete">${menuItem('Delete Folder', '🗑️', true)}</div>
+    <div data-action="edit">${menuItem('Edit Folder', 'edit')}</div>
+    <div data-action="delete">${menuItem('Delete Folder', 'delete', true)}</div>
   `);
   menu.querySelector('[data-action="edit"]').addEventListener('click', () => {
     closePopovers();
@@ -848,8 +848,8 @@ function openNewFolderModal(existingFolder) {
       existingFolder.color = selectedColor;
       toast('Folder updated', '✏️');
     } else {
-      LumioState.folders.push({ id: 'f' + Date.now(), name, color: selectedColor, icon: '📁' });
-      toast('Folder created', '📁');
+      LumioState.folders.push({ id: 'f' + Date.now(), name, color: selectedColor, semanticId: 'folder' });
+      NotifySystem.notify({ message: 'Folder created', type: 'success' });
     }
     overlay.remove();
     renderProjects();

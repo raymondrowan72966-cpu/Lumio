@@ -41,21 +41,21 @@ function renderCourseLanding(courseId) {
   const content = `
     <header class="app-topbar">
       <div class="flex items-center gap-12" style="min-width:0; flex:1; overflow:hidden;">
-        <button class="btn btn-ghost btn-sm" id="back-projects" style="flex-shrink:0;">← Projects</button>
+        <button class="btn btn-ghost btn-sm" id="back-projects" style="flex-shrink:0;">${platformIcon('back')} Projects</button>
         <h2 style="font-size:18px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1;" title="${escapeHtml(course.title)}">${course.title}</h2>
         ${statusBadge}
-        ${viewOnly ? `<span class="pill pill-grey" title="You have view-only access to this project">👁️ View Only</span>` : ''}
+        ${viewOnly ? `<span class="pill pill-grey" title="You have view-only access to this project">${platformIcon('preview')} View Only</span>` : ''}
       </div>
       <div class="flex items-center gap-12" style="flex-shrink:0;">
         ${!viewOnly ? `
         <div class="tabs" style="border-bottom:none;">
-          <div class="tab ${course.mode==='edit'?'active':''}" data-mode="edit">✏️ Editing</div>
-          <div class="tab ${course.mode==='preview'?'active':''}" data-mode="preview">👁️ Preview as Learner</div>
+          <div class="tab ${course.mode==='edit'?'active':''}" data-mode="edit">${platformIcon('edit')} Editing</div>
+          <div class="tab ${course.mode==='preview'?'active':''}" data-mode="preview">${platformIcon('preview')} Preview as Learner</div>
         </div>
-        <button class="btn btn-secondary btn-sm" id="course-settings">⚙️ Settings</button>
-        <button class="btn btn-secondary btn-sm" id="course-translate">🌐 Translate</button>
-        ${canPublishProjectStatus(project) ? `<button class="btn btn-primary btn-sm" id="course-publish">🚀 Publish</button>` : `<button class="btn btn-secondary btn-sm" disabled title="This project must be Approved before it can be published.">🚀 Publish</button>`}
-        ` : `<span class="text-sm text-muted">👁️ Preview as Learner</span>`}
+        <button class="btn btn-secondary btn-sm" id="course-settings">${platformIcon('settings')} Settings</button>
+        <button class="btn btn-secondary btn-sm" id="course-translate">${platformIcon('globe')} Translate</button>
+        ${canPublishProjectStatus(project) ? `<button class="btn btn-primary btn-sm" id="course-publish">${platformIcon('rocket')} Publish</button>` : `<button class="btn btn-secondary btn-sm" disabled title="This project must be Approved before it can be published.">${platformIcon('rocket')} Publish</button>`}
+        ` : `<span class="text-sm text-muted">${platformIcon('preview')} Preview as Learner</span>`}
       </div>
     </header>
     <main class="app-content">
@@ -236,7 +236,7 @@ function renderAddContent(course, totalMinutes) {
 
     ${overTarget ? `
       <div class="ai-card mb-16">
-        <div class="ai-spark">✨</div>
+        <div class="ai-spark">${platformIcon('ai')}</div>
         <div>
           <strong style="font-size:13px; color:var(--ink-900);">Lumio Tip</strong>
           <p class="text-sm mt-8">Your course is running longer than your ${target} target. Consider splitting "${course.lessons[course.lessons.length-1]?.title}" into a separate lesson, or trimming content — shorter sessions improve retention.</p>
@@ -286,14 +286,14 @@ function openContentMenu(btn, course, kind, id) {
   const idx = list.findIndex(x => x.id === id);
 
   const menu = popoverAt(btn, `
-    <div data-action="edit">${menuItem(isLesson ? 'Edit Lesson' : 'Edit Assessment', '✏️')}</div>
-    <div data-action="duplicate">${menuItem(isLesson ? 'Duplicate Lesson' : 'Duplicate Assessment', '⧉')}</div>
+    <div data-action="edit">${menuItem(isLesson ? 'Edit Lesson' : 'Edit Assessment', 'edit')}</div>
+    <div data-action="duplicate">${menuItem(isLesson ? 'Duplicate Lesson' : 'Duplicate Assessment', 'duplicate')}</div>
     ${isLesson ? `
-      <div data-action="up" style="${idx <= 0 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Up', '↑')}</div>
-      <div data-action="down" style="${idx >= list.length - 1 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Down', '↓')}</div>
-    ` : `<div data-action="assessment-settings">${menuItem('Assessment Settings', '⚙️')}</div>`}
+      <div data-action="up" style="${idx <= 0 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Up', 'arrow-up')}</div>
+      <div data-action="down" style="${idx >= list.length - 1 ? 'opacity:0.4; pointer-events:none;' : ''}">${menuItem('Move Down', 'arrow-down')}</div>
+    ` : `<div data-action="assessment-settings">${menuItem('Assessment Settings', 'settings')}</div>`}
     <div style="height:1px; background:var(--border); margin:4px 0;"></div>
-    <div data-action="delete">${menuItem(isLesson ? 'Delete Lesson' : 'Delete Assessment', '🗑️', true)}</div>
+    <div data-action="delete">${menuItem(isLesson ? 'Delete Lesson' : 'Delete Assessment', 'delete', true)}</div>
   `);
 
   menu.querySelector('[data-action="edit"]').addEventListener('click', () => {

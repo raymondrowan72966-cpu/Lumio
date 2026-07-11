@@ -37,7 +37,7 @@ function renderHub() {
         <p class="text-sm text-muted">Your AI learning design mentor — practical lessons, organized into learning paths.</p>
       </div>
       <div class="input-icon-wrap" style="width:280px;">
-        <span class="icon">🔍</span>
+        <span class="icon">${platformIcon('search')}</span>
         <input class="input" placeholder="Search topics..." />
       </div>
     </header>
@@ -49,7 +49,7 @@ function renderHub() {
 
         ${tips.length ? `
         <div class="ai-card mb-24">
-          <div class="ai-spark">✨</div>
+          <div class="ai-spark">${platformIcon('ai')}</div>
           <div style="flex:1;">
             <div class="flex items-center gap-8 mb-8">
               <strong style="color:var(--ink-900); font-size:14px;">Lumio AI Coach</strong>
@@ -64,7 +64,7 @@ function renderHub() {
           </div>
         </div>` : `
         <div class="ai-card mb-24">
-          <div class="ai-spark">✨</div>
+          <div class="ai-spark">${platformIcon('ai')}</div>
           <div>
             <div class="flex items-center gap-8 mb-8">
               <strong style="color:var(--ink-900); font-size:14px;">Lumio AI Coach</strong>
@@ -131,7 +131,7 @@ function renderAcademyPath(pathId) {
   const content = `
     <header class="app-topbar">
       <div>
-        <button class="btn btn-ghost btn-sm mb-8" id="back-to-academy">← All Learning Paths</button>
+        <button class="btn btn-ghost btn-sm mb-8" id="back-to-academy">${platformIcon('back')} All Learning Paths</button>
         <h2 style="font-size:20px;">${path.icon} ${path.title}</h2>
         <p class="text-sm text-muted">${path.description}</p>
       </div>
@@ -203,7 +203,7 @@ function showAcademyTopic(topic, path) {
   overlay.querySelector('#close-lesson').addEventListener('click', () => overlay.remove());
   overlay.querySelector('#apply-lesson').addEventListener('click', () => {
     overlay.remove();
-    toast('Tip applied — head to your course to see the suggestion', '✨');
+    NotifySystem.notify({ message: 'Tip applied — head to your course to see the suggestion', type: 'ai' });
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
