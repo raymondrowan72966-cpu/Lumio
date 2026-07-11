@@ -5,9 +5,10 @@
    ============================================================ */
 
 const WORKSPACE_SETTINGS_TABS = [
-  { id: 'users', label: 'Users' },
+  { id: 'users',      label: 'Users' },
   { id: 'governance', label: 'Governance' },
-  { id: 'system', label: 'System Information' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'system',     label: 'System Information' },
 ];
 
 let workspaceSettingsTab = 'users';
@@ -54,9 +55,10 @@ function renderWorkspaceSettingsTab() {
   const host = document.getElementById('ws-tab-content');
   if (!host) return;
   switch (workspaceSettingsTab) {
-    case 'users': host.innerHTML = workspaceUsersTab(); bindWorkspaceUsersTab(); break;
-    case 'governance': host.innerHTML = workspaceGovernanceTab(); bindWorkspaceReviewsTab(); break;
-    case 'system': host.innerHTML = workspaceSystemTab(); break;
+    case 'users':      host.innerHTML = workspaceUsersTab();      bindWorkspaceUsersTab();      break;
+    case 'governance': host.innerHTML = workspaceGovernanceTab(); bindWorkspaceReviewsTab();    break;
+    case 'appearance': host.innerHTML = workspaceAppearanceTab(); bindWorkspaceAppearanceTab(); break;
+    case 'system':     host.innerHTML = workspaceSystemTab();                                   break;
   }
 }
 
@@ -153,6 +155,57 @@ function bindWorkspaceReviewsTab() {
     toast(`"${projectDisplayTitle(p)}" rejected`, '↩️');
     renderWorkspaceSettingsTab();
   }));
+}
+
+/* ---------------- APPEARANCE (Workspace Owner only) ----------------
+   Workspace Theme Selection — lets the Workspace Owner choose from available
+   built-in themes.  Theme cards are read-only: no rename, delete, or edit.
+   All CSS application flows through applyWorkspaceIdentity() — this tab
+   never touches --ws-* tokens directly. */
+
+function workspaceAppearanceTab() {
+  const identity   = ensureWorkspaceIdentity();
+  const selectedId = identity.selectedThemeId || 'lumio';
+
+  const themeCard = (theme) => {
+    const isSelected = theme.id === selectedId;
+    // Swatches are derived from the theme's own token values — no separate
+    // swatch array. The preview always reflects the actual Workspace Theme.
+    const swatches = [theme.tokens.primary, theme.tokens.secondary, theme.tokens.accent]
+      .map(c => `<span class="ws-theme-swatch" style="background:${c};"></span>`)
+      .join('');
+    return `
+      <div class="ws-theme-card${isSelected ? ' ws-theme-card--selected' : ''}" data-select-theme="${theme.id}" role="button" tabindex="0" aria-pressed="${isSelected}">
+        <div class="ws-theme-card__preview">${swatches}</div>
+        <div class="ws-theme-card__footer">
+          <span class="ws-theme-card__name">${escapeHtml(theme.name)}</span>
+          ${theme.locked ? '<span class="pill pill-grey" style="font-size:10px;padding:2px 7px;">Built-in</span>' : ''}
+          ${isSelected ? '<span class="ws-theme-card__check">✓</span>' : ''}
+        </div>
+      </div>`;
+  };
+
+  return `
+    <div class="card card-pad mb-24">
+      <div class="prop-section-title">Workspace Theme</div>
+      <p class="text-sm text-muted mb-16">Choose the visual theme applied to the platform shell. Course themes are not affected.</p>
+      <div class="ws-theme-grid">
+        ${BUILTIN_THEMES.map(themeCard).join('')}
+      </div>
+    </div>`;
+}
+
+function bindWorkspaceAppearanceTab() {
+  const host = document.getElementById('ws-tab-content');
+  if (!host) return;
+  host.querySelectorAll('[data-select-theme]').forEach(card => {
+    const activate = () => {
+      selectWorkspaceTheme(card.dataset.selectTheme);
+      renderWorkspaceSettingsTab();
+    };
+    card.addEventListener('click', activate);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+  });
 }
 
 /* ---------------- USERS ---------------- */

@@ -2049,3 +2049,67 @@ button { font-family: var(--font-body); cursor: pointer; }
 @media (max-width: 480px) {
   .lumio-chart-pie-circle { width: 120px; height: 120px; }
 }
+
+/* ── WORKSPACE THEME CARDS (Workspace Settings > Appearance) ──────────────
+   Preview swatches use inline background colours from the theme definition —
+   they never reference --ws-* tokens so the live application theme is never
+   modified during a hover or focus event. */
+.ws-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.ws-theme-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: var(--surface-0);
+  outline: none;
+}
+.ws-theme-card:hover {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 12%, transparent);
+}
+.ws-theme-card:focus-visible {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 20%, transparent);
+}
+.ws-theme-card--selected {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 18%, transparent);
+}
+.ws-theme-card__preview {
+  display: flex;
+  height: 72px;
+  overflow: hidden;
+}
+.ws-theme-swatch { flex: 1; }
+.ws-theme-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-0);
+}
+.ws-theme-card__name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.ws-theme-card__check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ws-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

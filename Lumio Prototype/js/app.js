@@ -115,7 +115,7 @@ const LumioState = {
   // Workspace Identity resource — platform skin owned by the workspace.
   // null until first cloud load or explicit save. Managed exclusively through
   // the generic Workspace Resource architecture (cloudSyncWorkspace / _loadCloudWorkspace).
-  // Sprint 3 will add applyWorkspaceIdentity(); this field is the data source.
+  // applyWorkspaceIdentity() reads this field and writes --ws-* CSS tokens.
   workspaceIdentity: null,
 
   // workspace system info (Workspace Owner only) — populated per-workspace
@@ -1080,7 +1080,7 @@ function ensureSaasFoundation() {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 20;
+const LUMIO_STATE_VERSION = 21;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts.
@@ -1674,12 +1674,21 @@ function migrateLumioState(record) {
 
   if (version < 20) {
     // v20: Workspace Identity Resource Foundation — ensure the workspaceIdentity
-    // key is present in state (null = not yet loaded from cloud; Sprint 3 will
-    // call applyWorkspaceIdentity() once the cloud value arrives).
+    // key is present in state (null = not yet loaded from cloud).
     if (!Object.prototype.hasOwnProperty.call(state, 'workspaceIdentity')) {
       state.workspaceIdentity = null;
     }
     version = 20;
+  }
+
+  if (version < 21) {
+    // v21: Workspace Theme Selection — add selectedThemeId to any existing
+    // workspaceIdentity object that pre-dates this sprint.
+    if (state.workspaceIdentity && typeof state.workspaceIdentity === 'object'
+        && !Object.prototype.hasOwnProperty.call(state.workspaceIdentity, 'selectedThemeId')) {
+      state.workspaceIdentity.selectedThemeId = 'lumio';
+    }
+    version = 21;
   }
 
   return state;
@@ -1860,6 +1869,34 @@ const WORKSPACE_RESOURCES = {
   workspaceIdentity: { stateKey: 'workspaceIdentity', singleton: true },
 };
 
+// Built-in Workspace Themes — locked, always available, always the fallback.
+// Each theme carries explicit token values. There are no independently stored
+// swatch values — preview cards derive swatches from tokens directly.
+// styles.css :root provides application defaults ONLY when Workspace Identity
+// is unavailable (unauthenticated / not yet loaded).
+const BUILTIN_THEMES = [
+  {
+    id:     'lumio',
+    name:   'Lumio',
+    locked: true,
+    tokens: {
+      primary:    '#7C3AED',
+      secondary:  '#4F46E5',
+      accent:     '#06B6D4',
+      surface:    '#FFFFFF',
+      surfaceAlt: '#FBFBFE',
+      border:     '#E5E5EE',
+      text:       '#3A3655',
+      textMuted:  '#8A8A9E',
+      icon:       '#7C3AED',
+      shadow:     '0 8px 24px rgba(31, 27, 58, 0.06)',
+      radius:     '20px',
+      sidebarBg:  '#FFFFFF',
+      topbarBg:   '#FFFFFF',
+    },
+  },
+];
+
 /**
  * Return the workspace identity object from LumioState, initialising it with
  * Lumio defaults if it has never been set.  This is the ONLY place the default
@@ -1871,7 +1908,7 @@ const WORKSPACE_RESOURCES = {
  * exposed to that detail.
  *
  * Client code must NEVER write to the `version` field — it is server-managed.
- * Sprint 3 will call applyWorkspaceIdentity() after every successful load/sync.
+ * applyWorkspaceIdentity() is called after every successful load/sync.
  *
  * Sections are intentionally sparse: Sprint 2 establishes structure only.
  * Future sprints populate each section without schema redesign.
@@ -1885,17 +1922,21 @@ function ensureWorkspaceIdentity() {
       // null = not yet persisted to D1; server assigns 1 on first upsert.
       version: null,
 
-      theme: {
-        // Populated by Sprint 3 — workspace primary/secondary/accent overrides.
-      },
+      // selectedThemeId tracks which built-in or custom theme is active.
+      // 'lumio' is the permanent default and fallback.
+      selectedThemeId: 'lumio',
+
+      // theme holds the active token overrides written by selectWorkspaceTheme().
+      // Empty object = Lumio built-in defaults from styles.css :root apply.
+      theme: {},
 
       logos: {
-        // Populated by Sprint 4 — R2 asset IDs only, never binary data.
+        // Populated by a future sprint — R2 asset IDs only, never binary data.
         // { primary: assetId | null, reversed: assetId | null, icon: assetId | null }
       },
 
       iconPack: {
-        // Populated by Sprint 5 — { packId: string, colour: string }
+        // Populated by a future sprint — { packId: string, colour: string }
       },
 
       settings: {
@@ -1903,7 +1944,35 @@ function ensureWorkspaceIdentity() {
       },
     };
   }
+  // selectedThemeId was added in v21; guard against pre-v21 persisted state.
+  if (!LumioState.workspaceIdentity.selectedThemeId) {
+    LumioState.workspaceIdentity.selectedThemeId = 'lumio';
+  }
   return LumioState.workspaceIdentity;
+}
+
+/**
+ * Apply a Workspace Theme by id.
+ *
+ * This is the ONLY function that may change which theme is active.  It writes
+ * the theme's token values into workspaceIdentity.theme and delegates all CSS
+ * application to applyWorkspaceIdentity() — no other code path writes --ws-*.
+ *
+ * Future custom themes will follow the same path: their token values are
+ * written to identity.theme and applyWorkspaceIdentity() handles the rest.
+ */
+function selectWorkspaceTheme(themeId) {
+  const theme = BUILTIN_THEMES.find(t => t.id === themeId);
+  if (!theme) {
+    console.warn('[Lumio] Unknown workspace theme id:', themeId);
+    return;
+  }
+  const identity = ensureWorkspaceIdentity();
+  identity.selectedThemeId  = themeId;
+  identity.theme            = { ...theme.tokens };
+  applyWorkspaceIdentity();
+  saveLumioState();
+  cloudSyncWorkspace('workspaceIdentity');
 }
 
 /**
@@ -1978,6 +2047,66 @@ async function _loadCloudWorkspace() {
     }
   }
   saveLumioState();
+}
+
+/* ── WORKSPACE THEME ENGINE ──────────────────────────────────────────────────
+ *
+ * applyWorkspaceIdentity() is the ONLY function that may write --ws-* CSS
+ * custom properties.  All Workspace Identity tokens are applied atomically
+ * via a single <style id="__lumio-ws-identity"> block scoped to :root.
+ *
+ * Separation contract:
+ *   • This function reads ONLY LumioState.workspaceIdentity.theme
+ *   • It NEVER reads course data or --theme-* tokens
+ *   • applyThemeVars() NEVER reads workspaceIdentity
+ *   • Learner containers (#lesson-canvas etc.) are never touched here
+ *
+ * When theme values are absent (identity null or theme empty), the style
+ * block is cleared and the :root defaults defined in styles.css take over.
+ * The Platform Shell is always fully functional regardless of identity state.
+ *
+ * Lifecycle: call after loadLumioState() and after _loadCloudWorkspace().
+ * Future callers of cloudSyncWorkspace('workspaceIdentity') must also call
+ * applyWorkspaceIdentity() after the sync resolves.
+ */
+function applyWorkspaceIdentity() {
+  const identity = LumioState.workspaceIdentity;
+  const theme    = (identity && typeof identity.theme === 'object') ? identity.theme : {};
+
+  // Ordered map of --ws-* token → theme key.  All 13 tokens are covered.
+  // Only tokens with non-empty values are emitted; absent tokens fall through
+  // to the :root defaults in styles.css (e.g. --ws-primary: var(--violet)).
+  const TOKEN_MAP = [
+    ['--ws-primary',     theme.primary    ],
+    ['--ws-secondary',   theme.secondary  ],
+    ['--ws-accent',      theme.accent     ],
+    ['--ws-surface',     theme.surface    ],
+    ['--ws-surface-alt', theme.surfaceAlt ],
+    ['--ws-border',      theme.border     ],
+    ['--ws-text',        theme.text       ],
+    ['--ws-text-muted',  theme.textMuted  ],
+    ['--ws-icon',        theme.icon       ],
+    ['--ws-shadow',      theme.shadow     ],
+    ['--ws-radius',      theme.radius     ],
+    ['--ws-sidebar-bg',  theme.sidebarBg  ],
+    ['--ws-topbar-bg',   theme.topbarBg   ],
+  ];
+
+  const declarations = TOKEN_MAP
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `  ${k}: ${v};`)
+    .join('\n');
+
+  let sheet = document.getElementById('__lumio-ws-identity');
+  if (!sheet) {
+    sheet = document.createElement('style');
+    sheet.id = '__lumio-ws-identity';
+    document.head.appendChild(sheet);
+  }
+
+  // Atomic: every token written in a single textContent assignment.
+  // Platform Shell never exists in an intermediate visual state.
+  sheet.textContent = declarations ? `:root {\n${declarations}\n}` : '';
 }
 
 /**
@@ -2364,6 +2493,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const restoredHash = loadLumioState();
   ensureStableBlockIdentity();
   ensureSaasFoundation();
+  // Apply persisted Workspace Identity immediately so the first paint reflects
+  // any previously loaded identity (avoids a flash of default brand on reload).
+  applyWorkspaceIdentity();
 
   // Restore server-managed session first. If a valid cookie exists, the server
   // returns the full auth context and we populate LumioSession — the user
@@ -2385,6 +2517,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       // Awaited before render() so the first paint shows cloud projects and
       // workspace resources (label packs, etc.).
       await Promise.all([_loadCloudProjects(), _loadCloudWorkspace()]);
+      // Re-apply after cloud load — server values take precedence over the
+      // persisted snapshot applied at startup above.
+      applyWorkspaceIdentity();
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
       LumioSession.clear();
