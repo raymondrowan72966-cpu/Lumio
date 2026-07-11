@@ -112,6 +112,12 @@ const LumioState = {
   // hasn't already gated.
   currentUser: null,
 
+  // Workspace Identity resource — platform skin owned by the workspace.
+  // null until first cloud load or explicit save. Managed exclusively through
+  // the generic Workspace Resource architecture (cloudSyncWorkspace / _loadCloudWorkspace).
+  // Sprint 3 will add applyWorkspaceIdentity(); this field is the data source.
+  workspaceIdentity: null,
+
   // workspace system info (Workspace Owner only) — populated per-workspace
   // once a real workspace exists; never pre-seeded.
   workspace: {
@@ -1074,7 +1080,7 @@ function ensureSaasFoundation() {
 
 /* ---------------- PERSISTENCE ---------------- */
 const LUMIO_STORAGE_KEY = 'lumio.state';
-const LUMIO_STATE_VERSION = 19;
+const LUMIO_STATE_VERSION = 20;
 
 /* Shared block-gap tokens — single source of truth used by both builder and
    learner preview so spacing can never silently diverge between contexts.
@@ -1106,6 +1112,7 @@ const LUMIO_PERSISTED_KEYS = [
   'users', 'workspaces', 'workspaceMemberships', 'session',
   'notifications', 'statusFilter', 'passwordResets',
   'labelPacks',
+  'workspaceIdentity',
 ];
 
 // Generates a stable local learner identifier in the form "local-xxxxxxxx".
@@ -1665,6 +1672,16 @@ function migrateLumioState(record) {
     version = 19;
   }
 
+  if (version < 20) {
+    // v20: Workspace Identity Resource Foundation — ensure the workspaceIdentity
+    // key is present in state (null = not yet loaded from cloud; Sprint 3 will
+    // call applyWorkspaceIdentity() once the cloud value arrives).
+    if (!Object.prototype.hasOwnProperty.call(state, 'workspaceIdentity')) {
+      state.workspaceIdentity = null;
+    }
+    version = 20;
+  }
+
   return state;
 }
 
@@ -1832,9 +1849,62 @@ async function _loadCloudProjects() {
 // (used as the URL segment and as the LumioState property name) to its config.
 // Extend here to add Themes, Branding, Settings — the sync and load functions
 // below iterate this registry automatically; no other code needs to change.
+// Fixed key used internally when wrapping singleton resources into the
+// Record<id, item> shape the generic API contract requires.
+// Consumers never see this key — wrapping/unwrapping is done in cloudSyncWorkspace
+// and _loadCloudWorkspace. The D1 row for any singleton type has id = this value.
+const WORKSPACE_SINGLETON_KEY = 'default';
+
 const WORKSPACE_RESOURCES = {
-  labelPacks: { stateKey: 'labelPacks' },
+  labelPacks:        { stateKey: 'labelPacks' },
+  workspaceIdentity: { stateKey: 'workspaceIdentity', singleton: true },
 };
+
+/**
+ * Return the workspace identity object from LumioState, initialising it with
+ * Lumio defaults if it has never been set.  This is the ONLY place the default
+ * structure is defined — all other code reads from ensureWorkspaceIdentity().
+ *
+ * LumioState.workspaceIdentity IS the direct singleton object.
+ * Wrapping into the Record<id, item> shape the generic API requires is handled
+ * internally by cloudSyncWorkspace / _loadCloudWorkspace — consumers are never
+ * exposed to that detail.
+ *
+ * Client code must NEVER write to the `version` field — it is server-managed.
+ * Sprint 3 will call applyWorkspaceIdentity() after every successful load/sync.
+ *
+ * Sections are intentionally sparse: Sprint 2 establishes structure only.
+ * Future sprints populate each section without schema redesign.
+ */
+function ensureWorkspaceIdentity() {
+  // Guard handles both null (never loaded) and any stale keyed-map shape
+  // ({ ws: {...} }) that may have been persisted during Sprint 2 development.
+  if (!LumioState.workspaceIdentity || !('theme' in LumioState.workspaceIdentity)) {
+    LumioState.workspaceIdentity = {
+      // version is server-managed; never incremented by the client.
+      // null = not yet persisted to D1; server assigns 1 on first upsert.
+      version: null,
+
+      theme: {
+        // Populated by Sprint 3 — workspace primary/secondary/accent overrides.
+      },
+
+      logos: {
+        // Populated by Sprint 4 — R2 asset IDs only, never binary data.
+        // { primary: assetId | null, reversed: assetId | null, icon: assetId | null }
+      },
+
+      iconPack: {
+        // Populated by Sprint 5 — { packId: string, colour: string }
+      },
+
+      settings: {
+        // Future workspace-level settings (locale, date format, etc.)
+      },
+    };
+  }
+  return LumioState.workspaceIdentity;
+}
 
 /**
  * Push all items of a given workspace resource type to D1.
@@ -1847,12 +1917,36 @@ async function cloudSyncWorkspace(resourceType) {
   if (!isCloudUser()) return;
   const def = WORKSPACE_RESOURCES[resourceType];
   if (!def) return;
-  const items = LumioState[def.stateKey] || {};
+
+  let items;
+  if (def.singleton) {
+    const value = LumioState[def.stateKey];
+    if (!value || typeof value !== 'object') {
+      console.warn('[Lumio] Skipping sync for singleton resource', resourceType, '— no value in state');
+      return;
+    }
+    // Wrap the direct singleton object into the generic keyed-map shape the API expects.
+    items = { [WORKSPACE_SINGLETON_KEY]: value };
+    // Enforce the singleton contract client-side before sending.
+    if (Object.keys(items).length !== 1) {
+      console.warn('[Lumio] Singleton resource', resourceType, 'produced unexpected item count — aborting sync');
+      return;
+    }
+  } else {
+    items = LumioState[def.stateKey] || {};
+  }
+
   try {
     const serverItems = await LumioAPI.workspace.syncResources(resourceType, items);
     // Merge server metadata (version, updatedAt, etc.) back into local state.
     if (serverItems && typeof serverItems === 'object') {
-      LumioState[def.stateKey] = serverItems;
+      if (def.singleton) {
+        // Unwrap: server returns { [SINGLETON_KEY]: item } — store the item directly.
+        const serverValue = serverItems[WORKSPACE_SINGLETON_KEY];
+        if (serverValue) LumioState[def.stateKey] = serverValue;
+      } else {
+        LumioState[def.stateKey] = serverItems;
+      }
       saveLumioState();
     }
   } catch (err) {
@@ -1869,9 +1963,15 @@ async function cloudSyncWorkspace(resourceType) {
 async function _loadCloudWorkspace() {
   for (const [type, def] of Object.entries(WORKSPACE_RESOURCES)) {
     try {
-      const items = await LumioAPI.workspace.getResources(type);
-      if (items && typeof items === 'object') {
-        LumioState[def.stateKey] = items;
+      const serverItems = await LumioAPI.workspace.getResources(type);
+      if (serverItems && typeof serverItems === 'object') {
+        if (def.singleton) {
+          // Unwrap: server returns { [SINGLETON_KEY]: item } — store the item directly.
+          const serverValue = serverItems[WORKSPACE_SINGLETON_KEY];
+          if (serverValue) LumioState[def.stateKey] = serverValue;
+        } else {
+          LumioState[def.stateKey] = serverItems;
+        }
       }
     } catch (err) {
       console.warn('[Lumio] Could not load workspace resource', type, err);

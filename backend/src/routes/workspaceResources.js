@@ -1,9 +1,16 @@
 import { dataResponse } from '../utils/response.js';
 import { AuthenticationError, PermissionError, ValidationError } from '../errors/index.js';
+import { requireRole } from '../middleware/authorize.js';
 import { WorkspaceResourceRepository } from '../repositories/WorkspaceResourceRepository.js';
 
-// Only types wired up in the frontend WORKSPACE_RESOURCES registry are served.
-const ALLOWED_TYPES = new Set(['labelPacks']);
+// Types wired up in the frontend WORKSPACE_RESOURCES registry.
+// Each entry may carry a writeRole — callers must hold that role to PUT.
+// Types without writeRole are writable by any authenticated workspace member.
+const RESOURCE_CONFIG = {
+  labelPacks:        {},
+  workspaceIdentity: { writeRole: 'workspace_owner', singleton: true },
+};
+const ALLOWED_TYPES = new Set(Object.keys(RESOURCE_CONFIG));
 
 function requireAuth(auth) {
   if (!auth.isAuthenticated) throw new AuthenticationError('Authentication required.');
@@ -27,11 +34,21 @@ async function handleSync(request, params, ctx) {
   if (!ALLOWED_TYPES.has(params.type)) {
     throw new ValidationError(`Unknown resource type: ${params.type}`);
   }
+  // Enforce per-type write role if configured.
+  const config = RESOURCE_CONFIG[params.type];
+  if (config.writeRole) {
+    requireRole(ctx.auth, [config.writeRole]);
+  }
   let body;
   try { body = await request.json(); } catch { body = {}; }
   const { items } = body;
   if (!items || typeof items !== 'object' || Array.isArray(items)) {
     throw new ValidationError('items must be an object keyed by resource id');
+  }
+  // Singleton resource types must receive exactly one item — enforce the contract
+  // server-side so no bug or future code path can corrupt a singleton with extra rows.
+  if (config.singleton && Object.keys(items).length !== 1) {
+    throw new ValidationError(`Singleton resource type '${params.type}' must contain exactly one item.`);
   }
   const repo  = new WorkspaceResourceRepository(ctx.db);
   const wsId  = ctx.auth.currentWorkspace.id;
