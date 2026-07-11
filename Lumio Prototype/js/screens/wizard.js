@@ -33,7 +33,7 @@ function renderWizard() {
       <!-- Top bar -->
       <div class="flex items-center justify-between" style="padding:18px 32px; position:relative; z-index:1;">
         <div class="flex items-center gap-12">
-          <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="wizard-logo" style="width:56px; height:56px; border-radius:0; object-fit:contain; display:block; cursor:pointer;" />
+          ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'wizard-logo' })}
           <span class="pill pill-indigo">${w.type === 'Microlearning' ? 'New Microlearning' : 'New Course'}</span>
         </div>
         <button class="btn btn-ghost btn-sm" id="exit-wizard">Save &amp; Exit</button>

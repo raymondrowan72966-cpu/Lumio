@@ -1897,6 +1897,38 @@ const BUILTIN_THEMES = [
   },
 ];
 
+// ── Workspace Logo Renderer ───────────────────────────────────────────────────
+// Every logo displayed on the platform is rendered through renderWorkspaceLogo().
+// No page or component may render logo assets directly.
+
+const LOGO_SLOTS = {
+  LOGIN_BADGE:    'login-badge',     // 40 × 40 brand badge in the login page backdrop corner
+  LOGIN_BRAND:    'login-brand',     // Reserved — 320 × 120 max, future white-label login lockup
+  SIDEBAR:        'sidebar',         // Normal sidebar icon (34 × 34)
+  SIDEBAR_LARGE:  'sidebar-large',   // Featured sidebar logo on hub/projects (140 × auto)
+  COMPACT:        'compact',         // Topbar icon in builder / learner / wizard (32 × 32)
+  WELCOME:        'welcome',         // Authenticated welcome/loading screen (240 × 240 max)
+  FAVICON:        'favicon',         // Reserved — managed by index.html <link rel="icon">
+};
+
+/**
+ * Return an <img> HTML string for the workspace logo at the given slot.
+ *
+ * Slot sizes are owned by CSS (.ws-logo--<slot>).  Pages must never apply
+ * inline sizing to logo images.
+ *
+ * @param {string} slot   - One of the LOGO_SLOTS values.
+ * @param {object} [opts] - { id: string } — optional DOM id for event binding.
+ */
+function renderWorkspaceLogo(slot, opts = {}) {
+  const identity = LumioState.workspaceIdentity;
+  const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
+  const FALLBACK = 'assets/lumio-logo-transparent.png';
+  const src      = logos[slot] || FALLBACK;
+  const idAttr   = opts.id ? ` id="${opts.id}"` : '';
+  return `<img src="${src}" alt="Workspace logo" class="ws-logo ws-logo--${slot}"${idAttr} />`;
+}
+
 /**
  * Return the workspace identity object from LumioState, initialising it with
  * Lumio defaults if it has never been set.  This is the ONLY place the default
@@ -2882,8 +2914,8 @@ function renderShell(activeId, contentHtml, opts = {}) {
       <aside class="app-sidebar">
         <div class="sidebar-logo" data-nav="#/welcome" style="${opts.largeLogo ? 'justify-content:center; padding:24px 10px;' : ''} cursor:pointer;">
           ${opts.largeLogo
-            ? `<img src="assets/lumio-logo-transparent.png" alt="Lumio" style="width:140px; height:auto; border-radius:0; object-fit:contain; display:block;" />`
-            : `<img src="assets/lumio-logo-transparent.png" alt="Lumio" /><span>Lumio</span>`}
+            ? renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR_LARGE)
+            : `${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}<span>Lumio</span>`}
         </div>
         ${NAV_ITEMS.map(item => `
           <div class="nav-item ${item.id === activeId ? 'active' : ''}" data-nav="${item.hash}">

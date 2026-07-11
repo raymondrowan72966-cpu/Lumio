@@ -45,7 +45,7 @@ function loginAuthCardShell(innerHtml) {
         <img src="assets/lumio-login-backdrop.png" alt="Lumio — Learn. Design. Inspire."
           style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:30% center; display:block;" />
         <div class="glass-card login-logo-badge" style="position:absolute; top:28px; left:28px; padding:8px 16px 8px 8px; display:flex; align-items:center; gap:10px;">
-          <img src="assets/lumio-logo-transparent.png" alt="Lumio logo" style="width:40px; height:40px; border-radius:10px; object-fit:cover; display:block;" />
+          ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}
           <span style="font-weight:700; font-size:17px; font-family:var(--font-display); color:var(--ink-900); letter-spacing:0.04em;">LUMIO</span>
         </div>
       </div>
@@ -72,7 +72,7 @@ function paintLogin() {
           style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:30% center; display:block;" />
 
         <div class="glass-card login-logo-badge" style="position:absolute; top:28px; left:28px; padding:8px 16px 8px 8px; display:flex; align-items:center; gap:10px;">
-          <img src="assets/lumio-logo-transparent.png" alt="Lumio logo" style="width:40px; height:40px; border-radius:10px; object-fit:cover; display:block;" />
+          ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}
           <span style="font-weight:700; font-size:17px; font-family:var(--font-display); color:var(--ink-900); letter-spacing:0.04em;">LUMIO</span>
         </div>
 

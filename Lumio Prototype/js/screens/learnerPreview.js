@@ -411,7 +411,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
   const headerHtml = `
     <header id="lp-header" class="flex items-center justify-between" style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0; gap:16px; flex-wrap:wrap;">
       <div class="flex items-center gap-12" style="min-width:0;">
-        <img src="assets/lumio-logo-transparent.png" alt="Lumio" id="lp-logo" style="width:28px; height:28px; border-radius:0; object-fit:contain; display:block; cursor:pointer; flex-shrink:0;" />
+        ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'lp-logo' })}
         ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.return')}</button>` : ''}
         <strong style="font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
         <span class="pill pill-indigo">👁️ Learner Preview</span>

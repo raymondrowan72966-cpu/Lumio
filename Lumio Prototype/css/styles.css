@@ -1117,7 +1117,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   padding: 8px 10px 20px 10px;
   cursor: pointer;
 }
-.sidebar-logo img { width: 34px; height: 34px; border-radius: var(--r-sm); }
+/* .sidebar-logo img sizing transferred to .ws-logo--sidebar (Sprint 5) */
 .sidebar-logo span {
   font-family: var(--font-display);
   font-weight: 700;
@@ -2113,3 +2113,12 @@ button { font-family: var(--font-body); cursor: pointer; }
   justify-content: center;
   flex-shrink: 0;
 }
+
+/* ── Workspace Logo Renderer ─────────────────────────────── */
+/* All sizing owned here. Pages must not set inline dimensions on logo imgs. */
+.ws-logo                { object-fit: contain; display: block; flex-shrink: 0; }
+.ws-logo--login-badge   { width: 40px; height: 40px; }
+.ws-logo--sidebar       { width: 34px; height: 34px; border-radius: var(--r-sm); }
+.ws-logo--sidebar-large { max-width: 140px; height: auto; }
+.ws-logo--compact       { width: 32px; height: 32px; cursor: pointer; }
+.ws-logo--welcome       { max-width: 240px; max-height: 240px; margin: 0 auto; }

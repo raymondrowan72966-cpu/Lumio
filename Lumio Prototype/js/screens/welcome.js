@@ -24,7 +24,7 @@ function renderWelcome() {
       ])}
 
       <div class="fade-in" style="position:relative; z-index:1; max-width:1040px; margin:0 auto; text-align:center;">
-        <img src="assets/lumio-logo-transparent.png" alt="Lumio logo" style="width:240px; height:240px; margin:0 auto 20px; object-fit:contain; display:block;" />
+        <div style="margin-bottom:20px;">${renderWorkspaceLogo(LOGO_SLOTS.WELCOME)}</div>
 
         <h1 style="font-size:38px; line-height:1.25;">
           Welcome to <span class="gradient-text">Lumio</span>, ${firstName}!
