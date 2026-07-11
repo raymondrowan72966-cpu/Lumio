@@ -121,6 +121,33 @@
   --plt-font-size-lg:  15px;
   --plt-radius-btn:    var(--r-pill);
   --plt-radius-card:   var(--r-lg);
+
+  /* ── Workspace Identity Tokens ──────────────────────────────────────────
+     These tokens govern ONLY the Lumio application shell: sidebar, topbar,
+     navigation, platform dialogs, Builder chrome, notifications, and all
+     platform-level interactive controls.
+     They MUST NEVER be referenced inside #lesson-canvas, .lumio-learner-root,
+     or .course-landing-root. Course content uses --theme-* exclusively.
+     These defaults match the Lumio brand identity. applyWorkspaceIdentity()
+     will override them at runtime for custom workspace configurations.
+     Neither system may reference the other:
+       --ws-* must never reference --theme-*
+       --theme-* must never reference --ws-*                                  */
+  --ws-primary:     var(--violet);        /* #7C3AED — Lumio brand primary    */
+  --ws-secondary:   var(--indigo);        /* #4F46E5 — Lumio brand secondary  */
+  --ws-accent:      var(--cyan);          /* #06B6D4 — Lumio brand accent     */
+  --ws-surface:     var(--surface-0);     /* #FFFFFF — Platform shell surface */
+  --ws-surface-alt: var(--surface-50);    /* #FBFBFE — Alternate surface      */
+  --ws-border:      var(--border);        /* #E5E5EE — Platform shell border  */
+  --ws-text:        var(--ink-700);       /* #3A3655 — Shell body text        */
+  --ws-text-muted:  var(--ink-400);       /* #8A8A9E — Shell muted text       */
+  --ws-icon:        var(--ws-primary);    /* Defaults to primary; overridden  */
+                                          /* by applyWorkspaceIdentity() only */
+                                          /* when icons.colour is non-null    */
+  --ws-shadow:      var(--shadow-soft);   /* Platform shell elevation         */
+  --ws-radius:      var(--r-lg);          /* Platform shell card radius       */
+  --ws-sidebar-bg:  var(--surface-0);     /* Sidebar background               */
+  --ws-topbar-bg:   var(--surface-0);     /* Top bar background               */
 }
 
 * { box-sizing: border-box; }
@@ -179,8 +206,14 @@ p { margin: 0; line-height: 1.7; }
 .editable-text p { margin: 0; line-height: 1.7; }
 .editable-text p:not(:last-child) { margin-bottom: 0.65em; }
 
-a { color: var(--theme-primary, var(--indigo)); text-decoration: none; }
+/* Platform shell links use the Workspace Identity primary.
+   Learner container links restore --theme-primary so course link colour is
+   controlled by the Course Theme, not the Workspace Identity. */
+a { color: var(--ws-primary, var(--indigo)); text-decoration: none; }
 a:hover { text-decoration: underline; }
+#lesson-canvas a,
+.lumio-learner-root a,
+.course-landing-root a { color: var(--theme-primary, var(--indigo)); }
 
 img { max-width: 100%; display: block; }
 
@@ -274,12 +307,20 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .btn-primary:focus-visible { box-shadow: var(--elevation-1), var(--focus-ring); }
 
+/* Platform primary button — uses Workspace Identity tokens.
+   Inside learner containers, restores Course Theme tokens so course-landing
+   call-to-action buttons respect the authored Course Theme, not the Workspace. */
 .btn-primary {
-  background: linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%);
+  background: linear-gradient(90deg, var(--ws-primary, #7C3AED) 0%, var(--ws-secondary, #4F46E5) 55%, var(--ws-accent, #06B6D4) 100%);
   color: #fff;
   box-shadow: var(--shadow-soft);
 }
 .btn-primary:hover { box-shadow: var(--shadow-lift); filter: brightness(1.04); }
+#lesson-canvas .btn-primary,
+.lumio-learner-root .btn-primary,
+.course-landing-root .btn-primary {
+  background: linear-gradient(90deg, var(--theme-primary, #7C3AED) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%);
+}
 
 /* Borderless by design — delineated with an inset shadow ring instead of a
    literal `border`, so there's a single crisp line on every edge rather
@@ -291,7 +332,10 @@ button { font-family: var(--font-body); cursor: pointer; }
   border: none;
   box-shadow: inset 0 0 0 1px var(--border);
 }
-.btn-secondary:hover { box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)); color: var(--theme-primary, var(--indigo)); }
+.btn-secondary:hover { box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); color: var(--ws-primary, var(--indigo)); }
+#lesson-canvas .btn-secondary:hover,
+.lumio-learner-root .btn-secondary:hover,
+.course-landing-root .btn-secondary:hover { box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)); color: var(--theme-primary, var(--indigo)); }
 
 /* Assessment Submit — sits below Continue (btn-primary) in visual hierarchy.
    Always primary-coloured outline + text at rest; never filled. Used by the
@@ -354,7 +398,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   transition: all 0.15s ease-out;
   outline: none;
 }
-.btn-icon:hover { color: var(--theme-primary, var(--indigo)); box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)); background: var(--pastel-lavender); }
+.btn-icon:hover { color: var(--ws-primary, var(--indigo)); box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); background: var(--pastel-lavender); }
 .btn-icon:active { transform: scale(0.94); }
 .btn-icon.danger:hover { color: var(--color-destructive); box-shadow: inset 0 0 0 1px var(--color-destructive); background: var(--color-destructive-tint); }
 /* Toggle/active state — shared by any icon button representing an on/off
@@ -362,13 +406,13 @@ button { font-family: var(--font-body); cursor: pointer; }
    need inline conditional background/color styling per instance. */
 .btn-icon.active,
 .btn-icon[aria-pressed="true"] {
-  background: var(--theme-primary, var(--indigo));
+  background: var(--ws-primary, var(--indigo));
   color: #fff;
   box-shadow: none;
 }
 .btn-icon.active:hover,
 .btn-icon[aria-pressed="true"]:hover {
-  background: var(--theme-primary, var(--indigo));
+  background: var(--ws-primary, var(--indigo));
   color: #fff;
   box-shadow: none;
 }
@@ -394,8 +438,8 @@ button { font-family: var(--font-body); cursor: pointer; }
   display: block;
 }
 
-.content-menu-btn:hover { color: var(--theme-primary, var(--indigo)); background: var(--pastel-lavender); }
-.content-title-edit:focus { background: var(--pastel-lavender); box-shadow: 0 0 0 2px var(--theme-primary, var(--indigo)); }
+.content-menu-btn:hover { color: var(--ws-primary, var(--indigo)); background: var(--pastel-lavender); }
+.content-title-edit:focus { background: var(--pastel-lavender); box-shadow: 0 0 0 2px var(--ws-primary, var(--indigo)); }
 .content-card.dragging { opacity: 0.5; }
 
 /* ============================================================
@@ -494,8 +538,8 @@ button { font-family: var(--font-body); cursor: pointer; }
   width: 100%;
 }
 .input:focus, .textarea:focus, select.input:focus {
-  border-color: var(--theme-primary, var(--indigo));
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme-primary, var(--indigo)) 10%, transparent);
+  border-color: var(--ws-primary, var(--indigo));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ws-primary, var(--indigo)) 10%, transparent);
 }
 .textarea { resize: vertical; min-height: 90px; font-family: var(--font-body); }
 
@@ -1098,9 +1142,9 @@ button { font-family: var(--font-body); cursor: pointer; }
 .nav-item:hover { background: var(--pastel-lavender); }
 .nav-item.active {
   background: var(--pastel-lavender);
-  color: var(--theme-primary, var(--indigo));
+  color: var(--ws-primary, var(--indigo));
   font-weight: 600;
-  border-left: 3px solid var(--theme-primary, var(--indigo));
+  border-left: 3px solid var(--ws-primary, var(--indigo));
 }
 .nav-section-label {
   font-size: 11px;
@@ -1180,7 +1224,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   transition: color 0.15s ease-out, border-color 0.15s ease-out;
 }
 .tab:hover { color: var(--ink-700); }
-.tab.active { color: var(--theme-primary, var(--indigo)); border-bottom: 2px solid var(--theme-primary, var(--indigo)); }
+.tab.active { color: var(--ws-primary, var(--indigo)); border-bottom: 2px solid var(--ws-primary, var(--indigo)); }
 
 /* ============================================================
    AI ELEMENTS
@@ -1246,11 +1290,11 @@ button { font-family: var(--font-body); cursor: pointer; }
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .mp-dropzone:hover {
-  border-color: var(--theme-primary, var(--indigo));
+  border-color: var(--ws-primary, var(--indigo));
 }
 .mp-dropzone.drag-active {
-  border-color: var(--theme-primary, var(--indigo));
-  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-50));
+  border-color: var(--ws-primary, var(--indigo));
+  background: color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-50));
 }
 .mp-dropzone-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1590,7 +1634,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   font-size: 12px; font-weight: 600; color: var(--ink-700); white-space: nowrap;
   cursor: pointer; transition: all .12s; outline: none;
 }
-.seg-control button:hover { box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)); color: var(--theme-primary, var(--indigo)); }
+.seg-control button:hover { box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); color: var(--ws-primary, var(--indigo)); }
 .seg-control button.active {
   background: var(--gradient-primary); color: #fff; box-shadow: none;
 }
@@ -1733,7 +1777,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .notif-tab.active {
   color: var(--ink-900);
-  border-bottom-color: var(--theme-primary, var(--indigo));
+  border-bottom-color: var(--ws-primary, var(--indigo));
 }
 .notif-centre-list { flex: 1; overflow-y: auto; }
 .notif-centre-empty {

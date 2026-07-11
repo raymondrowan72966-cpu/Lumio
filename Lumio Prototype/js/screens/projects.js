@@ -162,7 +162,7 @@ function teamProjectsChip() {
   if (count === 0) return '';
   const active = LumioState.currentFolder === '__team__';
   return `
-    <div class="pill" style="background:${active ? 'var(--violet)' : 'var(--surface-0)'}; border:1px solid ${active ? 'var(--violet)' : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="__team__">
+    <div class="pill" style="background:${active ? 'var(--ws-primary)' : 'var(--surface-0)'}; border:1px solid ${active ? 'var(--ws-primary)' : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="__team__">
       <span style="font-size:14px;">👥</span>
       <span style="color:${active ? '#fff' : 'var(--ink-900)'}; font-weight:600;">Team Projects</span>
       <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'};">${count}</span>
@@ -1085,14 +1085,14 @@ function openShareModal(id) {
         <p class="text-sm text-muted mb-20">Control who can access this project.</p>
 
         <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
-          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeTeam ? 'var(--violet)' : 'var(--border)'}; background:${scopeTeam ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-team-label">
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeTeam ? 'var(--ws-primary)' : 'var(--border)'}; background:${scopeTeam ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-team-label">
             <input type="radio" name="share-scope" value="team" ${scopeTeam ? 'checked' : ''} style="margin-top:2px;">
             <div>
               <div style="font-weight:600; font-size:13px;">👥 Share with Team</div>
               <div class="text-sm text-muted mt-4">Visible to all workspace members.</div>
             </div>
           </label>
-          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeIndividual ? 'var(--violet)' : 'var(--border)'}; background:${scopeIndividual ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-individual-label">
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeIndividual ? 'var(--ws-primary)' : 'var(--border)'}; background:${scopeIndividual ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-individual-label">
             <input type="radio" name="share-scope" value="individual" ${scopeIndividual ? 'checked' : ''} style="margin-top:2px;">
             <div style="flex:1;">
               <div style="font-weight:600; font-size:13px;">👤 Share with Individual</div>
@@ -1113,7 +1113,7 @@ function openShareModal(id) {
           <div class="text-sm text-muted mb-8">Permission</div>
           <div style="display:flex; gap:8px;">
             ${['view','comment','edit'].map(perm => `
-              <label style="flex:1; text-align:center; cursor:pointer; padding:10px 8px; border-radius:var(--r-md); border:2px solid ${currentPermission===perm ? 'var(--violet)' : 'var(--border)'}; background:${currentPermission===perm ? 'var(--violet-tint-md)' : 'var(--surface-0)'}; font-size:13px; font-weight:${currentPermission===perm ? '600' : '400'};" class="perm-label" data-perm="${perm}">
+              <label style="flex:1; text-align:center; cursor:pointer; padding:10px 8px; border-radius:var(--r-md); border:2px solid ${currentPermission===perm ? 'var(--ws-primary)' : 'var(--border)'}; background:${currentPermission===perm ? 'var(--violet-tint-md)' : 'var(--surface-0)'}; font-size:13px; font-weight:${currentPermission===perm ? '600' : '400'};" class="perm-label" data-perm="${perm}">
                 <input type="radio" name="share-perm" value="${perm}" ${currentPermission===perm ? 'checked' : ''} style="display:none;">
                 ${{ view:'👁️ View', comment:'💬 Comment', edit:'✏️ Edit' }[perm]}
               </label>
@@ -1138,9 +1138,9 @@ function openShareModal(id) {
     radio.addEventListener('change', () => {
       const isTeam = radio.value === 'team';
       const isIndiv = radio.value === 'individual';
-      overlay.querySelector('#scope-team-label').style.borderColor = isTeam ? 'var(--violet)' : 'var(--border)';
+      overlay.querySelector('#scope-team-label').style.borderColor = isTeam ? 'var(--ws-primary)' : 'var(--border)';
       overlay.querySelector('#scope-team-label').style.background = isTeam ? 'var(--violet-tint)' : 'var(--surface-0)';
-      overlay.querySelector('#scope-individual-label').style.borderColor = isIndiv ? 'var(--violet)' : 'var(--border)';
+      overlay.querySelector('#scope-individual-label').style.borderColor = isIndiv ? 'var(--ws-primary)' : 'var(--border)';
       overlay.querySelector('#scope-individual-label').style.background = isIndiv ? 'var(--violet-tint)' : 'var(--surface-0)';
       overlay.querySelector('#individual-picker').style.display = isIndiv ? 'block' : 'none';
     });
@@ -1151,7 +1151,7 @@ function openShareModal(id) {
     lbl.addEventListener('click', () => {
       overlay.querySelectorAll('.perm-label').forEach(l => {
         const active = l.dataset.perm === lbl.dataset.perm;
-        l.style.borderColor = active ? 'var(--violet)' : 'var(--border)';
+        l.style.borderColor = active ? 'var(--ws-primary)' : 'var(--border)';
         l.style.background = active ? 'var(--violet-tint-md)' : 'var(--surface-0)';
         l.style.fontWeight = active ? '600' : '400';
       });

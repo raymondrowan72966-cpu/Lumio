@@ -286,7 +286,7 @@ function canvasStyles() {
       .drop-zone-add:focus-visible { opacity:1; }
       .drop-zone:hover .drop-zone-line { background:var(--border); }
       .drop-zone-add:hover, .drop-zone-add:focus-visible {
-        border-color:var(--theme-primary, var(--indigo)); color:var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
       }
       /* While a block is being dragged, faintly reveal every insertion line so placement stays obvious */
       #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
@@ -294,28 +294,28 @@ function canvasStyles() {
       /* Magnetic highlight — the zone under the dragged item lights up,
          the line thickens with a soft glow, and the "+" pops in slightly
          enlarged so the drop target feels alive without needing pixel-perfect aim. */
-      .drop-zone.drag-active { background:color-mix(in srgb, var(--theme-primary, var(--indigo)) 5%, transparent); }
+      .drop-zone.drag-active { background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 5%, transparent); }
       .drop-zone.drag-active .drop-zone-line {
-        background:var(--theme-primary, var(--indigo)); height:3px;
-        box-shadow:0 0 0 4px color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, transparent);
+        background:var(--ws-primary, var(--indigo)); height:3px;
+        box-shadow:0 0 0 4px color-mix(in srgb, var(--ws-primary, var(--indigo)) 12%, transparent);
       }
       .drop-zone.drag-active .drop-zone-add {
         opacity:1; transform:scale(1.15);
-        border-color:var(--theme-primary, var(--indigo)); color:var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
       }
 
       /* Active insertion zone — lightweight placeholder shown after clicking "+" */
       .insertion-zone { height:auto; margin:8px 0; }
       .insertion-zone-box {
         width:100%; padding:14px 16px; border-radius:var(--r-md);
-        border:1.5px dashed var(--theme-primary, var(--indigo)); background:var(--pastel-lavender);
+        border:1.5px dashed var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
         text-align:center; transition:border-color .12s, background-color .12s;
       }
       .insertion-zone.drag-active .insertion-zone-box {
         border-style:solid; border-width:2px;
-        background:color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, var(--pastel-lavender));
+        background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 12%, var(--pastel-lavender));
       }
-      .insertion-zone-title { font-size:13px; font-weight:600; color:var(--theme-primary, var(--indigo)); }
+      .insertion-zone-title { font-size:13px; font-weight:600; color:var(--ws-primary, var(--indigo)); }
       .insertion-zone-title-drop { display:none; }
       .insertion-zone.drag-active .insertion-zone-title-default { display:none; }
       .insertion-zone.drag-active .insertion-zone-title-drop { display:inline; }
@@ -325,7 +325,7 @@ function canvasStyles() {
       .empty-canvas { position:relative; text-align:center; padding:28px 24px; }
       .empty-canvas-line { position:absolute; left:0; right:0; top:24px; height:0; border-top:1px dashed var(--border); }
       .empty-canvas-add { position:relative; opacity:1; width:28px; height:28px; font-size:16px; margin:0 auto; }
-      .empty-canvas.drag-active .empty-canvas-line { border-top-style:solid; border-color:var(--theme-primary, var(--indigo)); }
+      .empty-canvas.drag-active .empty-canvas-line { border-top-style:solid; border-color:var(--ws-primary, var(--indigo)); }
 
       /* Quote Style 3 & 4 — stack to a centred column on narrow viewports.
          Uses a container query (against #lesson-canvas / <main>, which have
