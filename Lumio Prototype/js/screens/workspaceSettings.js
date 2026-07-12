@@ -188,18 +188,115 @@ const _COMING_SOON_ICON_PACKS = [
 
 // ── Logo slot specifications ──────────────────────────────────────
 // Source of truth for the Logos section display. Slot keys match LOGO_SLOTS values.
+// maxW / maxH: canvas fit-inside bounds used by _processLogoFile().
 const _LOGO_SLOT_SPECS = [
-  { slot: 'sidebar',       label: 'Sidebar Icon',     desc: 'Appears in the left navigation sidebar.',                             size: '34 × 34 px',       fmt: 'PNG · SVG' },
-  { slot: 'sidebar-large', label: 'Sidebar — Large',  desc: 'Featured logo on Projects and Hub when the sidebar is expanded.',     size: '140 × 40 px',      fmt: 'PNG · SVG' },
-  { slot: 'compact',       label: 'Compact',          desc: 'Topbar logo in Course Builder, Wizard, and Learner Preview.',         size: '32 × 32 px',       fmt: 'PNG · SVG' },
-  { slot: 'login-badge',   label: 'Login Badge',      desc: 'Brand badge in the login page backdrop corner.',                     size: '40 × 40 px',       fmt: 'PNG · SVG' },
-  { slot: 'welcome',       label: 'Welcome Screen',   desc: 'Displayed on the post-login welcome and onboarding tour screen.',    size: '240 × 240 px',     fmt: 'PNG · SVG · JPG' },
+  { slot: 'sidebar',       label: 'Sidebar Icon',    desc: 'Left navigation sidebar icon.',                                        size: '34 × 34 px',    fmt: 'PNG · SVG',         maxW: 68,  maxH: 68,  accept: 'image/png,image/svg+xml' },
+  { slot: 'sidebar-large', label: 'Sidebar — Large', desc: 'Featured logo on Projects and Hub when the sidebar is expanded.',      size: '140 × 40 px',   fmt: 'PNG · SVG',         maxW: 280, maxH: 80,  accept: 'image/png,image/svg+xml' },
+  { slot: 'compact',       label: 'Compact',         desc: 'Topbar logo in Course Builder, Wizard, and Learner Preview.',          size: '32 × 32 px',    fmt: 'PNG · SVG',         maxW: 64,  maxH: 64,  accept: 'image/png,image/svg+xml' },
+  { slot: 'login-badge',   label: 'Login Badge',     desc: 'Brand badge in the login page backdrop corner.',                      size: '40 × 40 px',    fmt: 'PNG · SVG',         maxW: 80,  maxH: 80,  accept: 'image/png,image/svg+xml' },
+  { slot: 'welcome',       label: 'Welcome Screen',  desc: 'Post-login welcome and onboarding tour screen.',                      size: '240 × 240 px',  fmt: 'PNG · SVG · JPG',   maxW: 480, maxH: 480, accept: 'image/png,image/svg+xml,image/jpeg' },
 ];
 
 const _LOGO_RESERVED_SPECS = [
-  { slot: 'login-brand', label: 'Login Brand',  desc: 'Full-width white-label login lockup. Architectural slot reserved — white-label login sprint.',            size: '320 × 120 px', fmt: 'PNG · SVG' },
-  { slot: 'favicon',     label: 'Favicon',       desc: 'Browser tab icon. Managed via <link rel="icon"> in index.html — outside application scope.',             size: '32 × 32 px',   fmt: 'ICO · PNG' },
+  { slot: 'login-brand', label: 'Login Brand', desc: 'Full-width white-label login lockup. Architectural slot reserved — white-label login sprint.', size: '320 × 120 px', fmt: 'PNG · SVG' },
+  { slot: 'favicon',     label: 'Favicon',     desc: 'Browser tab icon. Managed via <link rel="icon"> in index.html — outside application scope.',  size: '32 × 32 px',   fmt: 'ICO · PNG' },
 ];
+
+// Maximum file size accepted for logo uploads (bytes).
+const _LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// ── Logo upload pipeline ──────────────────────────────────────────
+
+/**
+ * Process a File from an <input type="file"> into a data: URL sized to fit
+ * inside the slot's canvas bounds (maxW × maxH), preserving transparency and
+ * aspect ratio. SVGs are stored as-is (data:image/svg+xml;base64,...) because
+ * rasterising them loses sharpness. Raster formats are drawn onto an offscreen
+ * canvas and exported as PNG to guarantee lossless transparency.
+ *
+ * @param {File}   file  — the chosen File object
+ * @param {object} spec  — one entry from _LOGO_SLOT_SPECS
+ * @returns {Promise<string>} — resolves with a data: URL, rejects with a user-readable error string
+ */
+function _processLogoFile(file, spec) {
+  return new Promise((resolve, reject) => {
+    // ── Validation ────────────────────────────────────────────────
+    const allowed = spec.accept.split(',').map(s => s.trim());
+    if (!allowed.includes(file.type) && !(file.type === '' && file.name.endsWith('.svg'))) {
+      return reject(`Unsupported file type "${file.type || file.name.split('.').pop()}". Accepted: ${spec.fmt}.`);
+    }
+    if (file.size > _LOGO_MAX_BYTES) {
+      return reject(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 2 MB.`);
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject('Could not read the file — please try again.');
+
+    // SVG: store as-is without rasterising.
+    if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Raster (PNG / JPG): fit-inside canvas resize → PNG data URL.
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject('Could not decode the image. Please check the file and try again.');
+      img.onload = () => {
+        const { maxW, maxH } = spec;
+        // Fit-inside: scale down only, never up.
+        const scale  = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+        const dw     = Math.round(img.naturalWidth  * scale);
+        const dh     = Math.round(img.naturalHeight * scale);
+
+        // Dimension guard — must produce at least 1×1.
+        if (dw < 1 || dh < 1) return reject('Image dimensions are too small.');
+
+        const canvas  = document.createElement('canvas');
+        canvas.width  = dw;
+        canvas.height = dh;
+        const ctx     = canvas.getContext('2d');
+        // Clear to transparent before drawing so PNG alpha is preserved.
+        ctx.clearRect(0, 0, dw, dh);
+        ctx.drawImage(img, 0, 0, dw, dh);
+
+        try {
+          resolve(canvas.toDataURL('image/png'));
+        } catch (e) {
+          reject('Could not export the image. The file may be cross-origin or corrupted.');
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Commit a processed data: URL into workspaceIdentity.logos[slot], persist,
+ * and cloud-sync. Then trigger live updates across the shell.
+ */
+function _commitLogoUpload(slot, dataUrl) {
+  const identity = ensureWorkspaceIdentity();
+  if (typeof identity.logos !== 'object' || identity.logos === null) identity.logos = {};
+  identity.logos[slot] = dataUrl;
+  saveLumioState();
+  cloudSyncWorkspace('workspaceIdentity');
+}
+
+/**
+ * Remove a custom logo from a slot, restoring the Lumio default fallback.
+ */
+function _removeLogoUpload(slot) {
+  const identity = ensureWorkspaceIdentity();
+  if (identity.logos && slot in identity.logos) {
+    delete identity.logos[slot];
+    saveLumioState();
+    cloudSyncWorkspace('workspaceIdentity');
+  }
+}
+
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -415,11 +512,14 @@ function _wsPackSection(selectedPack) {
     </div>`;
 }
 
-function _wsLogoSection() {
-  const slotCard = (spec) => `
-    <div class="ws-logo-slot-card">
+// Render an upload slot card. hasCustom = whether a non-fallback logo is set.
+function _wsLogoSlotCard(spec, hasCustom) {
+  const logoHtml = renderWorkspaceLogo(spec.slot);
+  const maxMB    = (_LOGO_MAX_BYTES / 1024 / 1024).toFixed(0);
+  return `
+    <div class="ws-logo-slot-card" data-logo-slot="${escapeHtml(spec.slot)}">
       <div class="ws-logo-slot-preview">
-        ${renderWorkspaceLogo(spec.slot)}
+        <div class="ws-logo-slot-img-wrap">${logoHtml}</div>
       </div>
       <div class="ws-logo-slot-body">
         <div class="ws-logo-slot-name">${escapeHtml(spec.label)}</div>
@@ -427,12 +527,23 @@ function _wsLogoSection() {
         <div class="ws-logo-slot-specs">
           <span class="ws-logo-slot-spec">${escapeHtml(spec.size)}</span>
           <span class="ws-logo-slot-spec">${escapeHtml(spec.fmt)}</span>
+          <span class="ws-logo-slot-spec">Max ${maxMB} MB</span>
         </div>
-        <button class="btn btn-secondary btn-sm w-full" disabled style="opacity:.5;cursor:not-allowed;" title="Logo uploads are planned for a future sprint">
-          Upload Logo
-        </button>
+        <div class="ws-logo-upload-error" id="ws-logo-err-${escapeHtml(spec.slot)}" role="alert" aria-live="polite"></div>
+        <div class="ws-logo-slot-actions">
+          <label class="btn btn-secondary btn-sm ws-logo-upload-label" title="Upload a custom logo for this slot">
+            ${hasCustom ? 'Replace' : 'Upload'}
+            <input type="file" class="ws-logo-file-input" accept="${escapeHtml(spec.accept)}" data-upload-slot="${escapeHtml(spec.slot)}" aria-label="Upload logo for ${escapeHtml(spec.label)}" />
+          </label>
+          ${hasCustom ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="${escapeHtml(spec.slot)}" title="Remove custom logo and restore default" aria-label="Remove logo for ${escapeHtml(spec.label)}">Remove</button>` : ''}
+        </div>
       </div>
     </div>`;
+}
+
+function _wsLogoSection() {
+  const logos   = ensureWorkspaceIdentity().logos || {};
+  const FALLBACK = 'assets/lumio-logo-transparent.png';
 
   const reservedCard = (spec) => `
     <div class="ws-logo-slot-card ws-logo-slot-card--reserved">
@@ -454,11 +565,11 @@ function _wsLogoSection() {
       <div class="ws-section-header mb-4">
         <div>
           <div class="prop-section-title mb-2">Workspace Logos</div>
-          <p class="text-sm text-muted">Upload custom logos for each platform context. All rendering flows through <code style="font-size:11px;background:var(--surface-alt);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">renderWorkspaceLogo()</code> — only the asset path changes. Logo upload is planned for a future sprint.</p>
+          <p class="text-sm text-muted">Upload custom logos for each platform context. All rendering flows through <code style="font-size:11px;background:var(--surface-alt);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">renderWorkspaceLogo()</code> — only the asset path changes.</p>
         </div>
       </div>
       <div class="ws-logo-slot-grid mt-16 mb-24">
-        ${_LOGO_SLOT_SPECS.map(slotCard).join('')}
+        ${_LOGO_SLOT_SPECS.map(spec => _wsLogoSlotCard(spec, !!(logos[spec.slot] && logos[spec.slot] !== FALLBACK))).join('')}
       </div>
       <div class="ws-subsection-label mb-10">Reserved Slots</div>
       <div class="ws-logo-slot-grid ws-logo-slot-grid--reserved">
@@ -468,12 +579,18 @@ function _wsLogoSection() {
 }
 
 function _wsLoginBrandSection() {
+  const logos    = ensureWorkspaceIdentity().logos || {};
+  const FALLBACK = 'assets/lumio-logo-transparent.png';
+  const spec     = _LOGO_SLOT_SPECS.find(s => s.slot === 'login-badge');
+  const hasCustom = !!(logos['login-badge'] && logos['login-badge'] !== FALLBACK);
+  const maxMB    = (_LOGO_MAX_BYTES / 1024 / 1024).toFixed(0);
+
   return `
     <div class="card card-pad mb-24">
       <div class="ws-section-header mb-4">
         <div>
           <div class="prop-section-title mb-2">Login Branding</div>
-          <p class="text-sm text-muted">Customise how the login screen presents your workspace. The Login Badge is already live via the Logos section above.</p>
+          <p class="text-sm text-muted">Customise how the login screen presents your workspace. Login Badge changes appear on the login page immediately.</p>
         </div>
       </div>
       <div class="ws-login-brand-layout mt-16">
@@ -492,18 +609,26 @@ function _wsLoginBrandSection() {
           </div>
         </div>
         <div class="ws-login-brand-slots">
-          <div class="ws-logo-slot-card" style="flex:1;">
+          <div class="ws-logo-slot-card" data-logo-slot="login-badge" style="flex:1;">
             <div class="ws-logo-slot-preview" style="background:var(--surface-alt);">
-              ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}
+              <div class="ws-logo-slot-img-wrap">${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}</div>
             </div>
             <div class="ws-logo-slot-body">
               <div class="ws-logo-slot-name">Login Badge <span class="pill pill-teal" style="font-size:10px;padding:1px 6px;margin-left:4px;">Live</span></div>
-              <div class="ws-logo-slot-desc">Brand badge displayed in the login page backdrop corner. Currently uses the default Lumio logo.</div>
+              <div class="ws-logo-slot-desc">Brand badge displayed in the login page backdrop corner.</div>
               <div class="ws-logo-slot-specs">
                 <span class="ws-logo-slot-spec">40 × 40 px</span>
                 <span class="ws-logo-slot-spec">PNG · SVG</span>
+                <span class="ws-logo-slot-spec">Max ${maxMB} MB</span>
               </div>
-              <button class="btn btn-secondary btn-sm w-full" disabled style="opacity:.5;cursor:not-allowed;">Upload Badge</button>
+              <div class="ws-logo-upload-error" id="ws-logo-err-login-badge-brand" role="alert" aria-live="polite"></div>
+              <div class="ws-logo-slot-actions">
+                <label class="btn btn-secondary btn-sm ws-logo-upload-label" title="Upload a custom login badge">
+                  ${hasCustom ? 'Replace' : 'Upload'}
+                  <input type="file" class="ws-logo-file-input" accept="${escapeHtml(spec.accept)}" data-upload-slot="login-badge" aria-label="Upload login badge" />
+                </label>
+                ${hasCustom ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="login-badge" title="Remove custom badge and restore default">Remove</button>` : ''}
+              </div>
             </div>
           </div>
           <div class="ws-logo-slot-card ws-logo-slot-card--reserved" style="flex:1;">
@@ -544,16 +669,17 @@ function bindWorkspaceAppearanceTab() {
   const host = document.getElementById('ws-tab-content');
   if (!host) return;
 
+  // ── Theme selection ───────────────────────────────────────────
   host.querySelectorAll('[data-select-theme]').forEach(card => {
     const activate = () => {
       selectWorkspaceTheme(card.dataset.selectTheme);
-      // Full shell re-render so the live preview, sidebar, and tab all update.
       renderWorkspaceSettings();
     };
     card.addEventListener('click', activate);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
   });
 
+  // ── Icon pack selection ───────────────────────────────────────
   host.querySelectorAll('[data-select-pack]').forEach(card => {
     const activate = () => {
       selectWorkspaceIconPack(card.dataset.selectPack);
@@ -561,6 +687,55 @@ function bindWorkspaceAppearanceTab() {
     };
     card.addEventListener('click', activate);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+  });
+
+  // ── Logo file inputs ──────────────────────────────────────────
+  host.querySelectorAll('.ws-logo-file-input[data-upload-slot]').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const slot   = input.dataset.uploadSlot;
+      const spec   = _LOGO_SLOT_SPECS.find(s => s.slot === slot);
+      if (!spec) return;
+
+      // Show loading state on the upload label.
+      const label  = input.closest('label');
+      const origTxt = label ? label.childNodes[0].textContent.trim() : '';
+      if (label) label.childNodes[0].textContent = 'Processing…';
+
+      // Clear any previous error for this slot (both error elements if duplicated in Login Branding).
+      host.querySelectorAll(`[id^="ws-logo-err-${slot}"]`).forEach(el => { el.textContent = ''; el.classList.remove('ws-logo-upload-error--visible'); });
+
+      _processLogoFile(file, spec)
+        .then(dataUrl => {
+          _commitLogoUpload(slot, dataUrl);
+          // Full re-render of the settings page updates Logos cards, Login Branding,
+          // and the Live Preview. _refreshLogoInstances already updated sidebar/topbar.
+          renderWorkspaceSettings();
+        })
+        .catch(errMsg => {
+          // Restore label text.
+          if (label) label.childNodes[0].textContent = origTxt;
+          // Display inline error beneath the upload button.
+          const errEl = host.querySelector(`#ws-logo-err-${slot}, [id^="ws-logo-err-${slot}"]`);
+          if (errEl) {
+            errEl.textContent = errMsg;
+            errEl.classList.add('ws-logo-upload-error--visible');
+          }
+          // Reset the file input so the same file can be retried.
+          input.value = '';
+        });
+    });
+  });
+
+  // ── Logo remove buttons ───────────────────────────────────────
+  host.querySelectorAll('.ws-logo-remove-btn[data-remove-slot]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slot = btn.dataset.removeSlot;
+      _removeLogoUpload(slot);
+      renderWorkspaceSettings();
+    });
   });
 }
 
