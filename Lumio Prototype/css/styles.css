@@ -2114,6 +2114,476 @@ button { font-family: var(--font-body); cursor: pointer; }
   flex-shrink: 0;
 }
 
+/* ── Icon Pack Cards (Workspace Appearance > Icon Pack, Sprint 8) ── */
+.ws-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.ws-pack-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: var(--surface-0);
+  outline: none;
+}
+.ws-pack-card:hover:not(.ws-pack-card--disabled) {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 12%, transparent);
+}
+.ws-pack-card:focus-visible {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 20%, transparent);
+}
+.ws-pack-card--selected {
+  border-color: var(--ws-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary) 18%, transparent);
+}
+.ws-pack-card--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.ws-pack-card__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 68px;
+  padding: 0 16px;
+  background: var(--surface-alt);
+  font-size: 20px;
+}
+.ws-pack-card__preview--empty {
+  font-size: 10px;
+  color: var(--ink-400);
+  font-style: italic;
+  text-align: center;
+}
+.ws-pack-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-0);
+}
+.ws-pack-card__name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.ws-pack-card__desc {
+  font-size: 11px;
+  color: var(--ink-500);
+  padding: 0 12px 10px;
+}
+.ws-pack-grid--compact .ws-pack-card {
+  cursor: not-allowed;
+}
+
+/* ── Shared section helpers (Sprint 9) ──────────────────────────── */
+.ws-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ws-subsection-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+/* ── Live Preview section (Sprint 9) ────────────────────────────── */
+.ws-prev-frame {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-0);
+}
+.ws-prev-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+.ws-prev-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.ws-prev-url {
+  flex: 1;
+  font-size: 11px;
+  color: var(--ink-400);
+  text-align: center;
+  margin: 0 8px;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+.ws-prev-shell {
+  display: flex;
+  height: 200px;
+}
+.ws-prev-sidebar {
+  width: 180px;
+  flex-shrink: 0;
+  background: var(--ws-sidebar-bg, var(--surface-alt));
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  gap: 4px;
+}
+.ws-prev-sidebar__logo {
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.ws-prev-sidebar__logo .ws-logo--sidebar {
+  width: 28px;
+  height: 28px;
+}
+.ws-prev-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+.ws-prev-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  cursor: default;
+  font-size: 12px;
+  color: var(--ink-600);
+}
+.ws-prev-nav--active {
+  background: color-mix(in srgb, var(--ws-primary, #7C3AED) 12%, transparent);
+  color: var(--ws-primary, #7C3AED);
+  font-weight: 600;
+}
+.ws-prev-nav__ic {
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.ws-prev-nav__ic .ic--lumio { font-size: 14px; }
+.ws-prev-nav__ic .ic--svg svg { width: 14px; height: 14px; }
+.ws-prev-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ws-prev-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-0);
+  gap: 8px;
+}
+.ws-prev-topbar__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+.ws-prev-topbar__btn {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--ws-primary, #7C3AED);
+  color: #fff;
+  border-radius: var(--ws-radius, var(--r-md));
+  padding: 4px 10px;
+  cursor: default;
+}
+.ws-prev-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  overflow: hidden;
+}
+.ws-prev-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--ws-radius, var(--r-md));
+  padding: 8px 12px;
+}
+.ws-prev-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin-bottom: 2px;
+}
+.ws-prev-card__meta {
+  font-size: 10px;
+  color: var(--ink-400);
+}
+.ws-prev-swatches {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+.ws-prev-swatch-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.ws-prev-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  flex-shrink: 0;
+}
+.ws-prev-swatch-label {
+  font-size: 10px;
+  color: var(--ink-400);
+  text-transform: capitalize;
+}
+.ws-prev-radius-label {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-400);
+}
+
+/* ── Workspace Identity section (Sprint 9) ──────────────────────── */
+.ws-identity-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.ws-identity-logo-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ws-identity-logo-frame {
+  width: 64px;
+  height: 64px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-identity-logo-hint {
+  font-size: 10px;
+  color: var(--ink-400);
+}
+.ws-identity-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ws-identity-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ws-identity-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+.ws-identity-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.ws-identity-note {
+  font-size: 11px;
+  color: var(--ink-400);
+}
+.ws-identity-future-note {
+  font-size: 11px;
+  color: var(--ink-500);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 8px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.5;
+}
+.ws-identity-future-note .ic--lumio,
+.ws-identity-future-note .ic--svg svg { font-size: 13px; width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; }
+
+/* ── Workspace Logo Slots section (Sprint 9) ─────────────────────── */
+.ws-logo-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.ws-logo-slot-grid--reserved {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.ws-logo-slot-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-0);
+  display: flex;
+  flex-direction: column;
+}
+.ws-logo-slot-card--reserved {
+  opacity: 0.6;
+}
+.ws-logo-slot-preview {
+  height: 80px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.ws-logo-slot-preview--reserved {
+  font-style: italic;
+}
+.ws-logo-slot-preview .ws-logo--sidebar       { width: 34px; height: 34px; }
+.ws-logo-slot-preview .ws-logo--sidebar-large { max-width: 140px; max-height: 40px; }
+.ws-logo-slot-preview .ws-logo--compact       { width: 32px; height: 32px; }
+.ws-logo-slot-preview .ws-logo--login-badge   { width: 40px; height: 40px; }
+.ws-logo-slot-preview .ws-logo--welcome       { max-width: 56px; max-height: 56px; }
+.ws-logo-slot-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.ws-logo-slot-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ws-logo-slot-desc {
+  font-size: 11px;
+  color: var(--ink-500);
+  line-height: 1.5;
+}
+.ws-logo-slot-specs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 0;
+}
+.ws-logo-slot-spec {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--ink-500);
+}
+
+/* ── Login Branding section (Sprint 9) ──────────────────────────── */
+.ws-login-brand-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.ws-login-mini-frame {
+  flex-shrink: 0;
+  width: 200px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-0);
+}
+.ws-login-mini-chrome {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+.ws-login-mini-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+}
+.ws-login-mini-badge .ws-logo--login-badge {
+  width: 36px;
+  height: 36px;
+}
+.ws-login-mini-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+.ws-login-mini-field {
+  width: 100%;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-alt);
+}
+.ws-login-mini-btn {
+  width: 100%;
+  height: 24px;
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-login-brand-slots {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* ── pill-teal variant ──────────────────────────────────────────── */
+.pill-teal {
+  background: color-mix(in srgb, #0891b2 15%, transparent);
+  color: #0891b2;
+}
+
 /* ── Workspace Logo Renderer ─────────────────────────────── */
 /* All sizing owned here. Pages must not set inline dimensions on logo imgs. */
 .ws-logo                { object-fit: contain; display: block; flex-shrink: 0; }

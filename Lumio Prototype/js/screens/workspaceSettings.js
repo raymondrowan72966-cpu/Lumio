@@ -157,21 +157,192 @@ function bindWorkspaceReviewsTab() {
   }));
 }
 
-/* ---------------- APPEARANCE (Workspace Owner only) ----------------
-   Workspace Theme Selection — lets the Workspace Owner choose from available
-   built-in themes.  Theme cards are read-only: no rename, delete, or edit.
-   All CSS application flows through applyWorkspaceIdentity() — this tab
-   never touches --ws-* tokens directly. */
+/* ══════════════════════════════════════════════════════════════════
+   APPEARANCE TAB — Sprint 9
+   Single place for all workspace visual identity controls.
 
-function workspaceAppearanceTab() {
-  const identity   = ensureWorkspaceIdentity();
-  const selectedId = identity.selectedThemeId || 'lumio';
+   Architecture contract:
+   • All CSS token writes go through applyWorkspaceIdentity() only.
+   • All icon renders go through platformIcon() only.
+   • All logo renders go through renderWorkspaceLogo() only.
+   • This tab never reads --ws-* tokens directly.
+   • This tab never writes to _IC_PATHS, _IC_EMOJI, or BUILTIN_THEMES.
+   ══════════════════════════════════════════════════════════════════ */
 
+// ── Icon Pack constants ───────────────────────────────────────────
+
+// Active selectable packs (COMPLETE status only).
+const _SELECTABLE_ICON_PACKS = [
+  { id: 'lumio',   name: 'Lumio',   description: 'Friendly colourful emoji icons.' },
+  { id: 'outline', name: 'Outline', description: 'Modern SVG outline icons.' },
+];
+
+// Future packs — displayed disabled to communicate roadmap capability.
+const _COMING_SOON_ICON_PACKS = [
+  { id: 'sketch',    name: 'Sketch'    },
+  { id: 'corporate', name: 'Corporate' },
+  { id: 'rounded',   name: 'Rounded'   },
+  { id: 'filled',    name: 'Filled'    },
+  { id: 'minimal',   name: 'Minimal'   },
+];
+
+// ── Logo slot specifications ──────────────────────────────────────
+// Source of truth for the Logos section display. Slot keys match LOGO_SLOTS values.
+const _LOGO_SLOT_SPECS = [
+  { slot: 'sidebar',       label: 'Sidebar Icon',     desc: 'Appears in the left navigation sidebar.',                             size: '34 × 34 px',       fmt: 'PNG · SVG' },
+  { slot: 'sidebar-large', label: 'Sidebar — Large',  desc: 'Featured logo on Projects and Hub when the sidebar is expanded.',     size: '140 × 40 px',      fmt: 'PNG · SVG' },
+  { slot: 'compact',       label: 'Compact',          desc: 'Topbar logo in Course Builder, Wizard, and Learner Preview.',         size: '32 × 32 px',       fmt: 'PNG · SVG' },
+  { slot: 'login-badge',   label: 'Login Badge',      desc: 'Brand badge in the login page backdrop corner.',                     size: '40 × 40 px',       fmt: 'PNG · SVG' },
+  { slot: 'welcome',       label: 'Welcome Screen',   desc: 'Displayed on the post-login welcome and onboarding tour screen.',    size: '240 × 240 px',     fmt: 'PNG · SVG · JPG' },
+];
+
+const _LOGO_RESERVED_SPECS = [
+  { slot: 'login-brand', label: 'Login Brand',  desc: 'Full-width white-label login lockup. Architectural slot reserved — white-label login sprint.',            size: '320 × 120 px', fmt: 'PNG · SVG' },
+  { slot: 'favicon',     label: 'Favicon',       desc: 'Browser tab icon. Managed via <link rel="icon"> in index.html — outside application scope.',             size: '32 × 32 px',   fmt: 'ICO · PNG' },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+// Temporarily overrides iconPack state to call platformIcon() for card previews,
+// then restores the original value. Never persists — safe to call mid-render.
+function _packPreviewIcons(packId) {
+  const identity = ensureWorkspaceIdentity();
+  const saved    = identity.iconPack ? { ...identity.iconPack } : {};
+  identity.iconPack = { packId };
+  const html = ['projects', 'search', 'settings', 'notifications']
+    .map(id => platformIcon(id)).join('');
+  identity.iconPack = saved;
+  return html;
+}
+
+// Apply an icon pack by id. Only COMPLETE packs are selectable.
+// Mirrors the pattern of selectWorkspaceTheme() — writes to workspaceIdentity,
+// persists to localStorage, and cloud-syncs. Callers re-render the screen
+// so all platformIcon() call-sites in the DOM update simultaneously.
+function selectWorkspaceIconPack(packId) {
+  const allowed = _SELECTABLE_ICON_PACKS.map(p => p.id);
+  if (!allowed.includes(packId)) {
+    console.warn('[Lumio] Icon pack not available:', packId);
+    return;
+  }
+  const identity = ensureWorkspaceIdentity();
+  if (!identity.iconPack) identity.iconPack = {};
+  identity.iconPack.packId = packId;
+  saveLumioState();
+  cloudSyncWorkspace('workspaceIdentity');
+}
+
+// Derive a short name from workspace name (first letter of each word, max 3).
+function _deriveShortName(name) {
+  const initials = (name || '').split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase()).join('');
+  return initials.slice(0, 3) || (name || 'WS').slice(0, 2).toUpperCase();
+}
+
+// ── Section builders ──────────────────────────────────────────────
+
+function _wsPreviewSection() {
+  const navItems = ['projects', 'recent', 'settings', 'notifications'];
+  const navLabels = ['Projects', 'Recent', 'Settings', 'Notifications'];
+  const navHtml = navItems.map((id, i) => `
+    <div class="ws-prev-nav${i === 0 ? ' ws-prev-nav--active' : ''}">
+      <span class="ws-prev-nav__ic">${platformIcon(id)}</span>
+      <span class="ws-prev-nav__label">${navLabels[i]}</span>
+    </div>`).join('');
+
+  return `
+    <div class="card card-pad mb-24">
+      <div class="ws-section-header mb-16">
+        <div>
+          <div class="prop-section-title mb-2">Live Preview</div>
+          <p class="text-sm text-muted">Reflects the active theme, icon pack, and logo. Updates immediately when you make changes below.</p>
+        </div>
+      </div>
+      <div class="ws-prev-frame">
+        <div class="ws-prev-chrome">
+          <span class="ws-prev-dot" style="background:#FF5F57;"></span>
+          <span class="ws-prev-dot" style="background:#FFBD2E;"></span>
+          <span class="ws-prev-dot" style="background:#28C840;"></span>
+          <div class="ws-prev-url">lumio.app · Workspace</div>
+        </div>
+        <div class="ws-prev-shell">
+          <div class="ws-prev-sidebar">
+            <div class="ws-prev-sidebar__logo">
+              ${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}
+            </div>
+            <nav class="ws-prev-sidebar__nav">${navHtml}</nav>
+          </div>
+          <div class="ws-prev-main">
+            <div class="ws-prev-topbar">
+              <span class="ws-prev-topbar__title">All Projects</span>
+              <div class="ws-prev-topbar__btn">+ Create New</div>
+            </div>
+            <div class="ws-prev-content">
+              <div class="ws-prev-card">
+                <div class="ws-prev-card__title">Onboarding Programme</div>
+                <div class="ws-prev-card__meta">Draft · 5 lessons</div>
+              </div>
+              <div class="ws-prev-card">
+                <div class="ws-prev-card__title">Compliance Training</div>
+                <div class="ws-prev-card__meta">Published · 12 lessons</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ws-prev-swatches">
+          ${['primary','secondary','accent'].map(k => `
+            <div class="ws-prev-swatch-cell">
+              <div class="ws-prev-swatch" style="background:var(--ws-${k},#7C3AED);"></div>
+              <span class="ws-prev-swatch-label">${k}</span>
+            </div>`).join('')}
+          <div class="ws-prev-radius-label">
+            Radius: <strong>var(--ws-radius)</strong>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _wsIdentitySection(workspace) {
+  const name      = (workspace && workspace.name) || 'My Workspace';
+  const shortName = _deriveShortName(name);
+  return `
+    <div class="card card-pad mb-24">
+      <div class="ws-section-header mb-4">
+        <div>
+          <div class="prop-section-title mb-2">Workspace Identity</div>
+          <p class="text-sm text-muted">Your workspace's name and branding identity.</p>
+        </div>
+        <span class="pill pill-grey" style="font-size:10px;align-self:flex-start;margin-top:2px;">Read-only</span>
+      </div>
+      <div class="ws-identity-row mt-16">
+        <div class="ws-identity-logo-col">
+          <div class="ws-identity-logo-frame">
+            ${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}
+          </div>
+          <span class="ws-identity-logo-hint">Sidebar logo</span>
+        </div>
+        <div class="ws-identity-fields">
+          <div class="ws-identity-field">
+            <label class="ws-identity-label">Workspace Name</label>
+            <div class="ws-identity-value">${escapeHtml(name)}</div>
+          </div>
+          <div class="ws-identity-field">
+            <label class="ws-identity-label">Short Name</label>
+            <div class="ws-identity-value">${escapeHtml(shortName)}</div>
+            <div class="ws-identity-note">Auto-generated from workspace name initials. Configurable in a future update.</div>
+          </div>
+          <div class="ws-identity-future-note">
+            ${platformIcon('info')} Workspace name editing and short name configuration require cloud-sync support for the workspaces resource. This is planned for a future sprint. Changes will persist to localStorage now but will not sync to cloud until that sprint ships.
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _wsThemeSection(selectedTheme) {
   const themeCard = (theme) => {
-    const isSelected = theme.id === selectedId;
-    // Swatches are derived from the theme's own token values — no separate
-    // swatch array. The preview always reflects the actual Workspace Theme.
-    const swatches = [theme.tokens.primary, theme.tokens.secondary, theme.tokens.accent]
+    const isSelected = theme.id === selectedTheme;
+    const swatches   = [theme.tokens.primary, theme.tokens.secondary, theme.tokens.accent]
       .map(c => `<span class="ws-theme-swatch" style="background:${c};"></span>`)
       .join('');
     return `
@@ -179,7 +350,7 @@ function workspaceAppearanceTab() {
         <div class="ws-theme-card__preview">${swatches}</div>
         <div class="ws-theme-card__footer">
           <span class="ws-theme-card__name">${escapeHtml(theme.name)}</span>
-          ${theme.locked ? '<span class="pill pill-grey" style="font-size:10px;padding:2px 7px;">Built-in</span>' : ''}
+          ${theme.locked ? '<span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Built-in</span>' : ''}
           ${isSelected ? '<span class="ws-theme-card__check">✓</span>' : ''}
         </div>
       </div>`;
@@ -187,21 +358,206 @@ function workspaceAppearanceTab() {
 
   return `
     <div class="card card-pad mb-24">
-      <div class="prop-section-title">Workspace Theme</div>
-      <p class="text-sm text-muted mb-16">Choose the visual theme applied to the platform shell. Course themes are not affected.</p>
-      <div class="ws-theme-grid">
+      <div class="ws-section-header mb-4">
+        <div>
+          <div class="prop-section-title mb-2">Workspace Theme</div>
+          <p class="text-sm text-muted">Controls the colour palette of the platform shell. Course themes are completely separate and unaffected.</p>
+        </div>
+      </div>
+      <div class="ws-theme-grid mt-16">
         ${BUILTIN_THEMES.map(themeCard).join('')}
       </div>
     </div>`;
 }
 
+function _wsPackSection(selectedPack) {
+  const packCard = (pack) => {
+    const isSelected = pack.id === selectedPack;
+    const preview    = _packPreviewIcons(pack.id);
+    return `
+      <div class="ws-pack-card${isSelected ? ' ws-pack-card--selected' : ''}" data-select-pack="${pack.id}" role="button" tabindex="0" aria-pressed="${isSelected}">
+        <div class="ws-pack-card__preview">${preview}</div>
+        <div class="ws-pack-card__footer">
+          <span class="ws-pack-card__name">${escapeHtml(pack.name)}</span>
+          <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Built-in</span>
+          ${isSelected ? '<span class="ws-theme-card__check">✓</span>' : ''}
+        </div>
+        <div class="ws-pack-card__desc">${escapeHtml(pack.description)}</div>
+      </div>`;
+  };
+
+  const comingSoonCard = (pack) => `
+    <div class="ws-pack-card ws-pack-card--disabled" aria-disabled="true">
+      <div class="ws-pack-card__preview ws-pack-card__preview--empty">
+        <span>Artwork in development</span>
+      </div>
+      <div class="ws-pack-card__footer">
+        <span class="ws-pack-card__name">${escapeHtml(pack.name)}</span>
+        <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
+      </div>
+    </div>`;
+
+  return `
+    <div class="card card-pad mb-24">
+      <div class="ws-section-header mb-4">
+        <div>
+          <div class="prop-section-title mb-2">Icon Pack</div>
+          <p class="text-sm text-muted">Controls icon artwork throughout the platform interface. Course content icons are not affected.</p>
+        </div>
+      </div>
+      <div class="ws-pack-grid mt-16 mb-24">
+        ${_SELECTABLE_ICON_PACKS.map(packCard).join('')}
+      </div>
+      <div class="ws-subsection-label mb-10">Coming Soon</div>
+      <div class="ws-pack-grid ws-pack-grid--compact">
+        ${_COMING_SOON_ICON_PACKS.map(comingSoonCard).join('')}
+      </div>
+    </div>`;
+}
+
+function _wsLogoSection() {
+  const slotCard = (spec) => `
+    <div class="ws-logo-slot-card">
+      <div class="ws-logo-slot-preview">
+        ${renderWorkspaceLogo(spec.slot)}
+      </div>
+      <div class="ws-logo-slot-body">
+        <div class="ws-logo-slot-name">${escapeHtml(spec.label)}</div>
+        <div class="ws-logo-slot-desc">${escapeHtml(spec.desc)}</div>
+        <div class="ws-logo-slot-specs">
+          <span class="ws-logo-slot-spec">${escapeHtml(spec.size)}</span>
+          <span class="ws-logo-slot-spec">${escapeHtml(spec.fmt)}</span>
+        </div>
+        <button class="btn btn-secondary btn-sm w-full" disabled style="opacity:.5;cursor:not-allowed;" title="Logo uploads are planned for a future sprint">
+          Upload Logo
+        </button>
+      </div>
+    </div>`;
+
+  const reservedCard = (spec) => `
+    <div class="ws-logo-slot-card ws-logo-slot-card--reserved">
+      <div class="ws-logo-slot-preview ws-logo-slot-preview--reserved">
+        <span class="pill pill-grey" style="font-size:10px;">Reserved</span>
+      </div>
+      <div class="ws-logo-slot-body">
+        <div class="ws-logo-slot-name">${escapeHtml(spec.label)}</div>
+        <div class="ws-logo-slot-desc">${spec.desc}</div>
+        <div class="ws-logo-slot-specs">
+          <span class="ws-logo-slot-spec">${escapeHtml(spec.size)}</span>
+          <span class="ws-logo-slot-spec">${escapeHtml(spec.fmt)}</span>
+        </div>
+      </div>
+    </div>`;
+
+  return `
+    <div class="card card-pad mb-24">
+      <div class="ws-section-header mb-4">
+        <div>
+          <div class="prop-section-title mb-2">Workspace Logos</div>
+          <p class="text-sm text-muted">Upload custom logos for each platform context. All rendering flows through <code style="font-size:11px;background:var(--surface-alt);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">renderWorkspaceLogo()</code> — only the asset path changes. Logo upload is planned for a future sprint.</p>
+        </div>
+      </div>
+      <div class="ws-logo-slot-grid mt-16 mb-24">
+        ${_LOGO_SLOT_SPECS.map(slotCard).join('')}
+      </div>
+      <div class="ws-subsection-label mb-10">Reserved Slots</div>
+      <div class="ws-logo-slot-grid ws-logo-slot-grid--reserved">
+        ${_LOGO_RESERVED_SPECS.map(reservedCard).join('')}
+      </div>
+    </div>`;
+}
+
+function _wsLoginBrandSection() {
+  return `
+    <div class="card card-pad mb-24">
+      <div class="ws-section-header mb-4">
+        <div>
+          <div class="prop-section-title mb-2">Login Branding</div>
+          <p class="text-sm text-muted">Customise how the login screen presents your workspace. The Login Badge is already live via the Logos section above.</p>
+        </div>
+      </div>
+      <div class="ws-login-brand-layout mt-16">
+        <div class="ws-login-mini-frame">
+          <div class="ws-login-mini-chrome">
+            <span class="ws-prev-dot" style="background:#FF5F57;"></span>
+            <span class="ws-prev-dot" style="background:#FFBD2E;"></span>
+            <span class="ws-prev-dot" style="background:#28C840;"></span>
+          </div>
+          <div class="ws-login-mini-body">
+            <div class="ws-login-mini-badge">${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}</div>
+            <div class="ws-login-mini-heading">Welcome back</div>
+            <div class="ws-login-mini-field"></div>
+            <div class="ws-login-mini-field"></div>
+            <div class="ws-login-mini-btn" style="background:var(--ws-primary,#7C3AED);">Sign In</div>
+          </div>
+        </div>
+        <div class="ws-login-brand-slots">
+          <div class="ws-logo-slot-card" style="flex:1;">
+            <div class="ws-logo-slot-preview" style="background:var(--surface-alt);">
+              ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}
+            </div>
+            <div class="ws-logo-slot-body">
+              <div class="ws-logo-slot-name">Login Badge <span class="pill pill-teal" style="font-size:10px;padding:1px 6px;margin-left:4px;">Live</span></div>
+              <div class="ws-logo-slot-desc">Brand badge displayed in the login page backdrop corner. Currently uses the default Lumio logo.</div>
+              <div class="ws-logo-slot-specs">
+                <span class="ws-logo-slot-spec">40 × 40 px</span>
+                <span class="ws-logo-slot-spec">PNG · SVG</span>
+              </div>
+              <button class="btn btn-secondary btn-sm w-full" disabled style="opacity:.5;cursor:not-allowed;">Upload Badge</button>
+            </div>
+          </div>
+          <div class="ws-logo-slot-card ws-logo-slot-card--reserved" style="flex:1;">
+            <div class="ws-logo-slot-preview ws-logo-slot-preview--reserved">
+              <span class="pill pill-grey" style="font-size:10px;">Coming Soon</span>
+            </div>
+            <div class="ws-logo-slot-body">
+              <div class="ws-logo-slot-name">Login Brand</div>
+              <div class="ws-logo-slot-desc">Full-width white-label brand lockup for the login backdrop. Architectural slot <code style="font-size:10px;">LOGIN_BRAND</code> is reserved and ready for implementation.</div>
+              <div class="ws-logo-slot-specs">
+                <span class="ws-logo-slot-spec">320 × 120 px</span>
+                <span class="ws-logo-slot-spec">PNG · SVG</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function workspaceAppearanceTab() {
+  const identity      = ensureWorkspaceIdentity();
+  const workspace     = getCurrentWorkspace();
+  const selectedTheme = identity.selectedThemeId || 'lumio';
+  const selectedPack  = identity.iconPack?.packId || 'lumio';
+
+  return `
+    ${_wsPreviewSection()}
+    ${_wsIdentitySection(workspace)}
+    ${_wsThemeSection(selectedTheme)}
+    ${_wsPackSection(selectedPack)}
+    ${_wsLogoSection()}
+    ${_wsLoginBrandSection()}
+  `;
+}
+
 function bindWorkspaceAppearanceTab() {
   const host = document.getElementById('ws-tab-content');
   if (!host) return;
+
   host.querySelectorAll('[data-select-theme]').forEach(card => {
     const activate = () => {
       selectWorkspaceTheme(card.dataset.selectTheme);
-      renderWorkspaceSettingsTab();
+      // Full shell re-render so the live preview, sidebar, and tab all update.
+      renderWorkspaceSettings();
+    };
+    card.addEventListener('click', activate);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+  });
+
+  host.querySelectorAll('[data-select-pack]').forEach(card => {
+    const activate = () => {
+      selectWorkspaceIconPack(card.dataset.selectPack);
+      renderWorkspaceSettings();
     };
     card.addEventListener('click', activate);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
