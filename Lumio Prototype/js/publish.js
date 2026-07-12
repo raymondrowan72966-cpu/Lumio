@@ -124,6 +124,7 @@ const PUBLISH_JS_FILES = [
   'js/heroImage.js',
   'js/assetStore.js',
   'js/app.js',
+  'js/labelEngine.js',
   'js/mediaPicker.js',
   'js/screens/wizard.js',
   'js/screens/landingSections.js',
@@ -318,7 +319,7 @@ const HTML_EXPORT_ADAPTER = {
   // Also patches AssetStore to resolve asset:// refs via the publish-time asset map
   // instead of IndexedDB, making the published package fully self-contained.
   buildBootstrapScript: () => `(function(){
-  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
+  if(typeof LabelEngine==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   // Learner-only persistence, isolated per published course — never the full
@@ -364,6 +365,7 @@ const HTML_EXPORT_ADAPTER = {
   window.addEventListener('beforeunload',__saveLearnerState);
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  var __packId=(__cd.course&&__cd.course.labelSet)||'en';if(['en','es','fr','de'].indexOf(__packId)===-1&&window.__LUMIO_LABEL_PACK__){if(!LumioState.labelPacks)LumioState.labelPacks={};if(!LumioState.labelPacks[__packId])LumioState.labelPacks[__packId]={id:__packId,name:__packId,labels:window.__LUMIO_LABEL_PACK__};}
   LumioState.learnerPreview={returnTo:''};
   LearnerUI.publishedMode=true;
   var __am=window.__LUMIO_ASSET_MAP__;
@@ -454,7 +456,7 @@ const SCORM12_EXPORT_ADAPTER = {
     `SCORM 1.2 package downloaded (${assetEntries.length} asset${assetEntries.length !== 1 ? 's' : ''})`,
   buildManifestFile: (course, project) => ({ name: 'imsmanifest.xml', content: buildImsManifest(course, project) }),
   buildBootstrapScript: () => `(function(){
-  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
+  if(typeof LabelEngine==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -562,6 +564,7 @@ const SCORM12_EXPORT_ADAPTER = {
   window.addEventListener('beforeunload',function(){__saveLearnerState();if(__scormOk)ScormRuntime.finish();});
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  var __packId=(__cd.course&&__cd.course.labelSet)||'en';if(['en','es','fr','de'].indexOf(__packId)===-1&&window.__LUMIO_LABEL_PACK__){if(!LumioState.labelPacks)LumioState.labelPacks={};if(!LumioState.labelPacks[__packId])LumioState.labelPacks[__packId]={id:__packId,name:__packId,labels:window.__LUMIO_LABEL_PACK__};}
   LumioState.learnerPreview={returnTo:''};
   LearnerUI.publishedMode=true;
   var __am=window.__LUMIO_ASSET_MAP__;
@@ -665,7 +668,7 @@ function buildImsManifest2004(course, project, edition) {
 // function rather than each carrying its own near-identical copy.
 function build2004BootstrapScript() {
   return `(function(){
-  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
+  if(typeof LabelEngine==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -767,6 +770,7 @@ function build2004BootstrapScript() {
   window.addEventListener('beforeunload',function(){__saveLearnerState();if(__scormOk)ScormRuntime2004.finish();});
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  var __packId=(__cd.course&&__cd.course.labelSet)||'en';if(['en','es','fr','de'].indexOf(__packId)===-1&&window.__LUMIO_LABEL_PACK__){if(!LumioState.labelPacks)LumioState.labelPacks={};if(!LumioState.labelPacks[__packId])LumioState.labelPacks[__packId]={id:__packId,name:__packId,labels:window.__LUMIO_LABEL_PACK__};}
   LumioState.learnerPreview={returnTo:''};
   LearnerUI.publishedMode=true;
   var __am=window.__LUMIO_ASSET_MAP__;
@@ -898,7 +902,7 @@ function buildTincanManifest(course, project) {
 // no parallel completion logic, only a diff over it.
 function buildXapiBootstrapScript() {
   return `(function(){
-  if(typeof L==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
+  if(typeof LabelEngine==='undefined'){var __lp=window.__LUMIO_LABEL_PACK__||{};window.L=function(key,vars){var str=__lp[key]||key;if(!vars)return str;return str.replace(/\{(\w+)\}/g,function(_,k){return vars[k]!==undefined?vars[k]:'{'+k+'}'});};}
   var __cd=window.__LUMIO_COURSE_DATA__;
   var cid=__cd.course.id;
   var __lk='lumio-learner-'+cid;
@@ -998,6 +1002,7 @@ function buildXapiBootstrapScript() {
   window.addEventListener('beforeunload',__saveLearnerState);
   LumioState.courses[cid]=__cd.course;
   Object.assign(LumioState.lessons||(LumioState.lessons={}),__cd.lessons);
+  var __packId=(__cd.course&&__cd.course.labelSet)||'en';if(['en','es','fr','de'].indexOf(__packId)===-1&&window.__LUMIO_LABEL_PACK__){if(!LumioState.labelPacks)LumioState.labelPacks={};if(!LumioState.labelPacks[__packId])LumioState.labelPacks[__packId]={id:__packId,name:__packId,labels:window.__LUMIO_LABEL_PACK__};}
   LumioState.learnerPreview={returnTo:''};
   LearnerUI.publishedMode=true;
   var __am=window.__LUMIO_ASSET_MAP__;
