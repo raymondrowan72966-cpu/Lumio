@@ -551,7 +551,7 @@ function openProjectMenu(btn, id) {
     workflowItems.push(`<div data-action="submit_for_review"${!ready ? ' data-disabled="1"' : ''}>${menuItem(label, 'submit-review', false, !ready)}</div>`);
   }
   if (p.status === 'in_review' && canApproveReject()) {
-    workflowItems.push(`<div data-action="approve">${menuItem('Approve', 'approve')}</div>`);
+    workflowItems.push(`<div data-action="approve">${menuItem('Approve', 'check')}</div>`);
     workflowItems.push(`<div data-action="reject">${menuItem('Reject', 'reject')}</div>`);
   }
   if (p.status === 'published' && canArchiveProject()) {

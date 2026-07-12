@@ -554,10 +554,10 @@ button { font-family: var(--font-body); cursor: pointer; }
    CARDS
    ============================================================ */
 .card {
-  background: var(--surface-0);
-  border-radius: var(--plt-radius-card);
-  box-shadow: var(--shadow-soft);
-  border: 1px solid var(--border);
+  background: var(--ws-surface);
+  border-radius: var(--ws-radius);
+  box-shadow: var(--ws-shadow);
+  border: 1px solid var(--ws-border);
 }
 
 .card-pad { padding: 24px; }
@@ -1100,8 +1100,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .app-sidebar {
   width: 240px;
   flex-shrink: 0;
-  background: var(--surface-0);
-  border-right: 1px solid var(--border);
+  background: var(--ws-sidebar-bg);
+  border-right: 1px solid var(--ws-border);
   display: flex;
   flex-direction: column;
   padding: 20px 14px;
@@ -1122,7 +1122,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 18px;
-  color: var(--ink-900);
+  color: var(--ws-text);
 }
 
 .nav-item {
@@ -1131,7 +1131,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   gap: 12px;
   padding: 10px 12px;
   border-radius: var(--r-md);
-  color: var(--ink-700);
+  color: var(--ws-text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1139,9 +1139,9 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-left: 3px solid transparent;
 }
 .nav-item .ic { font-size: 18px; width: 20px; text-align: center; }
-.nav-item:hover { background: var(--pastel-lavender); }
+.nav-item:hover { background: color-mix(in srgb, var(--ws-primary) 10%, var(--ws-surface)); }
 .nav-item.active {
-  background: var(--pastel-lavender);
+  background: color-mix(in srgb, var(--ws-primary) 14%, var(--ws-surface));
   color: var(--ws-primary, var(--indigo));
   font-weight: 600;
   border-left: 3px solid var(--ws-primary, var(--indigo));
@@ -1150,7 +1150,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--ink-400);
+  color: var(--ws-text-muted);
   font-weight: 700;
   margin: 18px 12px 6px;
 }
@@ -1168,11 +1168,13 @@ button { font-family: var(--font-body); cursor: pointer; }
   align-items: center;
   justify-content: space-between;
   padding: 16px 32px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-0);
+  border-bottom: 1px solid var(--ws-border);
+  background: var(--ws-topbar-bg);
+  color: var(--ws-text);
   gap: 16px;
   flex-shrink: 0;
 }
+.app-topbar h1, .app-topbar h2, .app-topbar h3, .app-topbar h4 { color: var(--ws-text); }
 
 .app-content {
   flex: 1;
@@ -1180,6 +1182,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   padding: 32px;
   position: relative;
   overflow-y: auto;
+  background: var(--ws-surface-alt);
 }
 
 /* ambient blobs */
@@ -1211,19 +1214,19 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* ============================================================
    TABS
    ============================================================ */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--ws-border); }
 .tab {
   padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink-400);
+  color: var(--ws-text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   outline: none;
   transition: color 0.15s ease-out, border-color 0.15s ease-out;
 }
-.tab:hover { color: var(--ink-700); }
+.tab:hover { color: var(--ws-text); }
 .tab.active { color: var(--ws-primary, var(--indigo)); border-bottom: 2px solid var(--ws-primary, var(--indigo)); }
 
 /* ============================================================
@@ -2248,7 +2251,10 @@ button { font-family: var(--font-body); cursor: pointer; }
   gap: 4px;
 }
 .ws-prev-sidebar__logo {
-  padding: 0 12px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 10px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
@@ -2513,6 +2519,60 @@ button { font-family: var(--font-body); cursor: pointer; }
   color: var(--ink-500);
 }
 
+/* ── Logo upload controls (Sprint 10) ──────────────────────────── */
+.ws-logo-slot-img-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.ws-logo-slot-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.ws-logo-upload-label {
+  position: relative;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-logo-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.ws-logo-remove-btn {
+  flex-shrink: 0;
+  color: var(--ink-400);
+  font-size: 12px;
+}
+.ws-logo-remove-btn:hover {
+  color: #dc2626;
+}
+.ws-logo-upload-error {
+  display: none;
+  font-size: 11px;
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in srgb, #dc2626 20%, transparent);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  line-height: 1.4;
+}
+.ws-logo-upload-error--visible {
+  display: block;
+}
+
 /* ── Login Branding section (Sprint 9) ──────────────────────────── */
 .ws-login-brand-layout {
   display: flex;
@@ -2522,7 +2582,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .ws-login-mini-frame {
   flex-shrink: 0;
-  width: 200px;
+  width: 260px;
   border: 1.5px solid var(--border);
   border-radius: var(--r-lg);
   overflow: hidden;
@@ -2538,37 +2598,67 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .ws-login-mini-body {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 12px;
+  flex-direction: row;
+  height: 130px;
+}
+.ws-login-mini-backdrop {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-alt);
+}
+.ws-login-mini-backdrop > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 30% center;
+  display: block;
+}
+.ws-login-mini-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
 }
 .ws-login-mini-badge .ws-logo--login-badge {
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
+}
+.ws-login-mini-auth {
+  flex: 0 0 auto;
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 12px 10px;
+  border-left: 1px solid var(--border);
 }
 .ws-login-mini-heading {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--ink-900);
+  margin-bottom: 2px;
 }
 .ws-login-mini-field {
   width: 100%;
-  height: 22px;
+  height: 18px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface-alt);
 }
 .ws-login-mini-btn {
   width: 100%;
-  height: 24px;
+  height: 20px;
   border-radius: var(--r-sm);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 2px;
 }
 .ws-login-brand-slots {
   flex: 1;
@@ -2586,12 +2676,13 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 /* ── Workspace Logo Renderer ─────────────────────────────── */
 /* All sizing owned here. Pages must not set inline dimensions on logo imgs. */
-.ws-logo                { object-fit: contain; display: block; flex-shrink: 0; }
-.ws-logo--login-badge   { width: 40px; height: 40px; }
-.ws-logo--sidebar       { width: 34px; height: 34px; border-radius: var(--r-sm); }
-.ws-logo--sidebar-large { max-width: 140px; height: auto; }
-.ws-logo--compact       { width: 32px; height: 32px; cursor: pointer; }
-.ws-logo--welcome       { max-width: 240px; max-height: 240px; margin: 0 auto; }
+.ws-logo                    { object-fit: contain; display: block; flex-shrink: 0; }
+.ws-logo--login-badge       { width: 40px; height: 40px; }
+.ws-logo--login-background  { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% center; display: block; }
+.ws-logo--sidebar           { width: 34px; height: 34px; border-radius: var(--r-sm); }
+.ws-logo--sidebar-large     { max-width: 140px; height: auto; }
+.ws-logo--compact           { width: 32px; height: 32px; cursor: pointer; }
+.ws-logo--welcome           { max-width: 240px; max-height: 240px; margin: 0 auto; }
 
 /* ── Platform Icon Infrastructure (Sprint 6) ─────────────────── */
 /* ic--lumio: emoji pack — inherits font-size from context, no special sizing */
@@ -2612,6 +2703,120 @@ button { font-family: var(--font-body); cursor: pointer; }
 .nav-item .ic--svg { color: var(--ws-icon, var(--ink-700)); }
 .nav-item.active .ic--svg { color: var(--ws-icon, var(--ws-primary, var(--indigo))); }
 
+/* ── Workspace Identity — editable inputs (Sprint 11) ─────────────────── */
+.ws-identity-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink-900);
+  background: var(--surface-0);
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.ws-identity-input:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.08);
+}
+.ws-identity-input--short { max-width: 160px; }
+.ws-identity-input-error {
+  font-size: 12px;
+  color: var(--red, #DC2626);
+  min-height: 18px;
+  margin-top: 4px;
+}
+.ws-identity-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.ws-identity-save-feedback {
+  font-size: 13px;
+  color: var(--green, #16A34A);
+  font-weight: 500;
+}
+
+/* ── Workspace Appearance — page-level section labels (Sprint 12) ──────── */
+.ws-page-section {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ws-text-muted);
+  margin: 8px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ws-border);
+}
+
+/* ── Live Preview — workspace name beside sidebar logo (Sprint 12) ──────── */
+.ws-prev-sidebar__name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+/* ── Theme card — disabled / custom coming-soon state (Sprint 12) ───────── */
+.ws-theme-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.ws-theme-card__preview--custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 72px;
+  background: var(--surface-50);
+}
+.ws-theme-card__custom-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+/* ── Theme card — mini chrome preview (Sprint 13) ──────────────────────── */
+.ws-tc-sidebar {
+  width: 28%;
+  flex-shrink: 0;
+  height: 100%;
+}
+.ws-tc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ws-tc-topbar {
+  height: 14px;
+  flex-shrink: 0;
+}
+.ws-tc-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+}
+.ws-tc-bar {
+  height: 7px;
+  border-radius: 3px;
+  width: 72%;
+}
+.ws-tc-bar--sm { width: 50%; }
+.ws-tc-bar--xs { width: 85%; opacity: 0.45; }
+
 /* ic--missing: stable layout placeholder for unregistered semantic IDs.
    Fixed dimensions prevent layout shift. Low opacity ensures it is
    visually neutral. Never contains text — developers see console.warn instead. */
@@ -2623,5 +2828,214 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-radius: 2px;
   opacity: 0.25;
   vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── WORKSPACE APPEARANCE MANAGER (Sprint 16) ────────────────────────────────
+   Profile cards for the Appearance Manager. Preview strips use inline
+   background colours from stored profile token values — they never reference
+   --ws-* custom properties so the live theme is not disturbed on hover. */
+
+.ws-ap-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.ws-ap-card {
+  width: 200px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg, 12px);
+  background: var(--surface-0);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+.ws-ap-card:hover { border-color: var(--ws-primary, var(--violet)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary, var(--violet)) 10%, transparent); }
+.ws-ap-card:focus-visible { outline: 2px solid var(--ws-primary, var(--violet)); outline-offset: 2px; }
+
+.ws-ap-card--active {
+  border-color: var(--ws-primary, var(--violet));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-primary, var(--violet)) 12%, transparent);
+}
+
+.ws-ap-card__preview {
+  display: flex;
+  height: 80px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: calc(var(--r-lg, 12px) - 1.5px) calc(var(--r-lg, 12px) - 1.5px) 0 0;
+}
+.ws-ap-card__preview-sidebar {
+  width: 28px;
+  flex-shrink: 0;
+}
+.ws-ap-card__preview-main {
+  flex: 1;
+  padding: 10px 10px 0;
+}
+
+/* Add card preview area — dashed + centred + icon */
+.ws-ap-card__preview--add {
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-50, #FBFBFE);
+}
+
+.ws-ap-card__add-icon {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--ink-400);
+  line-height: 1;
+}
+
+.ws-ap-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  min-height: 52px;
+  flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 10;
+}
+
+.ws-ap-card__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws-ap-card__subtitle {
+  font-size: 11px;
+  color: var(--ink-400);
+  margin-top: 1px;
+}
+.ws-ap-card__add-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-400);
+}
+
+.ws-ap-card--add {
+  border-style: dashed;
+  border-color: var(--border);
+  cursor: pointer;
+}
+.ws-ap-card--add:hover { border-color: var(--ws-primary, var(--violet)); }
+.ws-ap-card--add .ws-ap-card__add-icon,
+.ws-ap-card--add:hover .ws-ap-card__add-label { color: var(--ws-primary, var(--violet)); }
+
+.ws-ap-card__active-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ws-primary, var(--violet));
+  background: color-mix(in srgb, var(--ws-primary, var(--violet)) 10%, transparent);
+  border-radius: 99px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+/* Card meta block (name + status line) */
+.ws-ap-card__meta {
+  flex: 1;
+  min-width: 0;
+}
+.ws-ap-card__status {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ws-primary, var(--violet));
+  margin-top: 2px;
+}
+
+/* Overflow ⋯ menu */
+.ws-ap-overflow-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.ws-ap-overflow-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--ink-400);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+.ws-ap-overflow-btn:hover { background: var(--border); color: var(--ink-900); }
+
+.ws-ap-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 130px;
+  z-index: 200;
+  overflow: hidden;
+}
+.ws-ap-menu[hidden] { display: none; }
+
+.ws-ap-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-900);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ws-ap-menu-item:hover { background: var(--surface-50, #FBFBFE); }
+.ws-ap-menu-item--danger { color: #DC2626; }
+.ws-ap-menu-item--danger:hover { background: #FEF2F2; }
+
+/* "✓ Active" informational row — not a button */
+.ws-ap-menu-active-row {
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-primary, var(--violet));
+  cursor: default;
+  user-select: none;
+}
+
+/* Separator between top action and edit/dupe/delete group */
+.ws-ap-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+/* ── APPEARANCE EDITOR CHROME (Sprint 16) ─────────────────────────────────── */
+
+.ws-editor-chrome {
+  /* No visual wrapper — just a semantic grouping div. */
+}
+
+.ws-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ws-editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }

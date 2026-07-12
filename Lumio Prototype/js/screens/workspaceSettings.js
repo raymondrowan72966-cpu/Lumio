@@ -13,6 +13,12 @@ const WORKSPACE_SETTINGS_TABS = [
 
 let workspaceSettingsTab = 'users';
 
+// Sprint 16: Appearance Manager editor state.
+// null        = Manager list view.
+// { mode: 'create', draftName: '', snapshot: {...} }
+// { mode: 'edit',   id: '...', draftName: '', snapshot: {...} }
+let _wsAppearanceEditorState = null;
+
 function renderWorkspaceSettings() {
   if (!canAccessWorkspaceSettings()) {
     navigate('#/projects');
@@ -179,11 +185,11 @@ const _SELECTABLE_ICON_PACKS = [
 
 // Future packs — displayed disabled to communicate roadmap capability.
 const _COMING_SOON_ICON_PACKS = [
-  { id: 'sketch',    name: 'Sketch'    },
-  { id: 'corporate', name: 'Corporate' },
-  { id: 'rounded',   name: 'Rounded'   },
-  { id: 'filled',    name: 'Filled'    },
-  { id: 'minimal',   name: 'Minimal'   },
+  { id: 'sketch',    name: 'Sketch',    description: 'Hand-crafted illustrated line art with a distinctive drawn feel.' },
+  { id: 'corporate', name: 'Corporate', description: 'Clean professional glyphs for enterprise environments.' },
+  { id: 'rounded',   name: 'Rounded',   description: 'Soft rounded strokes for a friendly, approachable interface.' },
+  { id: 'filled',    name: 'Filled',    description: 'Solid filled shapes for high-contrast, bold interfaces.' },
+  { id: 'minimal',   name: 'Minimal',   description: 'Ultra-thin strokes for sophisticated minimal designs.' },
 ];
 
 // ── Logo slot specifications ──────────────────────────────────────
@@ -193,8 +199,12 @@ const _LOGO_SLOT_SPECS = [
   { slot: 'sidebar',       label: 'Sidebar Icon',    desc: 'Left navigation sidebar icon.',                                        size: '34 × 34 px',    fmt: 'PNG · SVG',         maxW: 68,  maxH: 68,  accept: 'image/png,image/svg+xml' },
   { slot: 'sidebar-large', label: 'Sidebar — Large', desc: 'Featured logo on Projects and Hub when the sidebar is expanded.',      size: '140 × 40 px',   fmt: 'PNG · SVG',         maxW: 280, maxH: 80,  accept: 'image/png,image/svg+xml' },
   { slot: 'compact',       label: 'Compact',         desc: 'Topbar logo in Course Builder, Wizard, and Learner Preview.',          size: '32 × 32 px',    fmt: 'PNG · SVG',         maxW: 64,  maxH: 64,  accept: 'image/png,image/svg+xml' },
-  { slot: 'login-badge',   label: 'Login Badge',     desc: 'Brand badge in the login page backdrop corner.',                      size: '40 × 40 px',    fmt: 'PNG · SVG',         maxW: 80,  maxH: 80,  accept: 'image/png,image/svg+xml' },
   { slot: 'welcome',       label: 'Welcome Screen',  desc: 'Post-login welcome and onboarding tour screen.',                      size: '240 × 240 px',  fmt: 'PNG · SVG · JPG',   maxW: 480, maxH: 480, accept: 'image/png,image/svg+xml,image/jpeg' },
+];
+// Login branding slots — owned by _wsLoginBrandSection(), not in _LOGO_SLOT_SPECS.
+const _LOGO_LOGIN_SPECS = [
+  { slot: 'login-badge',      label: 'Login Badge',      fmt: 'PNG · SVG',       maxW: 80,   maxH: 80,   accept: 'image/png,image/svg+xml' },
+  { slot: 'login-background', label: 'Login Background', fmt: 'PNG · JPG · SVG', maxW: 3840, maxH: 2160, accept: 'image/png,image/jpeg,image/svg+xml' },
 ];
 
 const _LOGO_RESERVED_SPECS = [
@@ -338,9 +348,10 @@ function _deriveShortName(name) {
 // ── Section builders ──────────────────────────────────────────────
 
 function _wsPreviewSection() {
-  const navItems = ['projects', 'recent', 'settings', 'notifications'];
+  const navItems  = ['projects', 'recent', 'settings', 'notifications'];
   const navLabels = ['Projects', 'Recent', 'Settings', 'Notifications'];
-  const navHtml = navItems.map((id, i) => `
+  const wsName    = getWorkspaceDisplayName();
+  const navHtml   = navItems.map((id, i) => `
     <div class="ws-prev-nav${i === 0 ? ' ws-prev-nav--active' : ''}">
       <span class="ws-prev-nav__ic">${platformIcon(id)}</span>
       <span class="ws-prev-nav__label">${navLabels[i]}</span>
@@ -351,7 +362,7 @@ function _wsPreviewSection() {
       <div class="ws-section-header mb-16">
         <div>
           <div class="prop-section-title mb-2">Live Preview</div>
-          <p class="text-sm text-muted">Reflects the active theme, icon pack, and logo. Updates immediately when you make changes below.</p>
+          <p class="text-sm text-muted">Reflects your workspace name, active theme, icon pack, and logos. Updates immediately when you save changes.</p>
         </div>
       </div>
       <div class="ws-prev-frame">
@@ -359,19 +370,20 @@ function _wsPreviewSection() {
           <span class="ws-prev-dot" style="background:#FF5F57;"></span>
           <span class="ws-prev-dot" style="background:#FFBD2E;"></span>
           <span class="ws-prev-dot" style="background:#28C840;"></span>
-          <div class="ws-prev-url">lumio.app · Workspace</div>
+          <div class="ws-prev-url">${escapeHtml(wsName)} · Lumio</div>
         </div>
         <div class="ws-prev-shell">
           <div class="ws-prev-sidebar">
             <div class="ws-prev-sidebar__logo">
               ${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}
+              <span class="ws-prev-sidebar__name">${escapeHtml(wsName)}</span>
             </div>
             <nav class="ws-prev-sidebar__nav">${navHtml}</nav>
           </div>
           <div class="ws-prev-main">
             <div class="ws-prev-topbar">
               <span class="ws-prev-topbar__title">All Projects</span>
-              <div class="ws-prev-topbar__btn">+ Create New</div>
+              <div class="ws-prev-topbar__btn">+ New</div>
             </div>
             <div class="ws-prev-content">
               <div class="ws-prev-card">
@@ -391,27 +403,28 @@ function _wsPreviewSection() {
               <div class="ws-prev-swatch" style="background:var(--ws-${k},#7C3AED);"></div>
               <span class="ws-prev-swatch-label">${k}</span>
             </div>`).join('')}
-          <div class="ws-prev-radius-label">
-            Radius: <strong>var(--ws-radius)</strong>
-          </div>
         </div>
       </div>
     </div>`;
 }
 
-function _wsIdentitySection(workspace) {
-  const name      = (workspace && workspace.name) || 'My Workspace';
-  const shortName = _deriveShortName(name);
+function _wsIdentitySection() {
+  const identity  = ensureWorkspaceIdentity();
+  const name      = getWorkspaceDisplayName();
+  const shortName = getWorkspaceShortName();
+  // Saved values for the inputs — blank string if the user hasn't set them yet
+  // (in that case the resolved display value is shown as placeholder).
+  const savedName      = identity.name      || '';
+  const savedShortName = identity.shortName || '';
   return `
     <div class="card card-pad mb-24">
-      <div class="ws-section-header mb-4">
+      <div class="ws-section-header mb-16">
         <div>
           <div class="prop-section-title mb-2">Workspace Identity</div>
           <p class="text-sm text-muted">Your workspace's name and branding identity.</p>
         </div>
-        <span class="pill pill-grey" style="font-size:10px;align-self:flex-start;margin-top:2px;">Read-only</span>
       </div>
-      <div class="ws-identity-row mt-16">
+      <div class="ws-identity-row">
         <div class="ws-identity-logo-col">
           <div class="ws-identity-logo-frame">
             ${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}
@@ -420,31 +433,99 @@ function _wsIdentitySection(workspace) {
         </div>
         <div class="ws-identity-fields">
           <div class="ws-identity-field">
-            <label class="ws-identity-label">Workspace Name</label>
-            <div class="ws-identity-value">${escapeHtml(name)}</div>
+            <label class="ws-identity-label" for="ws-id-name">Workspace Name</label>
+            <input
+              class="ws-identity-input"
+              id="ws-id-name"
+              type="text"
+              maxlength="60"
+              value="${escapeHtml(savedName)}"
+              placeholder="${escapeHtml(name)}"
+              autocomplete="off"
+            />
+            <div class="ws-identity-input-error" id="ws-id-name-err"></div>
           </div>
           <div class="ws-identity-field">
-            <label class="ws-identity-label">Short Name</label>
-            <div class="ws-identity-value">${escapeHtml(shortName)}</div>
-            <div class="ws-identity-note">Auto-generated from workspace name initials. Configurable in a future update.</div>
+            <label class="ws-identity-label" for="ws-id-short">Short Name</label>
+            <input
+              class="ws-identity-input ws-identity-input--short"
+              id="ws-id-short"
+              type="text"
+              maxlength="8"
+              value="${escapeHtml(savedShortName)}"
+              placeholder="${escapeHtml(shortName)}"
+              autocomplete="off"
+            />
+            <div class="ws-identity-note">Leave blank to auto-generate from initials.</div>
+            <div class="ws-identity-input-error" id="ws-id-short-err"></div>
           </div>
-          <div class="ws-identity-future-note">
-            ${platformIcon('info')} Workspace name editing and short name configuration require cloud-sync support for the workspaces resource. This is planned for a future sprint. Changes will persist to localStorage now but will not sync to cloud until that sprint ships.
+          <div class="ws-identity-actions">
+            <button class="btn btn-primary btn-sm" id="ws-id-save" disabled>Save Changes</button>
+            <button class="btn btn-ghost btn-sm" id="ws-id-cancel" disabled>Cancel</button>
+            <span class="ws-identity-save-feedback" id="ws-id-feedback" aria-live="polite"></span>
           </div>
         </div>
       </div>
     </div>`;
 }
 
+function _saveWorkspaceIdentityName() {
+  const nameInput  = document.getElementById('ws-id-name');
+  const shortInput = document.getElementById('ws-id-short');
+  const nameErr    = document.getElementById('ws-id-name-err');
+  const shortErr   = document.getElementById('ws-id-short-err');
+  if (!nameInput || !shortInput) return;
+
+  nameErr.textContent  = '';
+  shortErr.textContent = '';
+
+  const rawName  = nameInput.value.trim();
+  const rawShort = shortInput.value.trim();
+  let valid = true;
+
+  if (rawName.length > 60) {
+    nameErr.textContent = 'Workspace name must be 60 characters or fewer.';
+    valid = false;
+  }
+  if (rawShort.length > 8) {
+    shortErr.textContent = 'Short name must be 8 characters or fewer.';
+    valid = false;
+  }
+  if (!valid) return;
+
+  const identity   = ensureWorkspaceIdentity();
+  identity.name      = rawName;
+  identity.shortName = rawShort;
+  saveLumioState();
+  cloudSyncWorkspace('workspaceIdentity');
+
+  // Re-render the full shell first (replaces DOM), then find the new
+  // feedback element in the rebuilt DOM and show "Saved" there.
+  renderWorkspaceSettings();
+  const newFeedback = document.getElementById('ws-id-feedback');
+  if (newFeedback) {
+    newFeedback.textContent = 'Saved';
+    setTimeout(() => { const el = document.getElementById('ws-id-feedback'); if (el) el.textContent = ''; }, 2000);
+  }
+}
+
 function _wsThemeSection(selectedTheme) {
   const themeCard = (theme) => {
     const isSelected = theme.id === selectedTheme;
-    const swatches   = [theme.tokens.primary, theme.tokens.secondary, theme.tokens.accent]
-      .map(c => `<span class="ws-theme-swatch" style="background:${c};"></span>`)
-      .join('');
+    const t = theme.tokens;
     return `
       <div class="ws-theme-card${isSelected ? ' ws-theme-card--selected' : ''}" data-select-theme="${theme.id}" role="button" tabindex="0" aria-pressed="${isSelected}">
-        <div class="ws-theme-card__preview">${swatches}</div>
+        <div class="ws-theme-card__preview">
+          <div class="ws-tc-sidebar" style="background:${t.sidebarBg};border-right:1.5px solid ${t.border};"></div>
+          <div class="ws-tc-main" style="background:${t.surfaceAlt};">
+            <div class="ws-tc-topbar" style="background:${t.topbarBg};border-bottom:1px solid ${t.border};"></div>
+            <div class="ws-tc-body">
+              <div class="ws-tc-bar" style="background:${t.primary};"></div>
+              <div class="ws-tc-bar ws-tc-bar--sm" style="background:${t.accent};"></div>
+              <div class="ws-tc-bar ws-tc-bar--xs" style="background:${t.border};"></div>
+            </div>
+          </div>
+        </div>
         <div class="ws-theme-card__footer">
           <span class="ws-theme-card__name">${escapeHtml(theme.name)}</span>
           ${theme.locked ? '<span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Built-in</span>' : ''}
@@ -452,6 +533,19 @@ function _wsThemeSection(selectedTheme) {
         </div>
       </div>`;
   };
+
+  const customComingSoon = `
+    <div class="ws-theme-card ws-theme-card--disabled" aria-disabled="true">
+      <div class="ws-theme-card__preview ws-theme-card__preview--custom">
+        <div class="ws-theme-card__custom-dot" style="background:#6366F1;"></div>
+        <div class="ws-theme-card__custom-dot" style="background:#F59E0B;"></div>
+        <div class="ws-theme-card__custom-dot" style="background:#10B981;"></div>
+      </div>
+      <div class="ws-theme-card__footer">
+        <span class="ws-theme-card__name">Custom</span>
+        <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
+      </div>
+    </div>`;
 
   return `
     <div class="card card-pad mb-24">
@@ -463,6 +557,7 @@ function _wsThemeSection(selectedTheme) {
       </div>
       <div class="ws-theme-grid mt-16">
         ${BUILTIN_THEMES.map(themeCard).join('')}
+        ${customComingSoon}
       </div>
     </div>`;
 }
@@ -485,13 +580,12 @@ function _wsPackSection(selectedPack) {
 
   const comingSoonCard = (pack) => `
     <div class="ws-pack-card ws-pack-card--disabled" aria-disabled="true">
-      <div class="ws-pack-card__preview ws-pack-card__preview--empty">
-        <span>Artwork in development</span>
-      </div>
+      <div class="ws-pack-card__preview ws-pack-card__preview--empty"></div>
       <div class="ws-pack-card__footer">
         <span class="ws-pack-card__name">${escapeHtml(pack.name)}</span>
         <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
       </div>
+      <div class="ws-pack-card__desc">${escapeHtml(pack.description)}</div>
     </div>`;
 
   return `
@@ -565,7 +659,7 @@ function _wsLogoSection() {
       <div class="ws-section-header mb-4">
         <div>
           <div class="prop-section-title mb-2">Workspace Logos</div>
-          <p class="text-sm text-muted">Upload custom logos for each platform context. All rendering flows through <code style="font-size:11px;background:var(--surface-alt);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">renderWorkspaceLogo()</code> — only the asset path changes.</p>
+          <p class="text-sm text-muted">Upload custom logos for each platform context. Changing a logo updates every location where it appears — no manual updates required.</p>
         </div>
       </div>
       <div class="ws-logo-slot-grid mt-16 mb-24">
@@ -579,18 +673,21 @@ function _wsLogoSection() {
 }
 
 function _wsLoginBrandSection() {
-  const logos    = ensureWorkspaceIdentity().logos || {};
-  const FALLBACK = 'assets/lumio-logo-transparent.png';
-  const spec     = _LOGO_SLOT_SPECS.find(s => s.slot === 'login-badge');
-  const hasCustom = !!(logos['login-badge'] && logos['login-badge'] !== FALLBACK);
-  const maxMB    = (_LOGO_MAX_BYTES / 1024 / 1024).toFixed(0);
+  const logos        = ensureWorkspaceIdentity().logos || {};
+  const FALLBACK     = 'assets/lumio-logo-transparent.png';
+  const maxMB        = (_LOGO_MAX_BYTES / 1024 / 1024).toFixed(0);
+  const badgeSpec    = _LOGO_LOGIN_SPECS.find(s => s.slot === 'login-badge');
+  const bgSpec       = _LOGO_LOGIN_SPECS.find(s => s.slot === 'login-background');
+  const hasBadge     = !!(logos['login-badge']      && logos['login-badge']      !== FALLBACK);
+  const hasBg        = !!(logos['login-background']);
+  const bgSrc        = logos['login-background'] || 'assets/lumio-login-backdrop.png';
 
   return `
     <div class="card card-pad mb-24">
       <div class="ws-section-header mb-4">
         <div>
           <div class="prop-section-title mb-2">Login Branding</div>
-          <p class="text-sm text-muted">Customise how the login screen presents your workspace. Login Badge changes appear on the login page immediately.</p>
+          <p class="text-sm text-muted">Customise how the login screen presents your workspace. Changes appear on the login page immediately.</p>
         </div>
       </div>
       <div class="ws-login-brand-layout mt-16">
@@ -601,11 +698,16 @@ function _wsLoginBrandSection() {
             <span class="ws-prev-dot" style="background:#28C840;"></span>
           </div>
           <div class="ws-login-mini-body">
-            <div class="ws-login-mini-badge">${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}</div>
-            <div class="ws-login-mini-heading">Welcome back</div>
-            <div class="ws-login-mini-field"></div>
-            <div class="ws-login-mini-field"></div>
-            <div class="ws-login-mini-btn" style="background:var(--ws-primary,#7C3AED);">Sign In</div>
+            <div class="ws-login-mini-backdrop">
+              <img src="${escapeHtml(bgSrc)}" alt="" />
+              <div class="ws-login-mini-badge">${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}</div>
+            </div>
+            <div class="ws-login-mini-auth">
+              <div class="ws-login-mini-heading">Welcome back</div>
+              <div class="ws-login-mini-field"></div>
+              <div class="ws-login-mini-field"></div>
+              <div class="ws-login-mini-btn" style="background:var(--ws-primary,#7C3AED);">Sign In</div>
+            </div>
           </div>
         </div>
         <div class="ws-login-brand-slots">
@@ -624,10 +726,34 @@ function _wsLoginBrandSection() {
               <div class="ws-logo-upload-error" id="ws-logo-err-login-badge-brand" role="alert" aria-live="polite"></div>
               <div class="ws-logo-slot-actions">
                 <label class="btn btn-secondary btn-sm ws-logo-upload-label" title="Upload a custom login badge">
-                  ${hasCustom ? 'Replace' : 'Upload'}
-                  <input type="file" class="ws-logo-file-input" accept="${escapeHtml(spec.accept)}" data-upload-slot="login-badge" aria-label="Upload login badge" />
+                  ${hasBadge ? 'Replace' : 'Upload'}
+                  <input type="file" class="ws-logo-file-input" accept="${escapeHtml(badgeSpec.accept)}" data-upload-slot="login-badge" aria-label="Upload login badge" />
                 </label>
-                ${hasCustom ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="login-badge" title="Remove custom badge and restore default">Remove</button>` : ''}
+                ${hasBadge ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="login-badge" title="Remove custom badge and restore default">Remove</button>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="ws-logo-slot-card" data-logo-slot="login-background" style="flex:1;">
+            <div class="ws-logo-slot-preview" style="background:var(--surface-alt); overflow:hidden; padding:0; position:relative;">
+              ${hasBg
+                ? `<img src="${escapeHtml(logos['login-background'])}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" />`
+                : `<img src="assets/lumio-login-backdrop.png" alt="" style="width:100%; height:100%; object-fit:cover; display:block; opacity:0.5;" />`}
+            </div>
+            <div class="ws-logo-slot-body">
+              <div class="ws-logo-slot-name">Login Background <span class="pill pill-teal" style="font-size:10px;padding:1px 6px;margin-left:4px;">Live</span></div>
+              <div class="ws-logo-slot-desc">Full-bleed image covering the left panel of the login page. Defaults to the Lumio artwork.</div>
+              <div class="ws-logo-slot-specs">
+                <span class="ws-logo-slot-spec">Any size</span>
+                <span class="ws-logo-slot-spec">PNG · JPG · SVG</span>
+                <span class="ws-logo-slot-spec">Max ${maxMB} MB</span>
+              </div>
+              <div class="ws-logo-upload-error" id="ws-logo-err-login-background" role="alert" aria-live="polite"></div>
+              <div class="ws-logo-slot-actions">
+                <label class="btn btn-secondary btn-sm ws-logo-upload-label" title="Upload a custom login background">
+                  ${hasBg ? 'Replace' : 'Upload'}
+                  <input type="file" class="ws-logo-file-input" accept="${escapeHtml(bgSpec.accept)}" data-upload-slot="login-background" aria-label="Upload login background" />
+                </label>
+                ${hasBg ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="login-background" title="Remove custom background and restore Lumio artwork">Remove</button>` : ''}
               </div>
             </div>
           </div>
@@ -637,7 +763,7 @@ function _wsLoginBrandSection() {
             </div>
             <div class="ws-logo-slot-body">
               <div class="ws-logo-slot-name">Login Brand</div>
-              <div class="ws-logo-slot-desc">Full-width white-label brand lockup for the login backdrop. Architectural slot <code style="font-size:10px;">LOGIN_BRAND</code> is reserved and ready for implementation.</div>
+              <div class="ws-logo-slot-desc">White-label brand lockup overlaid on the login backdrop. Architectural slot <code style="font-size:10px;">LOGIN_BRAND</code> is reserved.</div>
               <div class="ws-logo-slot-specs">
                 <span class="ws-logo-slot-spec">320 × 120 px</span>
                 <span class="ws-logo-slot-spec">PNG · SVG</span>
@@ -649,25 +775,193 @@ function _wsLoginBrandSection() {
     </div>`;
 }
 
-function workspaceAppearanceTab() {
-  const identity      = ensureWorkspaceIdentity();
-  const workspace     = getCurrentWorkspace();
-  const selectedTheme = identity.selectedThemeId || 'lumio';
-  const selectedPack  = identity.iconPack?.packId || 'lumio';
+// ── Appearance Manager ────────────────────────────────────────────────────────
+
+function _wsAppearanceManager() {
+  const identity    = ensureWorkspaceIdentity();
+  const profiles    = identity.profiles || {};
+  const activeId    = identity.activeProfileId || 'default';
+  const customList  = Object.values(profiles);
+  const customCount = customList.length;
+
+  // Build mini preview strip from token values.
+  const _previewStrip = (primary, sidebarBg, surfaceAlt, border) => `
+    <div class="ws-ap-card__preview-sidebar" style="background:${sidebarBg};"></div>
+    <div class="ws-ap-card__preview-main" style="background:${surfaceAlt};">
+      <div style="height:6px;background:${primary};border-radius:2px;margin-bottom:4px;width:60%;"></div>
+      <div style="height:4px;background:${border};border-radius:2px;width:40%;"></div>
+    </div>`;
+
+  const lumioTheme   = BUILTIN_THEMES.find(t => t.id === 'lumio') || BUILTIN_THEMES[0];
+  const lt           = lumioTheme.tokens;
+  const isDefaultActive = activeId === 'default';
+
+  const defaultCard = `
+    <div class="ws-ap-card${isDefaultActive ? ' ws-ap-card--active' : ''}"
+         data-ap-activate="default" role="button" tabindex="0"
+         title="${isDefaultActive ? 'Currently active' : 'Click to activate'}">
+      <div class="ws-ap-card__preview">
+        ${_previewStrip(lt.primary, lt.sidebarBg, lt.surfaceAlt, lt.border)}
+      </div>
+      <div class="ws-ap-card__footer">
+        <div style="min-width:0;flex:1;">
+          <div class="ws-ap-card__name">Lumio</div>
+          <div class="ws-ap-card__subtitle">Default</div>
+        </div>
+        ${isDefaultActive ? '<span class="ws-ap-card__active-badge">✓ Active</span>' : ''}
+      </div>
+    </div>`;
+
+  const customCards = customList.map(p => {
+    const isActive   = p.id === activeId;
+    const baseTheme  = BUILTIN_THEMES.find(t => t.id === p.selectedThemeId) || BUILTIN_THEMES[0];
+    const t          = (p.theme && Object.keys(p.theme).length) ? p.theme : baseTheme.tokens;
+    return `
+      <div class="ws-ap-card${isActive ? ' ws-ap-card--active' : ''}" data-ap-id="${escapeHtml(p.id)}">
+        <div class="ws-ap-card__preview">
+          ${_previewStrip(t.primary, t.sidebarBg, t.surfaceAlt, t.border)}
+        </div>
+        <div class="ws-ap-card__footer">
+          <div class="ws-ap-card__meta">
+            <div class="ws-ap-card__name">${escapeHtml(p.name)}</div>
+            ${isActive ? '<div class="ws-ap-card__status">✓ Active</div>' : ''}
+          </div>
+          <div class="ws-ap-overflow-wrap">
+            <button class="ws-ap-overflow-btn" data-ap-menu="${escapeHtml(p.id)}" aria-label="Options for ${escapeHtml(p.name)}">⋯</button>
+            <div class="ws-ap-menu" id="ws-ap-menu-${escapeHtml(p.id)}" hidden>
+              ${isActive
+                ? `<div class="ws-ap-menu-active-row">✓ Active</div>
+                   <div class="ws-ap-menu-divider"></div>`
+                : `<button class="ws-ap-menu-item" data-ap-activate="${escapeHtml(p.id)}">Activate</button>
+                   <div class="ws-ap-menu-divider"></div>`}
+              <button class="ws-ap-menu-item" data-ap-edit="${escapeHtml(p.id)}">Edit</button>
+              <button class="ws-ap-menu-item" data-ap-dupe="${escapeHtml(p.id)}">Duplicate</button>
+              <button class="ws-ap-menu-item ws-ap-menu-item--danger" data-ap-delete="${escapeHtml(p.id)}">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const addCard = customCount < 2 ? `
+    <div class="ws-ap-card ws-ap-card--add" id="ws-ap-add-btn" role="button" tabindex="0">
+      <div class="ws-ap-card__preview ws-ap-card__preview--add">
+        <div class="ws-ap-card__add-icon">+</div>
+      </div>
+      <div class="ws-ap-card__footer">
+        <div class="ws-ap-card__add-label">Add Appearance</div>
+      </div>
+    </div>` : '';
 
   return `
-    ${_wsPreviewSection()}
-    ${_wsIdentitySection(workspace)}
-    ${_wsThemeSection(selectedTheme)}
-    ${_wsPackSection(selectedPack)}
-    ${_wsLogoSection()}
-    ${_wsLoginBrandSection()}
-  `;
+    <div class="ws-page-section">Workspace Appearance</div>
+    <div class="ws-ap-grid mb-32">
+      ${defaultCard}
+      ${customCards}
+      ${addCard}
+    </div>`;
 }
 
-function bindWorkspaceAppearanceTab() {
+// ── Appearance Editor ─────────────────────────────────────────────────────────
+
+function _wsAppearanceEditor(state) {
+  const identity      = ensureWorkspaceIdentity();
+  const selectedTheme = identity.selectedThemeId || 'lumio';
+  const selectedPack  = identity.iconPack?.packId || 'lumio';
+  const draftName     = state.draftName || '';
+  const isNew         = state.mode === 'create';
+
+  return `
+    <div class="ws-editor-chrome">
+      <div class="ws-editor-header mb-24">
+        <div class="prop-section-title">${isNew ? 'New Appearance' : 'Edit Appearance'}</div>
+        <div class="ws-editor-header-actions">
+          <button class="btn btn-ghost btn-sm" id="ws-ap-editor-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="ws-ap-editor-save">Save Appearance</button>
+        </div>
+      </div>
+      <div class="card card-pad mb-24">
+        <div class="prop-section-title mb-2">Appearance Name</div>
+        <p class="text-sm text-muted mb-12">Used to identify this appearance in the Appearance Manager.</p>
+        <input class="ws-identity-input" id="ws-ap-name-input" type="text" maxlength="60"
+               value="${escapeHtml(draftName)}" placeholder="e.g. Compliance Academy" autocomplete="off" />
+        <div class="ws-identity-input-error" id="ws-ap-name-err"></div>
+      </div>
+      ${_wsIdentitySection()}
+      <div class="ws-page-section">Workspace Branding</div>
+      ${_wsLogoSection()}
+      ${_wsLoginBrandSection()}
+      <div class="ws-page-section">Theme &amp; Icons</div>
+      ${_wsThemeSection(selectedTheme)}
+      ${_wsPackSection(selectedPack)}
+      <div class="ws-page-section">Live Preview</div>
+      ${_wsPreviewSection()}
+    </div>`;
+}
+
+// ── Tab dispatcher ────────────────────────────────────────────────────────────
+
+function workspaceAppearanceTab() {
+  if (_wsAppearanceEditorState) return _wsAppearanceEditor(_wsAppearanceEditorState);
+  return _wsAppearanceManager();
+}
+
+// ── Binding: shared section logic (theme, pack, logos, identity name) ─────────
+
+function _bindWorkspaceAppearanceSections() {
   const host = document.getElementById('ws-tab-content');
   if (!host) return;
+
+  // ── Workspace Identity (name / short name) ────────────────────
+  {
+    const identity   = ensureWorkspaceIdentity();
+    const nameInput  = host.querySelector('#ws-id-name');
+    const shortInput = host.querySelector('#ws-id-short');
+    const saveBtn    = host.querySelector('#ws-id-save');
+    const cancelBtn  = host.querySelector('#ws-id-cancel');
+
+    if (nameInput && shortInput && saveBtn && cancelBtn) {
+      let shortNameUserOwned = !!(identity.shortName);
+
+      function _wsIdUpdateButtons() {
+        const dirty =
+          nameInput.value.trim()  !== (identity.name      || '') ||
+          shortInput.value.trim() !== (identity.shortName || '');
+        saveBtn.disabled   = !dirty;
+        cancelBtn.disabled = !dirty;
+      }
+
+      nameInput.addEventListener('input', () => {
+        if (!shortNameUserOwned) {
+          const n = nameInput.value.trim();
+          const initials = n.split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase()).join('');
+          shortInput.placeholder = initials.slice(0, 3) || n.slice(0, 2).toUpperCase() || '';
+        }
+        _wsIdUpdateButtons();
+      });
+
+      shortInput.addEventListener('input', () => {
+        shortNameUserOwned = true;
+        _wsIdUpdateButtons();
+      });
+
+      saveBtn.addEventListener('click', _saveWorkspaceIdentityName);
+
+      cancelBtn.addEventListener('click', () => {
+        nameInput.value  = identity.name      || '';
+        shortInput.value = identity.shortName || '';
+        host.querySelector('#ws-id-name-err').textContent  = '';
+        host.querySelector('#ws-id-short-err').textContent = '';
+        shortNameUserOwned = !!(identity.shortName);
+        if (!shortNameUserOwned) {
+          const n = nameInput.value.trim();
+          const initials = n.split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase()).join('');
+          shortInput.placeholder = initials.slice(0, 3) || n.slice(0, 2).toUpperCase() || getWorkspaceShortName();
+        }
+        _wsIdUpdateButtons();
+      });
+    }
+  }
 
   // ── Theme selection ───────────────────────────────────────────
   host.querySelectorAll('[data-select-theme]').forEach(card => {
@@ -696,7 +990,7 @@ function bindWorkspaceAppearanceTab() {
       if (!file) return;
 
       const slot   = input.dataset.uploadSlot;
-      const spec   = _LOGO_SLOT_SPECS.find(s => s.slot === slot);
+      const spec   = [..._LOGO_SLOT_SPECS, ..._LOGO_LOGIN_SPECS].find(s => s.slot === slot);
       if (!spec) return;
 
       // Show loading state on the upload label.
@@ -737,6 +1031,266 @@ function bindWorkspaceAppearanceTab() {
       renderWorkspaceSettings();
     });
   });
+}
+
+// Dispatcher — called by renderWorkspaceSettingsTab().
+function bindWorkspaceAppearanceTab() {
+  if (_wsAppearanceEditorState) {
+    bindWorkspaceAppearanceEditor();
+  } else {
+    bindWorkspaceAppearanceManager();
+  }
+}
+
+// ── Binding: Appearance Manager ───────────────────────────────────────────────
+
+function bindWorkspaceAppearanceManager() {
+  const host = document.getElementById('ws-tab-content');
+  if (!host) return;
+
+  // Snapshot the current flat identity before entering the editor.
+  function _snapshotIdentity() {
+    const id = ensureWorkspaceIdentity();
+    return {
+      selectedThemeId: id.selectedThemeId,
+      theme:    { ...(id.theme    || {}) },
+      logos:    { ...(id.logos    || {}) },
+      iconPack: { ...(id.iconPack || {}) },
+      name:     id.name      || '',
+      shortName:id.shortName || '',
+    };
+  }
+
+  // Load a source object into the flat mirror and apply CSS.
+  function _loadIntoMirror(src) {
+    const id = ensureWorkspaceIdentity();
+    id.selectedThemeId = src.selectedThemeId || 'lumio';
+    id.theme    = { ...(src.theme    || {}) };
+    id.logos    = { ...(src.logos    || {}) };
+    id.iconPack = { ...(src.iconPack || { packId: 'lumio' }) };
+    id.name     = src.name      || '';
+    id.shortName= src.shortName || '';
+    applyWorkspaceIdentity();
+  }
+
+  // ── + Add Appearance ──────────────────────────────────────────
+  const addBtn = host.querySelector('#ws-ap-add-btn');
+  if (addBtn) {
+    const openCreate = () => {
+      const snapshot = _snapshotIdentity();
+      // Reset flat mirror to Lumio defaults for the new appearance canvas.
+      const lumioTheme = BUILTIN_THEMES.find(t => t.id === 'lumio') || BUILTIN_THEMES[0];
+      _loadIntoMirror({
+        selectedThemeId: lumioTheme.id,
+        theme:    { ...lumioTheme.tokens },
+        logos:    {},
+        iconPack: { packId: 'lumio' },
+        name:     '',
+        shortName:'',
+      });
+      _wsAppearanceEditorState = { mode: 'create', draftName: '', snapshot };
+      renderWorkspaceSettings();
+    };
+    addBtn.addEventListener('click', openCreate);
+    addBtn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCreate(); } });
+  }
+
+  // ── Default card click (activate) ────────────────────────────
+  host.querySelectorAll('[data-ap-activate="default"]').forEach(el => {
+    el.addEventListener('click', () => {
+      if ((ensureWorkspaceIdentity().activeProfileId || 'default') === 'default') return;
+      selectAppearanceProfile('default');
+      renderWorkspaceSettings();
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
+  });
+
+  // ── Activate (now inside overflow menu) ──────────────────────
+  host.querySelectorAll('[data-ap-activate]:not([data-ap-activate="default"])').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      _closeAllMenus();
+      selectAppearanceProfile(btn.dataset.apActivate);
+      renderWorkspaceSettings();
+    });
+  });
+
+  // ── Overflow menu: close helper ───────────────────────────────
+  function _closeAllMenus() {
+    host.querySelectorAll('.ws-ap-menu').forEach(m => { m.hidden = true; });
+  }
+
+  // ── Overflow menu: toggle ─────────────────────────────────────
+  host.querySelectorAll('.ws-ap-overflow-btn[data-ap-menu]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id      = btn.dataset.apMenu;
+      const menu    = host.querySelector(`#ws-ap-menu-${id}`);
+      if (!menu) return;
+      const opening = menu.hidden;
+      _closeAllMenus();
+      menu.hidden = !opening;
+    });
+  });
+
+  // ── Overflow menu: close on outside click ─────────────────────
+  function _onOutsideClick(e) {
+    if (!e.target.closest('.ws-ap-overflow-wrap')) _closeAllMenus();
+  }
+  document.addEventListener('click', _onOutsideClick);
+  // Remove listener when the host is replaced (next renderWorkspaceSettings).
+  new MutationObserver(() => {
+    if (!document.contains(host)) {
+      document.removeEventListener('click', _onOutsideClick);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // ── Overflow menu: close on Escape ───────────────────────────
+  function _onEscape(e) {
+    if (e.key === 'Escape') { _closeAllMenus(); }
+  }
+  document.addEventListener('keydown', _onEscape);
+  new MutationObserver(() => {
+    if (!document.contains(host)) {
+      document.removeEventListener('keydown', _onEscape);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // ── Edit ──────────────────────────────────────────────────────
+  host.querySelectorAll('[data-ap-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id      = btn.dataset.apEdit;
+      const profile = (ensureWorkspaceIdentity().profiles || {})[id];
+      if (!profile) return;
+      const snapshot = _snapshotIdentity();
+      _loadIntoMirror({
+        selectedThemeId: profile.selectedThemeId,
+        theme:    profile.theme,
+        logos:    profile.logos,
+        iconPack: profile.iconPack,
+        name:     profile.wsName,
+        shortName:profile.wsShortName,
+      });
+      _wsAppearanceEditorState = { mode: 'edit', id, draftName: profile.name, snapshot };
+      renderWorkspaceSettings();
+    });
+  });
+
+  // ── Duplicate ─────────────────────────────────────────────────
+  host.querySelectorAll('[data-ap-dupe]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id      = btn.dataset.apDupe;
+      const identity = ensureWorkspaceIdentity();
+      const profile  = (identity.profiles || {})[id];
+      if (!profile) return;
+      if (Object.keys(identity.profiles || {}).length >= 2) return;
+      const snapshot = _snapshotIdentity();
+      _loadIntoMirror({
+        selectedThemeId: profile.selectedThemeId,
+        theme:    profile.theme,
+        logos:    profile.logos,
+        iconPack: profile.iconPack,
+        name:     profile.wsName,
+        shortName:profile.wsShortName,
+      });
+      _wsAppearanceEditorState = { mode: 'create', draftName: profile.name + ' (Copy)', snapshot };
+      renderWorkspaceSettings();
+    });
+  });
+
+  // ── Delete ────────────────────────────────────────────────────
+  host.querySelectorAll('[data-ap-delete]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id       = btn.dataset.apDelete;
+      const identity = ensureWorkspaceIdentity();
+      if (!identity.profiles || !identity.profiles[id]) return;
+      const wasActive = identity.activeProfileId === id;
+      delete identity.profiles[id];
+      if (wasActive) {
+        selectAppearanceProfile('default'); // also saves + syncs
+      } else {
+        saveLumioState();
+        cloudSyncWorkspace('workspaceIdentity');
+      }
+      renderWorkspaceSettings();
+    });
+  });
+}
+
+// ── Binding: Appearance Editor ────────────────────────────────────────────────
+
+function bindWorkspaceAppearanceEditor() {
+  const host  = document.getElementById('ws-tab-content');
+  const state = _wsAppearanceEditorState;
+  if (!host || !state) return;
+
+  // Track draft name changes so re-renders preserve the typed value.
+  const nameInput = host.querySelector('#ws-ap-name-input');
+  if (nameInput) {
+    nameInput.addEventListener('input', () => { state.draftName = nameInput.value; });
+  }
+
+  // ── Cancel ────────────────────────────────────────────────────
+  const cancelBtn = host.querySelector('#ws-ap-editor-cancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      // Restore the snapshot so the live workspace reverts to what it was.
+      const identity = ensureWorkspaceIdentity();
+      const snap     = state.snapshot;
+      identity.selectedThemeId = snap.selectedThemeId;
+      identity.theme    = snap.theme;
+      identity.logos    = snap.logos;
+      identity.iconPack = snap.iconPack;
+      identity.name     = snap.name;
+      identity.shortName= snap.shortName;
+      applyWorkspaceIdentity();
+      _wsAppearanceEditorState = null;
+      renderWorkspaceSettings();
+    });
+  }
+
+  // ── Save ──────────────────────────────────────────────────────
+  const saveBtn = host.querySelector('#ws-ap-editor-save');
+  const nameErr = host.querySelector('#ws-ap-name-err');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const rawName = nameInput ? nameInput.value.trim() : (state.draftName || '').trim();
+      if (!rawName) {
+        if (nameErr) nameErr.textContent = 'Please enter an appearance name.';
+        if (nameInput) nameInput.focus();
+        return;
+      }
+      if (nameErr) nameErr.textContent = '';
+
+      const identity = ensureWorkspaceIdentity();
+      if (!identity.profiles) identity.profiles = {};
+
+      const id = state.mode === 'edit' ? state.id : ('custom-' + Date.now());
+
+      // Persist a snapshot of the current flat mirror as the profile.
+      identity.profiles[id] = {
+        id,
+        name:            rawName,
+        selectedThemeId: identity.selectedThemeId || 'lumio',
+        theme:           { ...(identity.theme    || {}) },
+        logos:           { ...(identity.logos    || {}) },
+        iconPack:        { ...(identity.iconPack || { packId: 'lumio' }) },
+        wsName:          identity.name      || '',
+        wsShortName:     identity.shortName || '',
+      };
+
+      // Activate the newly created profile.
+      if (state.mode === 'create') identity.activeProfileId = id;
+
+      saveLumioState();
+      cloudSyncWorkspace('workspaceIdentity');
+      _wsAppearanceEditorState = null;
+      renderWorkspaceSettings();
+    });
+  }
+
+  // Wire all existing section interactions (identity name, theme, pack, logos).
+  _bindWorkspaceAppearanceSections();
 }
 
 /* ---------------- USERS ---------------- */

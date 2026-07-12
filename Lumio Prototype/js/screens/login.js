@@ -42,8 +42,7 @@ function loginAuthCardShell(innerHtml) {
   return `
     <div class="login-shell" style="display:flex; min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden;">
       <div class="login-backdrop" style="flex:1 1 0%; position:relative; z-index:1; min-width:0; overflow:hidden; background:var(--surface-50);">
-        <img src="assets/lumio-login-backdrop.png" alt="Lumio — Learn. Design. Inspire."
-          style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:30% center; display:block;" />
+        ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BACKGROUND, { alt: '' })}
         <div class="glass-card login-logo-badge" style="position:absolute; top:28px; left:28px; padding:8px 16px 8px 8px; display:flex; align-items:center; gap:10px;">
           ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}
           <span style="font-weight:700; font-size:17px; font-family:var(--font-display); color:var(--ink-900); letter-spacing:0.04em;">LUMIO</span>
@@ -66,10 +65,9 @@ function paintLogin() {
   app.innerHTML = `
     <div class="login-shell" style="display:flex; min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden;">
 
-      <!-- Left: Approved Lumio Backdrop Artwork -->
+      <!-- Left: Workspace Login Background -->
       <div class="login-backdrop" style="flex:1 1 0%; position:relative; z-index:1; min-width:0; overflow:hidden; background:var(--surface-50);">
-        <img src="assets/lumio-login-backdrop.png" alt="Lumio — Learn. Design. Inspire."
-          style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:30% center; display:block;" />
+        ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BACKGROUND, { alt: '' })}
 
         <div class="glass-card login-logo-badge" style="position:absolute; top:28px; left:28px; padding:8px 16px 8px 8px; display:flex; align-items:center; gap:10px;">
           ${renderWorkspaceLogo(LOGO_SLOTS.LOGIN_BADGE)}

@@ -1895,6 +1895,66 @@ const BUILTIN_THEMES = [
       topbarBg:   '#FFFFFF',
     },
   },
+  {
+    id:     'ocean',
+    name:   'Ocean',
+    locked: true,
+    tokens: {
+      primary:    '#0284C7',
+      secondary:  '#0EA5E9',
+      accent:     '#14B8A6',
+      surface:    '#FFFFFF',
+      surfaceAlt: '#F0F9FF',
+      border:     '#BAE6FD',
+      text:       '#0C4A6E',
+      textMuted:  '#64748B',
+      icon:       '#0284C7',
+      shadow:     '0 8px 24px rgba(2, 132, 199, 0.08)',
+      radius:     '16px',
+      sidebarBg:  '#F0F9FF',
+      topbarBg:   '#FFFFFF',
+    },
+  },
+  {
+    id:     'midnight',
+    name:   'Midnight',
+    locked: true,
+    tokens: {
+      primary:    '#818CF8',
+      secondary:  '#A78BFA',
+      accent:     '#34D399',
+      surface:    '#2A2640',
+      surfaceAlt: '#1E1B2E',
+      border:     '#3D3860',
+      text:       '#E2E0F0',
+      textMuted:  '#9CA3AF',
+      icon:       '#818CF8',
+      shadow:     '0 8px 24px rgba(0, 0, 0, 0.40)',
+      radius:     '20px',
+      sidebarBg:  '#16131F',
+      topbarBg:   '#1E1B2E',
+    },
+  },
+  {
+    id:     'corporate',
+    name:   'Corporate',
+    locked: true,
+    tokens: {
+      primary:    '#2563EB',
+      secondary:  '#3B82F6',
+      accent:     '#0EA5E9',
+      surface:    '#FFFFFF',
+      surfaceAlt: '#F8FAFC',
+      border:     '#E2E8F0',
+      text:       '#1E293B',
+      textMuted:  '#64748B',
+      icon:       '#2563EB',
+      shadow:     '0 4px 16px rgba(30, 41, 59, 0.08)',
+      radius:     '8px',
+      sidebarBg:  '#F1F5F9',
+      topbarBg:   '#FFFFFF',
+    },
+  },
 ];
 
 // ── Workspace Logo Renderer ───────────────────────────────────────────────────
@@ -1902,13 +1962,14 @@ const BUILTIN_THEMES = [
 // No page or component may render logo assets directly.
 
 const LOGO_SLOTS = {
-  LOGIN_BADGE:    'login-badge',     // 40 × 40 brand badge in the login page backdrop corner
-  LOGIN_BRAND:    'login-brand',     // Reserved — 320 × 120 max, future white-label login lockup
-  SIDEBAR:        'sidebar',         // Normal sidebar icon (34 × 34)
-  SIDEBAR_LARGE:  'sidebar-large',   // Featured sidebar logo on hub/projects (140 × auto)
-  COMPACT:        'compact',         // Topbar icon in builder / learner / wizard (32 × 32)
-  WELCOME:        'welcome',         // Authenticated welcome/loading screen (240 × 240 max)
-  FAVICON:        'favicon',         // Reserved — managed by index.html <link rel="icon">
+  LOGIN_BADGE:       'login-badge',        // 40 × 40 brand badge in the login page backdrop corner
+  LOGIN_BACKGROUND:  'login-background',   // Full-bleed left-panel background image (replaces Lumio artwork)
+  LOGIN_BRAND:       'login-brand',        // Reserved — 320 × 120 max, future white-label login lockup
+  SIDEBAR:           'sidebar',            // Normal sidebar icon (34 × 34)
+  SIDEBAR_LARGE:     'sidebar-large',      // Featured sidebar logo on hub/projects (140 × auto)
+  COMPACT:           'compact',            // Topbar icon in builder / learner / wizard (32 × 32)
+  WELCOME:           'welcome',            // Authenticated welcome/loading screen (240 × 240 max)
+  FAVICON:           'favicon',            // Reserved — managed by index.html <link rel="icon">
 };
 
 /**
@@ -1923,10 +1984,12 @@ const LOGO_SLOTS = {
 function renderWorkspaceLogo(slot, opts = {}) {
   const identity = LumioState.workspaceIdentity;
   const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
-  const FALLBACK = 'assets/lumio-logo-transparent.png';
+  const SLOT_FALLBACKS = { 'login-background': 'assets/lumio-login-backdrop.png' };
+  const FALLBACK = SLOT_FALLBACKS[slot] || 'assets/lumio-logo-transparent.png';
   const src      = logos[slot] || FALLBACK;
-  const idAttr   = opts.id ? ` id="${opts.id}"` : '';
-  return `<img src="${src}" alt="Workspace logo" class="ws-logo ws-logo--${slot}"${idAttr} />`;
+  const idAttr   = opts.id  ? ` id="${opts.id}"` : '';
+  const alt      = opts.alt !== undefined ? opts.alt : 'Workspace logo';
+  return `<img src="${src}" alt="${alt}" class="ws-logo ws-logo--${slot}"${idAttr} />`;
 }
 
 /* ── Platform Icon Infrastructure ─────────────────────────────── */
@@ -1981,6 +2044,111 @@ const _IC_PATHS = {
   'chevron-right':  '<polyline points="9 18 15 12 9 6"/>',
   'chevron-left':   '<polyline points="15 18 9 12 15 6"/>',
   'chevron-down':   '<polyline points="6 9 12 15 18 9"/>',
+  // Shell / UI artwork — Sprint 7B
+  // Navigation
+  'back':               '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  'collapse-left':      '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="13 8 8 12 13 16"/>',
+  'expand-right':       '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="11 8 16 12 11 16"/>',
+  // Editor layout
+  'align-left':         '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="17" y2="18"/>',
+  'align-center':       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="5" y1="18" x2="19" y2="18"/>',
+  'align-right':        '<line x1="3" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="7" y1="18" x2="21" y2="18"/>',
+  'drag-handle':        '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
+  'more-options':       '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  'remove':             '<circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  'word-count':         '<line x1="9" y1="8" x2="9" y2="16"/><line x1="15" y1="8" x2="15" y2="16"/><line x1="6" y1="11" x2="18" y2="11"/><line x1="6" y1="13" x2="18" y2="13"/>',
+  'flip':               '<rect x="2" y="7" width="20" height="10" rx="2"/><polyline points="9 4 12 1 15 4"/><polyline points="9 20 12 23 15 20"/>',
+  // Workspace
+  'folder':             '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  'person':             '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  'team':               '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  'tag':                '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  'target':             '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  'celebration':        '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/>',
+  // Media UI
+  'image-placeholder':  '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  'audio-placeholder':  '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="9" y2="15"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="15" y1="10" x2="15" y2="14"/>',
+  'video-placeholder':  '<rect x="3" y="3" width="18" height="18" rx="2"/><polygon points="10 8 16 12 10 16 10 8"/>',
+  'play':               '<polygon points="5 3 19 12 5 21 5 3"/>',
+  'upload-media':       '<rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="16 10 12 6 8 10"/><line x1="12" y1="6" x2="12" y2="16"/>',
+  'replace-media':      '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  'download':           '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  // Block Categories artwork — Sprint 7C
+  'cat-recommended':    '<circle cx="12" cy="8" r="5"/><path d="M8.56 13.9L7 22l5-3 5 3-1.56-8.1"/>',
+  'cat-text':           '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>',
+  'cat-images':         '<rect x="5" y="2" width="16" height="16" rx="2"/><rect x="3" y="5" width="16" height="16" rx="2"/>',
+  'cat-gallery':        '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  'cat-multimedia':     '<rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 9 16 12 10 15 10 9"/><line x1="2" y1="20" x2="22" y2="20"/>',
+  'cat-lists':          '<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/>',
+  'cat-statements':     '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/>',
+  'cat-quotes':         '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>',
+  'cat-charts':         '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  'cat-dividers':       '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="9" x2="3" y2="15"/><line x1="21" y1="9" x2="21" y2="15"/>',
+  'cat-interactive':    '<path d="M9 11V6a3 3 0 0 1 6 0v5"/><path d="M9 11H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/><circle cx="12" cy="16" r="1"/>',
+  'cat-knowledge-checks':'<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><polyline points="9 12 11 14 15 10"/>',
+  // Block Types artwork — Sprint 7D
+  // Text
+  'block-heading':            '<line x1="5" y1="4" x2="5" y2="20"/><line x1="19" y1="4" x2="19" y2="20"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  'block-paragraph':          '<line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="14" y2="17"/>',
+  'block-heading-paragraph':  '<line x1="4" y1="3" x2="4" y2="9"/><line x1="13" y1="3" x2="13" y2="9"/><line x1="4" y1="6" x2="13" y2="6"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="19" x2="15" y2="19"/>',
+  // Layout
+  'block-columns':            '<rect x="2" y="3" width="9" height="18" rx="2"/><rect x="13" y="3" width="9" height="18" rx="2"/>',
+  'block-table':              '<rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="2" y1="15" x2="22" y2="15"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
+  // Statements — shared container: rect + left bar; inner icon differentiates
+  'block-statement-info':     '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><circle cx="13" cy="9.5" r="1"/><line x1="13" y1="12" x2="13" y2="15.5"/>',
+  'block-statement-tip':      '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><circle cx="13" cy="10" r="2.5"/><line x1="13" y1="13" x2="13" y2="15"/><line x1="11.5" y1="15" x2="14.5" y2="15"/>',
+  'block-statement-success':  '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><polyline points="9.5 12 12 14.5 17 9.5"/>',
+  'block-statement-warning':  '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><path d="M10 16l3-6 3 6z"/><line x1="13" y1="12" x2="13" y2="13.5"/>',
+  'block-statement-error':    '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><circle cx="13" cy="12" r="3"/><line x1="11.5" y1="10.5" x2="14.5" y2="13.5"/><line x1="14.5" y1="10.5" x2="11.5" y2="13.5"/>',
+  'block-statement-note':     '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><line x1="10" y1="10" x2="18" y2="10"/><line x1="10" y1="13" x2="18" y2="13"/><line x1="10" y1="16" x2="15" y2="16"/>',
+  // Quotes — shared quote glyph; companion element differentiates
+  'block-quote':              '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>',
+  'block-quote-image':        '<path d="M4 10c0-2.2 1.8-4 4-4V8c-1 0-2 .9-2 2h3v5H4v-5z"/><path d="M12 10c0-2.2 1.8-4 4-4V8c-1 0-2 .9-2 2h3v5h-5v-5z"/><rect x="4" y="17" width="16" height="5" rx="1"/><circle cx="8" cy="19.5" r="1.5"/><polyline points="4 22 9 18.5 12 21 15 18.5 20 22"/>',
+  'block-quote-carousel':     '<path d="M4 10c0-2.2 1.8-4 4-4V8c-1 0-2 .9-2 2h3v5H4v-5z"/><path d="M12 10c0-2.2 1.8-4 4-4V8c-1 0-2 .9-2 2h3v5h-5v-5z"/><line x1="3" y1="19" x2="21" y2="19"/><circle cx="9" cy="22" r="1"/><circle cx="12" cy="22" r="1.5"/><circle cx="15" cy="22" r="1"/><polyline points="3 17 1 19 3 21"/><polyline points="21 17 23 19 21 21"/>',
+  // Lists — left marker differentiates: circle vs rect vs checkbox
+  'block-list-bullet':        '<circle cx="5" cy="7" r="1.5"/><line x1="9" y1="7" x2="21" y2="7"/><circle cx="5" cy="13" r="1.5"/><line x1="9" y1="13" x2="21" y2="13"/><circle cx="5" cy="19" r="1.5"/><line x1="9" y1="19" x2="17" y2="19"/>',
+  'block-list-numbered':      '<rect x="3" y="5" width="4" height="4" rx="1"/><line x1="9" y1="7" x2="21" y2="7"/><rect x="3" y="11" width="4" height="4" rx="1"/><line x1="9" y1="13" x2="21" y2="13"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="9" y1="19" x2="17" y2="19"/>',
+  'block-list-checkbox':      '<rect x="3" y="5" width="4" height="4" rx="1"/><polyline points="4 7 5 8 7 6"/><line x1="9" y1="7" x2="21" y2="7"/><rect x="3" y="11" width="4" height="4" rx="1"/><polyline points="4 13 5 14 7 12"/><line x1="9" y1="13" x2="21" y2="13"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="9" y1="19" x2="17" y2="19"/>',
+  // Media
+  'block-image':              '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="2"/><path d="M3 17l5-4 4 4 3-3 6 4"/>',
+  'block-image-text':         '<rect x="2" y="4" width="10" height="16" rx="2"/><circle cx="7" cy="9" r="1.5"/><path d="M2 17l4-3 6 3"/><line x1="14" y1="7" x2="22" y2="7"/><line x1="14" y1="11" x2="22" y2="11"/><line x1="14" y1="15" x2="20" y2="15"/>',
+  'block-text-on-image':      '<rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="M2 14l5-4 4 4 4-3 7 3"/><rect x="2" y="15" width="20" height="6"/><line x1="5" y1="17.5" x2="17" y2="17.5"/><line x1="5" y1="19.5" x2="13" y2="19.5"/>',
+  'block-carousel':           '<rect x="4" y="5" width="16" height="12" rx="2"/><circle cx="9" cy="20" r="1"/><circle cx="12" cy="20" r="1.5"/><circle cx="15" cy="20" r="1"/><polyline points="3 9 1 11 3 13"/><polyline points="21 9 23 11 21 13"/>',
+  'block-grid':               '<rect x="2" y="2" width="6" height="9" rx="1"/><rect x="9" y="2" width="6" height="9" rx="1"/><rect x="16" y="2" width="6" height="9" rx="1"/><rect x="2" y="13" width="6" height="9" rx="1"/><rect x="9" y="13" width="6" height="9" rx="1"/><rect x="16" y="13" width="6" height="9" rx="1"/>',
+  'block-audio':              '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="10" y1="11" x2="10" y2="13"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="14" y1="11" x2="14" y2="13"/><line x1="17" y1="9" x2="17" y2="15"/>',
+  'block-video':              '<rect x="2" y="4" width="20" height="13" rx="2"/><polygon points="10 8 16 10.5 10 13 10 8"/><line x1="2" y1="21" x2="22" y2="21"/><circle cx="6" cy="21" r="1.5"/>',
+  'block-file':               '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 14 12 18 16 14"/><line x1="12" y1="18" x2="12" y2="10"/>',
+  // Interactive layout blocks
+  'block-accordion':          '<rect x="2" y="3" width="20" height="5" rx="1"/><polyline points="9 5 12 7.5 15 5"/><line x1="2" y1="11" x2="22" y2="11"/><line x1="2" y1="15" x2="22" y2="15"/><line x1="2" y1="19" x2="22" y2="19"/>',
+  'block-tabs':               '<rect x="2" y="8" width="20" height="14" rx="2"/><rect x="2" y="3" width="7" height="7" rx="2"/><rect x="10" y="5" width="6" height="5" rx="1"/><rect x="17" y="5" width="5" height="5" rx="1"/>',
+  'block-hotspot':            '<rect x="2" y="2" width="20" height="15" rx="2"/><circle cx="8" cy="8" r="2"/><line x1="8" y1="10" x2="8" y2="13"/><circle cx="16" cy="7" r="2"/><line x1="16" y1="9" x2="16" y2="12"/>',
+  'block-process':            '<rect x="1" y="9" width="5" height="6" rx="1"/><line x1="6" y1="12" x2="9" y2="12"/><polyline points="8 10 10 12 8 14"/><rect x="10" y="9" width="5" height="6" rx="1"/><line x1="15" y1="12" x2="18" y2="12"/><polyline points="17 10 19 12 17 14"/><rect x="19" y="9" width="4" height="6" rx="1"/>',
+  'block-scenario':           '<circle cx="12" cy="4" r="2"/><line x1="12" y1="6" x2="7" y2="13"/><line x1="12" y1="6" x2="17" y2="13"/><circle cx="7" cy="15" r="2"/><circle cx="17" cy="15" r="2"/><line x1="5" y1="17" x2="3" y2="21"/><line x1="9" y1="17" x2="11" y2="21"/><line x1="15" y1="17" x2="13" y2="21"/><line x1="19" y1="17" x2="21" y2="21"/>',
+  // Flashcards — stack vs grid; grid uses front/back divider to distinguish from block-grid
+  'block-flashcard-stack':    '<rect x="5" y="3" width="15" height="11" rx="2"/><rect x="2" y="9" width="15" height="11" rx="2"/>',
+  'block-flashcard-grid':     '<rect x="2" y="2" width="9" height="9" rx="2"/><line x1="6.5" y1="2" x2="6.5" y2="11"/><rect x="13" y="2" width="9" height="9" rx="2"/><line x1="17.5" y1="2" x2="17.5" y2="11"/><rect x="2" y="13" width="9" height="9" rx="2"/><line x1="6.5" y1="13" x2="6.5" y2="22"/><rect x="13" y="13" width="9" height="9" rx="2"/><line x1="17.5" y1="13" x2="17.5" y2="22"/>',
+  'block-button':             '<rect x="3" y="8" width="18" height="8" rx="4"/>',
+  // Charts
+  'block-chart-bar':          '<line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="3" x2="3" y2="20"/><line x1="7" y1="20" x2="7" y2="12"/><line x1="11" y1="20" x2="11" y2="6"/><line x1="15" y1="20" x2="15" y2="15"/><line x1="19" y1="20" x2="19" y2="9"/>',
+  'block-chart-line':         '<line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="3" x2="3" y2="20"/><polyline points="4 16 8 10 12 13 16 7 20 9"/>',
+  'block-chart-pie':          '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7.8 4.5"/><line x1="12" y1="12" x2="4.2" y2="16.5"/>',
+  // Dividers
+  'block-divider-line':       '<line x1="2" y1="12" x2="22" y2="12"/>',
+  'block-divider-numbered':   '<line x1="2" y1="12" x2="7" y2="12"/><circle cx="12" cy="12" r="5"/><line x1="17" y1="12" x2="22" y2="12"/><line x1="3" y1="9" x2="3" y2="15"/><line x1="21" y1="9" x2="21" y2="15"/>',
+  'block-divider-continue':   '<line x1="2" y1="12" x2="8" y2="12"/><rect x="8" y="8" width="8" height="8" rx="2"/><polyline points="11 10 13 12 11 14"/><line x1="16" y1="12" x2="22" y2="12"/>',
+  'block-divider-spacer':     '<line x1="2" y1="7" x2="22" y2="7"/><line x1="2" y1="17" x2="22" y2="17"/>',
+  // Knowledge checks
+  'block-kc-multiple-choice': '<line x1="3" y1="5" x2="21" y2="5"/><circle cx="5" cy="12" r="2"/><circle cx="5" cy="12" r="1"/><line x1="9" y1="12" x2="20" y2="12"/><circle cx="5" cy="18" r="2"/><line x1="9" y1="18" x2="20" y2="18"/>',
+  'block-kc-multiple-response':'<line x1="3" y1="5" x2="21" y2="5"/><rect x="3" y="10" width="4" height="4" rx="1"/><polyline points="4 12 5 13 7 11"/><line x1="9" y1="12" x2="20" y2="12"/><rect x="3" y="17" width="4" height="4" rx="1"/><polyline points="4 19 5 20 7 18"/><line x1="9" y1="19" x2="20" y2="19"/>',
+  'block-kc-matching':        '<circle cx="5" cy="8" r="2"/><circle cx="5" cy="16" r="2"/><circle cx="19" cy="8" r="2"/><circle cx="19" cy="16" r="2"/><line x1="7" y1="8" x2="17" y2="16"/><line x1="7" y1="16" x2="17" y2="8"/>',
+  'block-kc-matching-cards':  '<rect x="2" y="5" width="8" height="6" rx="1"/><rect x="14" y="5" width="8" height="6" rx="1"/><rect x="2" y="14" width="8" height="6" rx="1"/><rect x="14" y="14" width="8" height="6" rx="1"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="10" y1="17" x2="14" y2="17"/>',
+  'block-kc-fill-blank':      '<line x1="3" y1="8" x2="8" y2="8"/><rect x="8" y="5" width="7" height="6" rx="1"/><line x1="15" y1="8" x2="21" y2="8"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="18" x2="15" y2="18"/>',
+  'block-kc-ordering':        '<rect x="3" y="4" width="14" height="4" rx="1"/><rect x="3" y="10" width="14" height="4" rx="1"/><rect x="3" y="16" width="14" height="4" rx="1"/><line x1="20" y1="5" x2="20" y2="19"/><polyline points="18 7 20 5 22 7"/><polyline points="18 17 20 19 22 17"/>',
+  // Media Types artwork — Sprint 7E (FINAL)
+  'media-type-image':    '<circle cx="12" cy="9" r="4"/><path d="M3 20l5-6 4 5 3-4 6 5"/>',
+  'media-type-audio':    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  'media-type-video':    '<rect x="2" y="6" width="20" height="12" rx="2"/><rect x="2" y="6" width="3" height="3"/><rect x="2" y="12" width="3" height="3"/><rect x="19" y="6" width="3" height="3"/><rect x="19" y="12" width="3" height="3"/>',
+  'media-type-document': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
 };
 
 // Emoji for the Lumio (default) icon pack.
@@ -2144,7 +2312,7 @@ const ICON_PACKS = {
 // A pack may not ship to production while its status is INCOMPLETE or RESERVED.
 const ICON_PACK_STATUS = {
   lumio:     'COMPLETE',    // canonical fallback — every ID has a Lumio emoji
-  outline:   'INCOMPLETE',  // 47 / 133 IDs have SVG paths; awaiting Artwork Migration sprint
+  outline:   'COMPLETE',    // 133 / 133 IDs have SVG paths; Artwork Migration complete Sprint 7E
   sketch:    'INCOMPLETE',  // 47 / 133 IDs have SVG paths; awaiting Artwork Migration sprint
   corporate: 'RESERVED',
   minimal:   'RESERVED',
@@ -2309,13 +2477,61 @@ function ensureWorkspaceIdentity() {
       settings: {
         // Future workspace-level settings (locale, date format, etc.)
       },
+
+      // Sprint 11: workspace display identity — '' means "not yet set by user".
+      name: '',
+      shortName: '',
     };
   }
   // selectedThemeId was added in v21; guard against pre-v21 persisted state.
   if (!LumioState.workspaceIdentity.selectedThemeId) {
     LumioState.workspaceIdentity.selectedThemeId = 'lumio';
   }
+  // name/shortName added in Sprint 11; guard against pre-Sprint-11 persisted state.
+  if (!('name' in LumioState.workspaceIdentity)) LumioState.workspaceIdentity.name = '';
+  if (!('shortName' in LumioState.workspaceIdentity)) LumioState.workspaceIdentity.shortName = '';
+  // Sprint 16: Appearance Profiles — additive guards only.
+  if (!LumioState.workspaceIdentity.activeProfileId) LumioState.workspaceIdentity.activeProfileId = 'default';
+  if (!LumioState.workspaceIdentity.profiles)        LumioState.workspaceIdentity.profiles = {};
   return LumioState.workspaceIdentity;
+}
+
+/**
+ * Resolve the workspace display name.
+ *
+ * Resolution order:
+ *   1. workspaceIdentity.name   (user-set, cloud-synced)
+ *   2. getCurrentWorkspace().name  (legacy workspaces[] record)
+ *   3. 'My Workspace'           (absolute fallback)
+ *
+ * THIS IS THE ONLY APPROVED WAY to obtain the workspace name in rendering code.
+ * Do not read workspaceIdentity.name directly from any renderer.
+ */
+function getWorkspaceDisplayName() {
+  const identity = ensureWorkspaceIdentity();
+  if (identity.name && identity.name.trim()) return identity.name.trim();
+  const ws = getCurrentWorkspace();
+  if (ws && ws.name && ws.name.trim()) return ws.name.trim();
+  return 'My Workspace';
+}
+
+/**
+ * Resolve the workspace short name.
+ *
+ * Resolution order:
+ *   1. workspaceIdentity.shortName  (user-set, cloud-synced)
+ *   2. Derived from getWorkspaceDisplayName() initials (max 3 chars)
+ *   3. 'MW'                         (absolute fallback)
+ *
+ * THIS IS THE ONLY APPROVED WAY to obtain the workspace short name in rendering code.
+ * Do not read workspaceIdentity.shortName directly from any renderer.
+ */
+function getWorkspaceShortName() {
+  const identity = ensureWorkspaceIdentity();
+  if (identity.shortName && identity.shortName.trim()) return identity.shortName.trim();
+  const displayName = getWorkspaceDisplayName();
+  const initials = displayName.split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase()).join('');
+  return initials.slice(0, 3) || displayName.slice(0, 2).toUpperCase() || 'MW';
 }
 
 /**
@@ -2337,6 +2553,54 @@ function selectWorkspaceTheme(themeId) {
   const identity = ensureWorkspaceIdentity();
   identity.selectedThemeId  = themeId;
   identity.theme            = { ...theme.tokens };
+  applyWorkspaceIdentity();
+  saveLumioState();
+  cloudSyncWorkspace('workspaceIdentity');
+}
+
+/**
+ * Sprint 16 — Appearance Profiles
+ * Switches the active appearance profile.  Copies the selected profile's
+ * stored data into the flat workspaceIdentity mirror fields so that every
+ * existing consumer (applyWorkspaceIdentity, renderWorkspaceLogo,
+ * _resolveIconPack, getWorkspaceDisplayName) continues to read from the same
+ * place it always has — zero changes required in any engine function.
+ *
+ * 'default' is never stored in identity.profiles; it is derived from the
+ * Lumio BUILTIN_THEMES entry + empty logos + Lumio icon pack.
+ */
+function selectAppearanceProfile(profileId) {
+  const identity = ensureWorkspaceIdentity();
+  let src;
+  if (profileId === 'default') {
+    const lumioTheme = BUILTIN_THEMES.find(t => t.id === 'lumio') || BUILTIN_THEMES[0];
+    src = {
+      selectedThemeId: lumioTheme.id,
+      theme:    { ...lumioTheme.tokens },
+      logos:    {},
+      iconPack: { packId: 'lumio' },
+      name:     '',
+      shortName:'',
+    };
+  } else {
+    const profile = (identity.profiles || {})[profileId];
+    if (!profile) { console.warn('[Lumio] Appearance profile not found:', profileId); return; }
+    src = {
+      selectedThemeId: profile.selectedThemeId || 'lumio',
+      theme:    { ...(profile.theme    || {}) },
+      logos:    { ...(profile.logos    || {}) },
+      iconPack: { ...(profile.iconPack || { packId: 'lumio' }) },
+      name:     profile.wsName      || '',
+      shortName:profile.wsShortName || '',
+    };
+  }
+  identity.activeProfileId  = profileId;
+  identity.selectedThemeId  = src.selectedThemeId;
+  identity.theme            = src.theme;
+  identity.logos            = src.logos;
+  identity.iconPack         = src.iconPack;
+  identity.name             = src.name;
+  identity.shortName        = src.shortName;
   applyWorkspaceIdentity();
   saveLumioState();
   cloudSyncWorkspace('workspaceIdentity');
@@ -3244,6 +3508,7 @@ const NAV_ITEMS = [
 ];
 
 function renderShell(activeId, contentHtml, opts = {}) {
+  document.title = getWorkspaceDisplayName() + ' • Lumio';
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="app-shell">
@@ -3251,7 +3516,7 @@ function renderShell(activeId, contentHtml, opts = {}) {
         <div class="sidebar-logo" data-nav="#/welcome" style="${opts.largeLogo ? 'justify-content:center; padding:24px 10px;' : ''} cursor:pointer;">
           ${opts.largeLogo
             ? renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR_LARGE)
-            : `${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}<span>Lumio</span>`}
+            : `${renderWorkspaceLogo(LOGO_SLOTS.SIDEBAR)}<span>${escapeHtml(getWorkspaceDisplayName())}</span>`}
         </div>
         ${NAV_ITEMS.map(item => `
           <div class="nav-item ${item.id === activeId ? 'active' : ''}" data-nav="${item.hash}">
