@@ -2831,6 +2831,69 @@ button { font-family: var(--font-body); cursor: pointer; }
   flex-shrink: 0;
 }
 
+/* ── CUSTOM THEME EDITOR (Sprint 16 — Phase 4) ──────────────────────────────
+   Inline colour-token editor, visible only when Custom theme is selected.
+   All writes go through applyWorkspaceIdentity() — no direct --ws-* writes. */
+
+.ws-cte-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px 24px;
+  background: var(--surface-alt);
+}
+.ws-cte-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px 24px;
+}
+.ws-cte-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ws-cte-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-700);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws-cte-color-input {
+  width: 36px;
+  height: 28px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 2px;
+  cursor: pointer;
+  background: var(--surface-0);
+  flex-shrink: 0;
+}
+.ws-cte-hex {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--ink-500);
+  width: 54px;
+  flex-shrink: 0;
+}
+.ws-cte-text-input {
+  flex: 1;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  background: var(--surface-0);
+  color: var(--ink-900);
+  min-width: 0;
+}
+.ws-cte-text-input:focus {
+  outline: none;
+  border-color: var(--ws-primary);
+}
+
 /* ── WORKSPACE APPEARANCE MANAGER (Sprint 16) ────────────────────────────────
    Profile cards for the Appearance Manager. Preview strips use inline
    background colours from stored profile token values — they never reference

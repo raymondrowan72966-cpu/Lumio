@@ -2545,12 +2545,25 @@ function getWorkspaceShortName() {
  * written to identity.theme and applyWorkspaceIdentity() handles the rest.
  */
 function selectWorkspaceTheme(themeId) {
+  const identity = ensureWorkspaceIdentity();
+  if (themeId === 'custom') {
+    // Custom theme: preserve existing identity.theme (user-edited tokens).
+    // Seed from Lumio defaults if no custom tokens have been set yet.
+    if (!identity.theme || Object.keys(identity.theme).length === 0) {
+      const lumioTheme = BUILTIN_THEMES.find(t => t.id === 'lumio') || BUILTIN_THEMES[0];
+      identity.theme = { ...lumioTheme.tokens };
+    }
+    identity.selectedThemeId = 'custom';
+    applyWorkspaceIdentity();
+    saveLumioState();
+    cloudSyncWorkspace('workspaceIdentity');
+    return;
+  }
   const theme = BUILTIN_THEMES.find(t => t.id === themeId);
   if (!theme) {
     console.warn('[Lumio] Unknown workspace theme id:', themeId);
     return;
   }
-  const identity = ensureWorkspaceIdentity();
   identity.selectedThemeId  = themeId;
   identity.theme            = { ...theme.tokens };
   applyWorkspaceIdentity();

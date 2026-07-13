@@ -222,14 +222,14 @@ function emptyState() {
   if (LumioState.searchQuery) {
     return `
       <div class="text-center" style="grid-column:1/-1; padding:60px 20px;">
-        <div style="font-size:40px;">🔍</div>
+        <div style="font-size:40px;">${platformIcon('search')}</div>
         <h3 class="mt-16" style="font-size:16px;">No projects match "${LumioState.searchQuery}"</h3>
         <p class="text-sm text-muted mt-8">Try a different search term or clear your filters.</p>
       </div>`;
   }
   return `
     <div class="text-center" style="grid-column:1/-1; padding:60px 20px;">
-      <div style="font-size:48px;">🎨</div>
+      <div style="font-size:48px;">${platformIcon('projects')}</div>
       <h3 class="mt-16" style="font-size:18px;">This space is empty — for now</h3>
       <p class="text-sm text-muted mt-8" style="max-width:380px; margin:8px auto 0;">
         Create your first project, or drag existing projects here to organize your workspace.
@@ -272,7 +272,7 @@ function renderRecent() {
 function emptyRecentState() {
   return `
     <div class="text-center" style="grid-column:1/-1; padding:60px 20px;">
-      <div style="font-size:48px;">⏱️</div>
+      <div style="font-size:48px;">${platformIcon('recent')}</div>
       <h3 class="mt-16" style="font-size:18px;">Nothing opened recently</h3>
       <p class="text-sm text-muted mt-8" style="max-width:380px; margin:8px auto 0;">
         Projects you open will show up here, most recent first.
@@ -322,8 +322,8 @@ function trashCard(p) {
         <div style="font-size:14px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
         <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
         <div class="flex gap-12 mt-16">
-          <button class="btn btn-secondary btn-sm restore-btn" data-restore="${p.id}" style="flex:1;">↩️ Restore</button>
-          <button class="btn btn-ghost btn-sm delete-forever-btn text-destructive" data-delete-forever="${p.id}" style="flex:1;">🗑️ Delete Forever</button>
+          <button class="btn btn-secondary btn-sm restore-btn" data-restore="${p.id}" style="flex:1;">${platformIcon('restore')} Restore</button>
+          <button class="btn btn-ghost btn-sm delete-forever-btn text-destructive" data-delete-forever="${p.id}" style="flex:1;">${platformIcon('delete')} Delete Forever</button>
         </div>
       </div>
     </div>
@@ -333,7 +333,7 @@ function trashCard(p) {
 function emptyTrashState() {
   return `
     <div class="text-center" style="grid-column:1/-1; padding:60px 20px;">
-      <div style="font-size:48px;">🗑️</div>
+      <div style="font-size:48px;">${platformIcon('delete')}</div>
       <h3 class="mt-16" style="font-size:18px;">Trash is empty</h3>
       <p class="text-sm text-muted mt-8" style="max-width:380px; margin:8px auto 0;">
         Deleted projects will appear here and can be restored.

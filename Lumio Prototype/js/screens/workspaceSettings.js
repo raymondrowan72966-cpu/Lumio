@@ -534,18 +534,72 @@ function _wsThemeSection(selectedTheme) {
       </div>`;
   };
 
-  const customComingSoon = `
-    <div class="ws-theme-card ws-theme-card--disabled" aria-disabled="true">
-      <div class="ws-theme-card__preview ws-theme-card__preview--custom">
-        <div class="ws-theme-card__custom-dot" style="background:#6366F1;"></div>
-        <div class="ws-theme-card__custom-dot" style="background:#F59E0B;"></div>
-        <div class="ws-theme-card__custom-dot" style="background:#10B981;"></div>
+  const isCustom = selectedTheme === 'custom';
+  const ct = isCustom
+    ? (ensureWorkspaceIdentity().theme || {})
+    : (BUILTIN_THEMES.find(t => t.id === 'lumio') || BUILTIN_THEMES[0]).tokens;
+
+  const customCard = `
+    <div class="ws-theme-card${isCustom ? ' ws-theme-card--selected' : ''}" data-select-theme="custom" role="button" tabindex="0" aria-pressed="${isCustom}">
+      <div class="ws-theme-card__preview">
+        <div class="ws-tc-sidebar" style="background:${ct.sidebarBg || '#fff'};border-right:1.5px solid ${ct.border || '#eee'};"></div>
+        <div class="ws-tc-main" style="background:${ct.surfaceAlt || '#f9f9f9'};">
+          <div class="ws-tc-topbar" style="background:${ct.topbarBg || '#fff'};border-bottom:1px solid ${ct.border || '#eee'};"></div>
+          <div class="ws-tc-body">
+            <div class="ws-tc-bar" style="background:${ct.primary || '#7C3AED'};"></div>
+            <div class="ws-tc-bar ws-tc-bar--sm" style="background:${ct.accent || '#06B6D4'};"></div>
+            <div class="ws-tc-bar ws-tc-bar--xs" style="background:${ct.border || '#E5E5EE'};"></div>
+          </div>
+        </div>
       </div>
       <div class="ws-theme-card__footer">
         <span class="ws-theme-card__name">Custom</span>
-        <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
+        ${isCustom ? '<span class="ws-theme-card__check">✓</span>' : ''}
       </div>
     </div>`;
+
+  // Token definitions: key → { label, type }.
+  // 'color' tokens use <input type="color"> with hex values.
+  // 'text' tokens use <input type="text"> for freeform CSS values.
+  const _CTE_TOKENS = [
+    { key: 'primary',    label: 'Primary',            type: 'color' },
+    { key: 'secondary',  label: 'Secondary',          type: 'color' },
+    { key: 'accent',     label: 'Accent',             type: 'color' },
+    { key: 'surface',    label: 'Surface',            type: 'color' },
+    { key: 'surfaceAlt', label: 'Surface Alt',        type: 'color' },
+    { key: 'border',     label: 'Border',             type: 'color' },
+    { key: 'text',       label: 'Text',               type: 'color' },
+    { key: 'textMuted',  label: 'Muted Text',         type: 'color' },
+    { key: 'sidebarBg',  label: 'Sidebar Background', type: 'color' },
+    { key: 'topbarBg',   label: 'Topbar Background',  type: 'color' },
+    { key: 'icon',       label: 'Icon Colour',        type: 'color' },
+    { key: 'radius',     label: 'Radius',             type: 'text'  },
+    { key: 'shadow',     label: 'Shadow',             type: 'text'  },
+  ];
+
+  const cteRows = _CTE_TOKENS.map(({ key, label, type }) => {
+    const val = ct[key] || '';
+    if (type === 'color') {
+      return `
+        <div class="ws-cte-row">
+          <label class="ws-cte-label" for="ws-cte-${key}">${escapeHtml(label)}</label>
+          <input class="ws-cte-color-input" id="ws-cte-${key}" type="color" value="${escapeHtml(val)}" data-token="${key}" />
+          <span class="ws-cte-hex" id="ws-cte-hex-${key}">${escapeHtml(val)}</span>
+        </div>`;
+    }
+    return `
+      <div class="ws-cte-row">
+        <label class="ws-cte-label" for="ws-cte-${key}">${escapeHtml(label)}</label>
+        <input class="ws-cte-text-input" id="ws-cte-${key}" type="text" value="${escapeHtml(val)}" data-token="${key}" placeholder="e.g. 20px" autocomplete="off" />
+      </div>`;
+  }).join('');
+
+  const customEditor = isCustom ? `
+    <div class="ws-cte-panel mt-16" id="ws-custom-theme-editor">
+      <div class="ws-cte-grid">
+        ${cteRows}
+      </div>
+    </div>` : '';
 
   return `
     <div class="card card-pad mb-24">
@@ -557,8 +611,9 @@ function _wsThemeSection(selectedTheme) {
       </div>
       <div class="ws-theme-grid mt-16">
         ${BUILTIN_THEMES.map(themeCard).join('')}
-        ${customComingSoon}
+        ${customCard}
       </div>
+      ${customEditor}
     </div>`;
 }
 
@@ -578,14 +633,14 @@ function _wsPackSection(selectedPack) {
       </div>`;
   };
 
-  const comingSoonCard = (pack) => `
+  const customPackCard = `
     <div class="ws-pack-card ws-pack-card--disabled" aria-disabled="true">
       <div class="ws-pack-card__preview ws-pack-card__preview--empty"></div>
       <div class="ws-pack-card__footer">
-        <span class="ws-pack-card__name">${escapeHtml(pack.name)}</span>
+        <span class="ws-pack-card__name">Custom</span>
         <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
       </div>
-      <div class="ws-pack-card__desc">${escapeHtml(pack.description)}</div>
+      <div class="ws-pack-card__desc">Upload a custom SVG icon pack for your workspace.</div>
     </div>`;
 
   return `
@@ -596,12 +651,9 @@ function _wsPackSection(selectedPack) {
           <p class="text-sm text-muted">Controls icon artwork throughout the platform interface. Course content icons are not affected.</p>
         </div>
       </div>
-      <div class="ws-pack-grid mt-16 mb-24">
+      <div class="ws-pack-grid mt-16">
         ${_SELECTABLE_ICON_PACKS.map(packCard).join('')}
-      </div>
-      <div class="ws-subsection-label mb-10">Coming Soon</div>
-      <div class="ws-pack-grid ws-pack-grid--compact">
-        ${_COMING_SOON_ICON_PACKS.map(comingSoonCard).join('')}
+        ${customPackCard}
       </div>
     </div>`;
 }
@@ -639,21 +691,6 @@ function _wsLogoSection() {
   const logos   = ensureWorkspaceIdentity().logos || {};
   const FALLBACK = 'assets/lumio-logo-transparent.png';
 
-  const reservedCard = (spec) => `
-    <div class="ws-logo-slot-card ws-logo-slot-card--reserved">
-      <div class="ws-logo-slot-preview ws-logo-slot-preview--reserved">
-        <span class="pill pill-grey" style="font-size:10px;">Reserved</span>
-      </div>
-      <div class="ws-logo-slot-body">
-        <div class="ws-logo-slot-name">${escapeHtml(spec.label)}</div>
-        <div class="ws-logo-slot-desc">${spec.desc}</div>
-        <div class="ws-logo-slot-specs">
-          <span class="ws-logo-slot-spec">${escapeHtml(spec.size)}</span>
-          <span class="ws-logo-slot-spec">${escapeHtml(spec.fmt)}</span>
-        </div>
-      </div>
-    </div>`;
-
   return `
     <div class="card card-pad mb-24">
       <div class="ws-section-header mb-4">
@@ -662,12 +699,8 @@ function _wsLogoSection() {
           <p class="text-sm text-muted">Upload custom logos for each platform context. Changing a logo updates every location where it appears — no manual updates required.</p>
         </div>
       </div>
-      <div class="ws-logo-slot-grid mt-16 mb-24">
+      <div class="ws-logo-slot-grid mt-16">
         ${_LOGO_SLOT_SPECS.map(spec => _wsLogoSlotCard(spec, !!(logos[spec.slot] && logos[spec.slot] !== FALLBACK))).join('')}
-      </div>
-      <div class="ws-subsection-label mb-10">Reserved Slots</div>
-      <div class="ws-logo-slot-grid ws-logo-slot-grid--reserved">
-        ${_LOGO_RESERVED_SPECS.map(reservedCard).join('')}
       </div>
     </div>`;
 }
@@ -754,19 +787,6 @@ function _wsLoginBrandSection() {
                   <input type="file" class="ws-logo-file-input" accept="${escapeHtml(bgSpec.accept)}" data-upload-slot="login-background" aria-label="Upload login background" />
                 </label>
                 ${hasBg ? `<button class="btn btn-ghost btn-sm ws-logo-remove-btn" data-remove-slot="login-background" title="Remove custom background and restore Lumio artwork">Remove</button>` : ''}
-              </div>
-            </div>
-          </div>
-          <div class="ws-logo-slot-card ws-logo-slot-card--reserved" style="flex:1;">
-            <div class="ws-logo-slot-preview ws-logo-slot-preview--reserved">
-              <span class="pill pill-grey" style="font-size:10px;">Coming Soon</span>
-            </div>
-            <div class="ws-logo-slot-body">
-              <div class="ws-logo-slot-name">Login Brand</div>
-              <div class="ws-logo-slot-desc">White-label brand lockup overlaid on the login backdrop. Architectural slot <code style="font-size:10px;">LOGIN_BRAND</code> is reserved.</div>
-              <div class="ws-logo-slot-specs">
-                <span class="ws-logo-slot-spec">320 × 120 px</span>
-                <span class="ws-logo-slot-spec">PNG · SVG</span>
               </div>
             </div>
           </div>
@@ -981,6 +1001,36 @@ function _bindWorkspaceAppearanceSections() {
     };
     card.addEventListener('click', activate);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+  });
+
+  // ── Custom theme editor ───────────────────────────────────────
+  // Color inputs: live preview on input, persist on change (picker close).
+  host.querySelectorAll('.ws-cte-color-input[data-token]').forEach(input => {
+    input.addEventListener('input', () => {
+      const identity = ensureWorkspaceIdentity();
+      if (!identity.theme) identity.theme = {};
+      identity.theme[input.dataset.token] = input.value;
+      applyWorkspaceIdentity();
+      const hexEl = host.querySelector(`#ws-cte-hex-${input.dataset.token}`);
+      if (hexEl) hexEl.textContent = input.value;
+    });
+    input.addEventListener('change', () => {
+      saveLumioState();
+      cloudSyncWorkspace('workspaceIdentity');
+    });
+  });
+  // Text inputs (radius, shadow): live preview + persist on change.
+  host.querySelectorAll('.ws-cte-text-input[data-token]').forEach(input => {
+    input.addEventListener('input', () => {
+      const identity = ensureWorkspaceIdentity();
+      if (!identity.theme) identity.theme = {};
+      identity.theme[input.dataset.token] = input.value;
+      applyWorkspaceIdentity();
+    });
+    input.addEventListener('change', () => {
+      saveLumioState();
+      cloudSyncWorkspace('workspaceIdentity');
+    });
   });
 
   // ── Logo file inputs ──────────────────────────────────────────
