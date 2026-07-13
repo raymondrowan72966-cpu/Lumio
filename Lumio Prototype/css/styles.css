@@ -2917,6 +2917,23 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-color: var(--ws-primary);
 }
 
+.ws-cte-row--shadow .ws-cte-shadow-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.ws-cte-shadow-range {
+  flex: 1;
+  accent-color: var(--ws-primary);
+  cursor: pointer;
+  min-width: 0;
+}
+.ws-cte-shadow-pct {
+  min-width: 32px;
+  text-align: right;
+}
+
 /* ── WORKSPACE APPEARANCE MANAGER (Sprint 16) ────────────────────────────────
    Profile cards for the Appearance Manager. Preview strips use inline
    background colours from stored profile token values — they never reference

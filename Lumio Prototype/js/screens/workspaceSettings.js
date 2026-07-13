@@ -509,6 +509,22 @@ function _saveWorkspaceIdentityName() {
   }
 }
 
+// Parse rgba(r,g,b,a) from a box-shadow string. Returns { hex, strength }.
+function _parseShadow(shadowStr) {
+  const m = (shadowStr || '').match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+  if (!m) return { hex: '#1f1b3a', strength: 0.06 };
+  const r = Math.round(parseFloat(m[1])), g = Math.round(parseFloat(m[2])), b = Math.round(parseFloat(m[3]));
+  const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return { hex, strength: m[4] != null ? parseFloat(m[4]) : 1 };
+}
+
+// Rebuild box-shadow preserving existing offsets/blur, replacing color+alpha.
+function _buildShadow(existingCss, hex, strength) {
+  const prefix = (existingCss || '0 8px 24px').replace(/rgba?\([^)]*\)/i, '').trim() || '0 8px 24px';
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `${prefix} rgba(${r}, ${g}, ${b}, ${parseFloat(strength).toFixed(2)})`;
+}
+
 function _wsThemeSection(selectedTheme) {
   const themeCard = (theme) => {
     const isSelected = theme.id === selectedTheme;
@@ -561,20 +577,21 @@ function _wsThemeSection(selectedTheme) {
   // Token definitions: key → { label, type }.
   // 'color' tokens use <input type="color"> with hex values.
   // 'text' tokens use <input type="text"> for freeform CSS values.
+  // 'shadow' token uses a visual colour + intensity editor.
   const _CTE_TOKENS = [
-    { key: 'primary',    label: 'Primary',            type: 'color' },
-    { key: 'secondary',  label: 'Secondary',          type: 'color' },
-    { key: 'accent',     label: 'Accent',             type: 'color' },
-    { key: 'surface',    label: 'Surface',            type: 'color' },
-    { key: 'surfaceAlt', label: 'Surface Alt',        type: 'color' },
-    { key: 'border',     label: 'Border',             type: 'color' },
-    { key: 'text',       label: 'Text',               type: 'color' },
-    { key: 'textMuted',  label: 'Muted Text',         type: 'color' },
-    { key: 'sidebarBg',  label: 'Sidebar Background', type: 'color' },
-    { key: 'topbarBg',   label: 'Topbar Background',  type: 'color' },
-    { key: 'icon',       label: 'Icon Colour',        type: 'color' },
-    { key: 'radius',     label: 'Radius',             type: 'text'  },
-    { key: 'shadow',     label: 'Shadow',             type: 'text'  },
+    { key: 'primary',    label: 'Primary',            type: 'color'  },
+    { key: 'secondary',  label: 'Secondary',          type: 'color'  },
+    { key: 'accent',     label: 'Accent',             type: 'color'  },
+    { key: 'surface',    label: 'Surface',            type: 'color'  },
+    { key: 'surfaceAlt', label: 'Surface Alt',        type: 'color'  },
+    { key: 'border',     label: 'Border',             type: 'color'  },
+    { key: 'text',       label: 'Text',               type: 'color'  },
+    { key: 'textMuted',  label: 'Muted Text',         type: 'color'  },
+    { key: 'sidebarBg',  label: 'Sidebar Background', type: 'color'  },
+    { key: 'topbarBg',   label: 'Topbar Background',  type: 'color'  },
+    { key: 'icon',       label: 'Icon Colour',        type: 'color'  },
+    { key: 'radius',     label: 'Radius',             type: 'text'   },
+    { key: 'shadow',     label: 'Shadow',             type: 'shadow' },
   ];
 
   const cteRows = _CTE_TOKENS.map(({ key, label, type }) => {
@@ -585,6 +602,19 @@ function _wsThemeSection(selectedTheme) {
           <label class="ws-cte-label" for="ws-cte-${key}">${escapeHtml(label)}</label>
           <input class="ws-cte-color-input" id="ws-cte-${key}" type="color" value="${escapeHtml(val)}" data-token="${key}" />
           <span class="ws-cte-hex" id="ws-cte-hex-${key}">${escapeHtml(val)}</span>
+        </div>`;
+    }
+    if (type === 'shadow') {
+      const { hex, strength } = _parseShadow(val || '0 8px 24px rgba(31,27,58,0.06)');
+      const pct = Math.round(strength * 100);
+      return `
+        <div class="ws-cte-row ws-cte-row--shadow">
+          <label class="ws-cte-label">Shadow</label>
+          <div class="ws-cte-shadow-editor">
+            <input type="color" class="ws-cte-color-input ws-cte-shadow-color" id="ws-cte-shadow-color" value="${escapeHtml(hex)}" title="Shadow colour" />
+            <input type="range" class="ws-cte-shadow-range" id="ws-cte-shadow-strength" min="0" max="40" step="1" value="${Math.round(strength * 100)}" title="Shadow intensity" />
+            <span class="ws-cte-hex ws-cte-shadow-pct" id="ws-cte-shadow-pct">${pct}%</span>
+          </div>
         </div>`;
     }
     return `
@@ -1019,7 +1049,7 @@ function _bindWorkspaceAppearanceSections() {
       cloudSyncWorkspace('workspaceIdentity');
     });
   });
-  // Text inputs (radius, shadow): live preview + persist on change.
+  // Text inputs (radius): live preview + persist on change.
   host.querySelectorAll('.ws-cte-text-input[data-token]').forEach(input => {
     input.addEventListener('input', () => {
       const identity = ensureWorkspaceIdentity();
@@ -1032,6 +1062,29 @@ function _bindWorkspaceAppearanceSections() {
       cloudSyncWorkspace('workspaceIdentity');
     });
   });
+
+  // ── Shadow visual editor ──────────────────────────────────────
+  (function() {
+    const colorPicker = host.querySelector('#ws-cte-shadow-color');
+    const strengthSlider = host.querySelector('#ws-cte-shadow-strength');
+    const pctLabel = host.querySelector('#ws-cte-shadow-pct');
+    if (!colorPicker || !strengthSlider) return;
+
+    function _applyCurrentShadow() {
+      const identity = ensureWorkspaceIdentity();
+      if (!identity.theme) identity.theme = {};
+      const existing = identity.theme.shadow || '0 8px 24px rgba(31,27,58,0.06)';
+      const strength = parseInt(strengthSlider.value, 10) / 100;
+      identity.theme.shadow = _buildShadow(existing, colorPicker.value, strength);
+      applyWorkspaceIdentity();
+      if (pctLabel) pctLabel.textContent = strengthSlider.value + '%';
+    }
+
+    colorPicker.addEventListener('input', _applyCurrentShadow);
+    strengthSlider.addEventListener('input', _applyCurrentShadow);
+    colorPicker.addEventListener('change', () => { saveLumioState(); cloudSyncWorkspace('workspaceIdentity'); });
+    strengthSlider.addEventListener('change', () => { saveLumioState(); cloudSyncWorkspace('workspaceIdentity'); });
+  })();
 
   // ── Logo file inputs ──────────────────────────────────────────
   host.querySelectorAll('.ws-logo-file-input[data-upload-slot]').forEach(input => {

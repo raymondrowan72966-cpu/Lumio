@@ -18,9 +18,9 @@ function renderWelcome() {
     <div style="min-height:100vh; position:relative; overflow:hidden; background:var(--ws-surface, var(--surface-50)); padding:48px 24px;">
       <div class="mesh-bg"></div>
       ${ambientBlobs([
-        ['var(--ws-primary)', '500px', '500px', '-180px', '-160px', null, null],
-        ['var(--ws-accent)', '420px', '420px', null, null, '-140px', '-120px'],
-        ['var(--ws-secondary)', '320px', '320px', '8%', '8%', null, null],
+        ['color-mix(in srgb, var(--ws-primary) 45%, transparent)', '400px', '400px', '-150px', '-130px', null, null],
+        ['color-mix(in srgb, var(--ws-accent) 50%, transparent)', '340px', '340px', null, null, '-110px', '-90px'],
+        ['color-mix(in srgb, var(--ws-secondary) 35%, transparent)', '280px', '280px', '12%', '6%', null, null],
       ])}
 
       <div class="fade-in" style="position:relative; z-index:1; max-width:1040px; margin:0 auto; text-align:center;">
