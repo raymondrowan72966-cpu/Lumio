@@ -496,10 +496,18 @@ const LabelEngine = (function () {
     const sourceLocale = opts.sourceLocale || 'en-us';
     const targetLocale = opts.targetLocale || '';
     const targetAttr   = targetLocale ? ` target-language="${_escXml(targetLocale)}"` : '';
-    const labels = pack.labels;
-    const units = Object.keys(labels).map(key =>
-      `      <trans-unit id="${_escXml(key)}"><source>${_escXml(labels[key])}</source></trans-unit>`
-    ).join('\n');
+
+    // Resolve base language for <source>. Custom packs carry baseId; built-ins use EN as base.
+    const baseId = pack.baseId || 'en';
+    const baseLabels = (BUILT_IN[baseId] || BUILT_IN.en).labels;
+    const targetLabels = pack.labels;
+
+    const units = Object.keys(targetLabels).map(key => {
+      const src = _escXml(baseLabels[key] || targetLabels[key] || '');
+      const tgt = _escXml(targetLabels[key] || baseLabels[key] || '');
+      return `      <trans-unit id="${_escXml(key)}"><source>${src}</source><target>${tgt}</target></trans-unit>`;
+    }).join('\n');
+
     return `<?xml version="1.0" encoding="utf-8"?>
 <xliff version="1.2" xmlns="${XLIFF_NS}" xml:space="preserve">
   <file original="labels" datatype="plaintext" source-language="${_escXml(sourceLocale)}"${targetAttr}>

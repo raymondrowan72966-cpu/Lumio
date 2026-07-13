@@ -2,6 +2,131 @@
    COURSE LANDING PAGE
    ============================================================ */
 
+/* ── New Custom Label Pack modal ─────────────────────────── */
+function _openNewLabelPackModal(course, renderModal) {
+  let selectedFile = null;
+
+  const dlg = el(`
+    <div class="overlay" style="z-index:101;">
+      <div class="modal" style="width:480px; padding:28px;">
+        <h3 style="font-size:16px; margin-bottom:4px;">New Custom Label Pack</h3>
+        <p class="text-sm text-muted" style="margin-bottom:20px;">Create a custom learner UI label pack. Optionally seed it from a translated XLIFF file.</p>
+
+        <div style="margin-bottom:16px;">
+          <label class="text-sm" style="font-weight:600; display:block; margin-bottom:6px;">Pack Name <span style="color:var(--destructive);">*</span></label>
+          <input class="input" id="nlp-name" placeholder="e.g. Mining Safety English" autocomplete="off" />
+          <p id="nlp-name-err" class="text-sm" style="color:var(--destructive); margin-top:4px; display:none;">Pack name is required.</p>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="text-sm" style="font-weight:600; display:block; margin-bottom:6px;">Base Language</label>
+          <select class="input" id="nlp-base">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+          </select>
+          <p class="text-sm text-muted" style="margin-top:4px;">Missing translations fall back to this language.</p>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <label class="text-sm" style="font-weight:600; display:block; margin-bottom:6px;">Label XLIFF File <span class="text-muted">(optional)</span></label>
+          <input type="file" id="nlp-file-input" accept=".xlf,.xliff,text/xml" style="display:none;" />
+          <div id="nlp-drop-zone" style="border:2px dashed var(--border); border-radius:var(--r-lg); padding:16px 20px; text-align:center; cursor:pointer; transition:border-color .15s;">
+            <p class="text-sm text-muted" id="nlp-file-label">Click to select a Label XLIFF file (.xlf, .xliff)</p>
+          </div>
+          <p id="nlp-import-err" class="text-sm" style="color:var(--destructive); margin-top:4px; display:none;"></p>
+        </div>
+
+        <div class="flex gap-12" style="justify-content:flex-end;">
+          <button class="btn btn-ghost" id="nlp-cancel">Cancel</button>
+          <button class="btn btn-primary" id="nlp-create">Create Pack</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  document.body.appendChild(dlg);
+  dlg.querySelector('#nlp-name').focus();
+
+  const dropZone = dlg.querySelector('#nlp-drop-zone');
+  const fileInput = dlg.querySelector('#nlp-file-input');
+  const fileLabel = dlg.querySelector('#nlp-file-label');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    selectedFile = f;
+    fileLabel.textContent = f.name + ' (' + _fileSize(f.size) + ')';
+    dropZone.style.borderColor = 'var(--indigo)';
+    dlg.querySelector('#nlp-import-err').style.display = 'none';
+  });
+
+  dlg.querySelector('#nlp-cancel').addEventListener('click', () => dlg.remove());
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
+
+  dlg.querySelector('#nlp-create').addEventListener('click', () => {
+    const name = dlg.querySelector('#nlp-name').value.trim();
+    const baseId = dlg.querySelector('#nlp-base').value || 'en';
+    const nameErr = dlg.querySelector('#nlp-name-err');
+    const importErr = dlg.querySelector('#nlp-import-err');
+
+    nameErr.style.display = 'none';
+    importErr.style.display = 'none';
+
+    if (!name) {
+      nameErr.style.display = '';
+      dlg.querySelector('#nlp-name').focus();
+      return;
+    }
+
+    if (!selectedFile) {
+      // No XLIFF — create pack seeded from base language
+      const pack = LabelEngine.createCustomPack(name, baseId);
+      _finaliseLabelPack(pack.id, name, renderModal, 0);
+      dlg.remove();
+      return;
+    }
+
+    // XLIFF selected — parse, create pack, merge translations
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = LabelEngine.parseXliff(ev.target.result);
+      if (!parsed.ok) {
+        importErr.textContent = 'XLIFF parse error — check the file format.';
+        importErr.style.display = '';
+        return;
+      }
+      const pack = LabelEngine.createCustomPack(name, baseId);
+      // importXliff merges translated strings over the seeded base
+      const result = LabelEngine.importXliff(pack.id, ev.target.result, { name });
+      _finaliseLabelPack(pack.id, name, renderModal, result.applied || 0);
+      dlg.remove();
+    };
+    reader.onerror = () => {
+      importErr.textContent = 'Could not read the file.';
+      importErr.style.display = '';
+    };
+    reader.readAsText(selectedFile);
+  });
+}
+
+function _finaliseLabelPack(packId, packName, renderModal, appliedCount) {
+  saveLumioState();
+  cloudSyncWorkspace('labelPacks');
+  renderModal();
+  // Auto-select the newly created pack in the refreshed dropdown
+  setTimeout(() => {
+    const sel = document.querySelector('#tm-label-set');
+    if (sel) sel.value = packId;
+  }, 0);
+  const msg = appliedCount > 0
+    ? 'Label pack created — ' + appliedCount + ' translations imported'
+    : 'Label pack created: ' + packName;
+  toast(msg, '🏷️');
+}
+
 function ensureCourseDesign(course) {
   if (!course.themeDesign) {
     course.themeDesign = defaultThemeDesign();
@@ -835,11 +960,6 @@ function openTranslationModal(course) {
               <button class="btn btn-ghost btn-sm" id="tm-label-export">⬇ Export Labels XLIFF</button>
               <button class="btn btn-ghost btn-sm" id="tm-label-create">+ New Custom Pack</button>
             </div>
-            <div id="tm-label-import-zone" style="margin-top:10px; display:none;">
-              <p class="text-sm text-muted" style="margin-bottom:6px;">Upload translated labels XLIFF:</p>
-              <input type="file" id="tm-label-file-input" accept=".xlf,.xliff,text/xml" style="display:none;" />
-              <button class="btn btn-secondary btn-sm" id="tm-label-import-btn">📥 Import Labels XLIFF</button>
-            </div>
           </section>
 
           <div style="border-top:1px solid var(--border);"></div>
@@ -1023,35 +1143,7 @@ function openTranslationModal(course) {
 
     // Label Sets — Create Custom
     overlay.querySelector('#tm-label-create')?.addEventListener('click', () => {
-      const base = overlay.querySelector('#tm-label-set')?.value || 'en';
-      const baseName = (LabelEngine.getAllPacks()[base] || {}).name || 'English';
-      const name = prompt(`Name for new custom label set (based on ${baseName}):`, baseName + ' (custom)');
-      if (!name) return;
-      LabelEngine.createCustomPack(name, base);
-      persistCourse(course.id);
-      cloudSyncWorkspace('labelPacks');
-      renderModal(); // refresh select to show new pack
-      toast('Custom label set created: ' + name, '🏷️');
-    });
-
-    // Label Sets — Import file
-    overlay.querySelector('#tm-label-import-btn')?.addEventListener('click', () => {
-      overlay.querySelector('#tm-label-file-input')?.click();
-    });
-    overlay.querySelector('#tm-label-file-input')?.addEventListener('change', (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      const targetId = overlay.querySelector('#tm-label-set')?.value;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = LabelEngine.importXliff(targetId, ev.target.result, { name: f.name.replace(/\.xlf.*$/, '') });
-        if (!result.ok) { toast('Label import failed — check the file format', '❌'); return; }
-        persistCourse(course.id);
-        cloudSyncWorkspace('labelPacks');
-        renderModal();
-        toast('Labels imported — ' + result.applied + ' strings updated', '✅');
-      };
-      reader.readAsText(f);
+      _openNewLabelPackModal(course, renderModal);
     });
 
     // Close on backdrop click
