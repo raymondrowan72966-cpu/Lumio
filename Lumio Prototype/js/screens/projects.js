@@ -26,6 +26,12 @@ const FOLDER_COLORS = {
   magenta:  'var(--magenta)',
 };
 
+function _courseLangName(course) {
+  const packs = LabelEngine.getAllPacks();
+  const id = course && course.labelSet;
+  return (id && packs[id] && packs[id].name) || 'English';
+}
+
 function folderColorVar(color) {
   return FOLDER_COLORS[color] || 'var(--violet)';
 }
@@ -207,6 +213,7 @@ function projectCard(p) {
           <button class="btn-icon" data-menu="${p.id}" title="More">⋯</button>
         </div>
         <div class="mt-16" style="display:flex; align-items:center; gap:8px;">
+          <span class="proj-lang-badge" title="Course language">${_courseLangName(p)}</span>
           <div style="flex:1; height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
             <div style="width:${p.health}%; height:100%; background:${p.health >= 80 ? 'var(--teal)' : p.health >= 60 ? 'var(--orange)' : 'var(--magenta)'};"></div>
           </div>
