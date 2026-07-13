@@ -1396,10 +1396,10 @@ function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
             <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Page Size</label>
             <div style="display:flex; gap:8px;">
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-page-size" value="letter" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Letter <span class="text-muted">(US)</span></span>
+                <input type="radio" name="pdf-page-size" value="letter" checked style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">Letter <span class="text-muted">(US)</span></span>
               </label>
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-page-size" value="a4" style="accent-color:var(--primary);"> <span style="font-size:13px;">A4 <span class="text-muted">(International)</span></span>
+                <input type="radio" name="pdf-page-size" value="a4" style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">A4 <span class="text-muted">(International)</span></span>
               </label>
             </div>
           </div>
@@ -1408,10 +1408,10 @@ function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
             <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Orientation</label>
             <div style="display:flex; gap:8px;">
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-orientation" value="portrait" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Portrait</span>
+                <input type="radio" name="pdf-orientation" value="portrait" checked style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">Portrait</span>
               </label>
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-orientation" value="landscape" style="accent-color:var(--primary);"> <span style="font-size:13px;">Landscape</span>
+                <input type="radio" name="pdf-orientation" value="landscape" style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">Landscape</span>
               </label>
             </div>
           </div>
@@ -1420,14 +1420,14 @@ function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
             <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Export Profile</label>
             <div style="display:flex; flex-direction:column; gap:8px;">
               <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-profile" value="learner" checked style="accent-color:var(--primary); margin-top:2px;">
+                <input type="radio" name="pdf-profile" value="learner" checked style="accent-color:var(--ws-primary); margin-top:2px;">
                 <span>
                   <span style="font-size:13px; font-weight:600; color:var(--ink-900);">Learner Guide</span>
                   <span class="text-sm text-muted" style="display:block; margin-top:2px;">All content blocks — narrative, activities, knowledge checks and media.</span>
                 </span>
               </label>
               <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-profile" value="assessment" style="accent-color:var(--primary); margin-top:2px;">
+                <input type="radio" name="pdf-profile" value="assessment" style="accent-color:var(--ws-primary); margin-top:2px;">
                 <span>
                   <span style="font-size:13px; font-weight:600; color:var(--ink-900);">Assessment Pack</span>
                   <span class="text-sm text-muted" style="display:block; margin-top:2px;">Knowledge check questions only — ideal for printed assessments.</span>
@@ -1440,10 +1440,10 @@ function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
             <label style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); display:block; margin-bottom:6px;">Knowledge Check Answers</label>
             <div style="display:flex; gap:8px;">
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-answers" value="show" checked style="accent-color:var(--primary);"> <span style="font-size:13px;">Questions + Answers</span>
+                <input type="radio" name="pdf-answers" value="show" checked style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">Questions + Answers</span>
               </label>
               <label style="flex:1; display:flex; align-items:center; gap:8px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; background:var(--surface-0);">
-                <input type="radio" name="pdf-answers" value="hide" style="accent-color:var(--primary);"> <span style="font-size:13px;">Questions Only</span>
+                <input type="radio" name="pdf-answers" value="hide" style="accent-color:var(--ws-primary);"> <span style="font-size:13px;">Questions Only</span>
               </label>
             </div>
           </div>
