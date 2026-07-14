@@ -470,6 +470,15 @@ const LabelEngine = (function () {
     return true;
   }
 
+  /* Rename a custom pack. ID and all course assignments remain unchanged. */
+  function renameCustomPack(id, newName) {
+    if (!LumioState.labelPacks || !LumioState.labelPacks[id]) return false;
+    const trimmed = String(newName || '').trim();
+    if (!trimmed) return false;
+    LumioState.labelPacks[id].name = trimmed;
+    return true;
+  }
+
   /* Delete a custom pack. */
   function deleteCustomPack(id) {
     if (!LumioState.labelPacks) return;
@@ -645,6 +654,7 @@ ${units}
     getAllPacks,
     createCustomPack,
     updateCustomPack,
+    renameCustomPack,
     deleteCustomPack,
     register,
     // XLIFF

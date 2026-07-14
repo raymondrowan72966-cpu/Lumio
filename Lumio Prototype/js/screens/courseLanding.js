@@ -185,7 +185,7 @@ function _finaliseLabelPack(packId, packName, renderModal, appliedCount) {
   // Auto-select the newly created pack in the refreshed dropdown
   setTimeout(() => {
     const sel = document.querySelector('#tm-label-set');
-    if (sel) sel.value = packId;
+    if (sel) { sel.value = packId; sel.dispatchEvent(new Event('change')); }
   }, 0);
   const msg = appliedCount > 0
     ? 'Label pack created — ' + appliedCount + ' translations imported'
@@ -910,6 +910,105 @@ function getCourseReadinessIssues(course) {
   return issues;
 }
 
+/* ── Label Pack management helpers ───────────────────────────── */
+
+function _isCustomLabelPack(id) {
+  return !!(LumioState.labelPacks && LumioState.labelPacks[id]);
+}
+
+function _getLabelPackAssignedProjects(packId) {
+  const seen = new Set();
+  const titles = [];
+  (LumioState.projects || []).forEach(p => {
+    if (p.labelSet === packId && !seen.has(p.id)) {
+      seen.add(p.id);
+      titles.push(p.title || p.id);
+    }
+  });
+  Object.values(LumioState.courses || {}).forEach(c => {
+    if (c && c.labelSet === packId && !seen.has(c.id)) {
+      seen.add(c.id);
+      titles.push(c.title || c.id);
+    }
+  });
+  return titles;
+}
+
+function _openRenameLabelPackModal(packId, currentName, onSuccess) {
+  const dlg = el(`
+    <div class="overlay" style="z-index:102;">
+      <div class="modal" style="width:400px; padding:28px;">
+        <h3 style="font-size:16px; margin-bottom:16px;">Rename Label Pack</h3>
+        <div style="margin-bottom:20px;">
+          <label class="text-sm" style="font-weight:600; display:block; margin-bottom:6px;">New Name <span style="color:var(--destructive);">*</span></label>
+          <input type="text" id="rlp-name" class="input" placeholder="Pack name" value="${escapeHtml(currentName)}" style="width:100%;" />
+          <p id="rlp-err" class="text-sm" style="color:var(--destructive); margin-top:4px; display:none;"></p>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="rlp-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="rlp-save">Save</button>
+        </div>
+      </div>
+    </div>
+  `);
+  const nameInput = dlg.querySelector('#rlp-name');
+  const errEl     = dlg.querySelector('#rlp-err');
+  dlg.querySelector('#rlp-cancel').addEventListener('click', () => dlg.remove());
+  dlg.querySelector('#rlp-save').addEventListener('click', () => {
+    const newName = (nameInput.value || '').trim();
+    if (!newName) { errEl.textContent = 'Name is required.'; errEl.style.display = ''; return; }
+    LabelEngine.renameCustomPack(packId, newName);
+    dlg.remove();
+    onSuccess(newName);
+  });
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') dlg.querySelector('#rlp-save').click(); });
+  document.body.appendChild(dlg);
+  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+}
+
+function _openLabelPackInUseModal(packName, courseTitles) {
+  const listHtml = courseTitles.map(t => `<li class="text-sm" style="color:var(--ink-700);">${escapeHtml(t)}</li>`).join('');
+  const dlg = el(`
+    <div class="overlay" style="z-index:102;">
+      <div class="modal" style="width:420px; padding:28px;">
+        <h3 style="font-size:16px; margin-bottom:8px;">Cannot Delete Label Pack</h3>
+        <p class="text-sm text-muted" style="margin-bottom:12px;">
+          <strong>${escapeHtml(packName)}</strong> is assigned to ${courseTitles.length === 1 ? 'this course' : 'these courses'} and cannot be deleted:
+        </p>
+        <ul style="margin:0 0 16px 18px; display:flex; flex-direction:column; gap:4px;">${listHtml}</ul>
+        <p class="text-sm text-muted" style="margin-bottom:20px;">Remove the label pack from the course${courseTitles.length !== 1 ? 's' : ''} first, then delete.</p>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-primary btn-sm" id="liu-close">OK</button>
+        </div>
+      </div>
+    </div>
+  `);
+  dlg.querySelector('#liu-close').addEventListener('click', () => dlg.remove());
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
+  document.body.appendChild(dlg);
+}
+
+function _openConfirmDeleteLabelPackModal(packName, onConfirm) {
+  const dlg = el(`
+    <div class="overlay" style="z-index:102;">
+      <div class="modal" style="width:400px; padding:28px;">
+        <h3 style="font-size:16px; margin-bottom:8px;">Delete Label Pack</h3>
+        <p class="text-sm text-muted" style="margin-bottom:20px;">
+          Delete <strong>${escapeHtml(packName)}</strong>? This cannot be undone.
+        </p>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="cdlp-cancel">Cancel</button>
+          <button class="btn btn-sm" id="cdlp-confirm" style="background:#dc2626; color:#fff;">Delete</button>
+        </div>
+      </div>
+    </div>
+  `);
+  dlg.querySelector('#cdlp-cancel').addEventListener('click', () => dlg.remove());
+  dlg.querySelector('#cdlp-confirm').addEventListener('click', () => { dlg.remove(); onConfirm(); });
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
+  document.body.appendChild(dlg);
+}
+
 /* ============================================================
    TRANSLATION MODAL
    ============================================================ */
@@ -924,6 +1023,7 @@ function openTranslationModal(course) {
   let lastValidation = null;
   let exportLang = 'en-us';
   let preserveHtml = true;
+  let _labelDropdownSel = course.labelSet || 'en';
 
   const stringCount = TranslationEngine.countStrings(course);
 
@@ -1018,13 +1118,15 @@ function openTranslationModal(course) {
             <div class="flex items-center gap-12" style="margin-bottom:10px;">
               <label class="text-sm" style="min-width:120px;">Label set</label>
               <select class="input" id="tm-label-set" style="flex:1;">
-                ${_labelPackOptions(course.labelSet)}
+                ${_labelPackOptions(_labelDropdownSel)}
               </select>
             </div>
             <div class="flex gap-8" style="flex-wrap:wrap;">
               <button class="btn btn-secondary btn-sm" id="tm-label-set-apply">✓ Apply Label Set</button>
               <button class="btn btn-ghost btn-sm" id="tm-label-export">⬇ Export Labels XLIFF</button>
               <button class="btn btn-ghost btn-sm" id="tm-label-create">+ New Custom Pack</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-rename" style="${_isCustomLabelPack(_labelDropdownSel) ? '' : 'display:none;'}">✏ Rename</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-delete" style="${_isCustomLabelPack(_labelDropdownSel) ? 'color:var(--destructive);' : 'display:none;'}">🗑 Delete</button>
             </div>
           </section>
 
@@ -1210,6 +1312,49 @@ function openTranslationModal(course) {
     // Label Sets — Create Custom
     overlay.querySelector('#tm-label-create')?.addEventListener('click', () => {
       _openNewLabelPackModal(course, renderModal);
+    });
+
+    // Label Sets — dropdown change: sync _labelDropdownSel and toggle custom-pack buttons
+    overlay.querySelector('#tm-label-set')?.addEventListener('change', (e) => {
+      _labelDropdownSel = e.target.value;
+      const isCustom = _isCustomLabelPack(_labelDropdownSel);
+      const renameBtn = overlay.querySelector('#tm-label-rename');
+      const deleteBtn = overlay.querySelector('#tm-label-delete');
+      if (renameBtn) renameBtn.style.display = isCustom ? '' : 'none';
+      if (deleteBtn) deleteBtn.style.display = isCustom ? '' : 'none';
+    });
+
+    // Label Sets — Rename
+    overlay.querySelector('#tm-label-rename')?.addEventListener('click', () => {
+      const packId = overlay.querySelector('#tm-label-set')?.value;
+      if (!_isCustomLabelPack(packId)) return;
+      const pack = LumioState.labelPacks[packId];
+      _openRenameLabelPackModal(packId, pack.name, (newName) => {
+        saveLumioState();
+        cloudSyncWorkspace('labelPacks');
+        renderModal();
+        toast(`Label pack renamed to "${newName}"`, '✏️');
+      });
+    });
+
+    // Label Sets — Delete
+    overlay.querySelector('#tm-label-delete')?.addEventListener('click', () => {
+      const packId = overlay.querySelector('#tm-label-set')?.value;
+      if (!_isCustomLabelPack(packId)) return;
+      const pack = LumioState.labelPacks[packId];
+      const usedBy = _getLabelPackAssignedProjects(packId);
+      if (usedBy.length > 0) {
+        _openLabelPackInUseModal(pack.name, usedBy);
+        return;
+      }
+      _openConfirmDeleteLabelPackModal(pack.name, () => {
+        LabelEngine.deleteCustomPack(packId);
+        _labelDropdownSel = course.labelSet || 'en';
+        saveLumioState();
+        cloudSyncWorkspace('labelPacks');
+        renderModal();
+        toast(`Label pack "${pack.name}" deleted`, '🗑️');
+      });
     });
 
     // Close on backdrop click
