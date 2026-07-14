@@ -29,7 +29,10 @@ const FOLDER_COLORS = {
 function _courseLangName(course) {
   const packs = LabelEngine.getAllPacks();
   const id = course && course.labelSet;
-  return (id && packs[id] && packs[id].name) || 'English';
+  if (!id) return 'English';
+  const pack = packs[id];
+  if (!pack) return 'English';
+  return (pack.name || '').replace(/\s*\(custom\)\s*$/i, '').trim() || 'English';
 }
 
 function folderColorVar(color) {
@@ -623,6 +626,8 @@ function openProjectMenu(btn, id) {
       p.folder = opt.dataset.folder || null;
       closePopovers();
       renderProjects();
+      scheduleLumioSave();
+      cloudPersistProject(p.id);
       NotifySystem.notify({ message: `Moved "${projectDisplayTitle(p)}" to ${opt.dataset.folder ? LumioState.folders.find(f=>f.id===opt.dataset.folder).name : 'Uncategorized'}`, type: 'success' });
     });
   });
@@ -788,9 +793,12 @@ function confirmDeleteFolder(folderId) {
   document.body.appendChild(overlay);
   overlay.querySelector('#cancel-del').addEventListener('click', () => overlay.remove());
   overlay.querySelector('#confirm-del').addEventListener('click', () => {
-    LumioState.projects.forEach(p => { if (p.folder === folderId) p.folder = null; });
+    const affected = LumioState.projects.filter(p => p.folder === folderId);
+    affected.forEach(p => { p.folder = null; });
     LumioState.folders = LumioState.folders.filter(x => x.id !== folderId);
     if (LumioState.currentFolder === folderId) LumioState.currentFolder = null;
+    scheduleLumioSave();
+    affected.forEach(p => cloudPersistProject(p.id));
     overlay.remove();
     renderProjects();
     toast('Folder deleted', '🗑️');

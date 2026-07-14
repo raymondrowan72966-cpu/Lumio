@@ -30,8 +30,8 @@ export class ProjectRepository {
     await this._db.run(
       `INSERT INTO projects
          (id, workspace_id, owner_id, title, type, status, health, folder_id,
-          shared_scope, shared_permission, last_accessed_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          shared_scope, shared_permission, label_set, last_accessed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         data.id,
         data.workspaceId,
@@ -43,6 +43,7 @@ export class ProjectRepository {
         data.folderId || null,
         data.sharedScope || null,
         data.sharedPermission || 'view',
+        data.labelSet || null,
         data.lastAccessedAt || now,
         now,
         now,
@@ -55,13 +56,14 @@ export class ProjectRepository {
     await this._db.run(
       `UPDATE projects
        SET title = ?, status = ?, health = ?, folder_id = ?,
-           last_accessed_at = ?, updated_at = ?
+           label_set = ?, last_accessed_at = ?, updated_at = ?
        WHERE id = ?`,
       [
         data.title,
         data.status,
         data.health != null ? data.health : 0,
         data.folderId != null ? data.folderId : null,
+        data.labelSet !== undefined ? data.labelSet : null,
         data.lastAccessedAt || now,
         now,
         id,
@@ -192,6 +194,7 @@ function rowToProject(row) {
     folderId:         row.folder_id,
     sharedScope:      row.shared_scope,
     sharedPermission: row.shared_permission,
+    labelSet:         row.label_set || null,
     lastAccessedAt:   row.last_accessed_at,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,

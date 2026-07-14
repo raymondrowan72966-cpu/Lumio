@@ -56,6 +56,7 @@ async function handleCreate(request, _params, ctx) {
     status:      body.status || 'draft',
     health:      body.health != null ? body.health : 0,
     folderId:    body.folderId || null,
+    labelSet:    (course && course.labelSet) || null,
     lastAccessedAt: now,
   });
 
@@ -123,6 +124,7 @@ async function handleUpdate(request, params, ctx) {
     status:         project.status         != null ? project.status         : existing.status,
     health:         project.health         != null ? project.health         : existing.health,
     folderId:       project.folderId       !== undefined ? project.folderId : existing.folderId,
+    labelSet:       project.labelSet       !== undefined ? project.labelSet : existing.labelSet,
     lastAccessedAt: project.lastAccessedAt != null ? project.lastAccessedAt : Date.now(),
   });
 

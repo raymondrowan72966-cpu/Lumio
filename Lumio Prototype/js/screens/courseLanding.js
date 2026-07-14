@@ -5,6 +5,8 @@
 /* ── New Custom Label Pack modal ─────────────────────────── */
 function _openNewLabelPackModal(course, renderModal) {
   let selectedFile = null;
+  let _cachedXliffText = null;  // raw text of a successfully pre-parsed file
+  let _cachedLabelCount = 0;    // label count from the pre-parse
 
   const dlg = el(`
     <div class="overlay" style="z-index:101;">
@@ -32,7 +34,7 @@ function _openNewLabelPackModal(course, renderModal) {
         <div style="margin-bottom:24px;">
           <label class="text-sm" style="font-weight:600; display:block; margin-bottom:6px;">Label XLIFF File <span class="text-muted">(optional)</span></label>
           <input type="file" id="nlp-file-input" accept=".xlf,.xliff,text/xml" style="display:none;" />
-          <div id="nlp-drop-zone" style="border:2px dashed var(--border); border-radius:var(--r-lg); padding:16px 20px; text-align:center; cursor:pointer; transition:border-color .15s;">
+          <div id="nlp-drop-zone" style="border:2px dashed var(--border); border-radius:var(--r-lg); padding:16px 20px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s;">
             <p class="text-sm text-muted" id="nlp-file-label">Click to select a Label XLIFF file (.xlf, .xliff)</p>
           </div>
           <p id="nlp-import-err" class="text-sm" style="color:var(--destructive); margin-top:4px; display:none;"></p>
@@ -49,30 +51,86 @@ function _openNewLabelPackModal(course, renderModal) {
   document.body.appendChild(dlg);
   dlg.querySelector('#nlp-name').focus();
 
-  const dropZone = dlg.querySelector('#nlp-drop-zone');
+  const dropZone  = dlg.querySelector('#nlp-drop-zone');
   const fileInput = dlg.querySelector('#nlp-file-input');
   const fileLabel = dlg.querySelector('#nlp-file-label');
+  const importErr = dlg.querySelector('#nlp-import-err');
+
+  function _resetDropZone() {
+    dropZone.style.borderColor  = 'var(--border)';
+    dropZone.style.background   = '';
+    fileLabel.style.color       = '';
+    fileLabel.innerHTML = 'Click to select a Label XLIFF file (.xlf, .xliff)';
+    _cachedXliffText  = null;
+    _cachedLabelCount = 0;
+  }
+
+  function _showDropZoneSuccess(filename, count) {
+    dropZone.style.borderColor = '#16a34a';
+    dropZone.style.background  = 'color-mix(in srgb, #16a34a 7%, transparent)';
+    fileLabel.style.color      = '#16a34a';
+    fileLabel.innerHTML =
+      '<span style="font-size:15px;">✓</span> ' +
+      '<strong>' + escapeHtml(filename) + '</strong>' +
+      '<br><span style="font-size:11px; opacity:.85;">' + count + ' label' + (count !== 1 ? 's' : '') + ' ready to import</span>';
+  }
+
+  function _showDropZonePending(filename, size) {
+    dropZone.style.borderColor = 'var(--indigo)';
+    dropZone.style.background  = '';
+    fileLabel.style.color      = '';
+    fileLabel.textContent = filename + ' (' + size + ')';
+  }
 
   dropZone.addEventListener('click', () => fileInput.click());
+
   fileInput.addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     selectedFile = f;
-    fileLabel.textContent = f.name + ' (' + _fileSize(f.size) + ')';
-    dropZone.style.borderColor = 'var(--indigo)';
-    dlg.querySelector('#nlp-import-err').style.display = 'none';
+    _cachedXliffText  = null;
+    _cachedLabelCount = 0;
+    importErr.style.display = 'none';
+
+    // Show a pending state while reading
+    _showDropZonePending(f.name, _fileSize(f.size));
+
+    // Pre-parse immediately so we can show a success/error state before Create Pack
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text   = ev.target.result;
+      const parsed = LabelEngine.parseXliff(text);
+      if (!parsed.ok) {
+        importErr.textContent   = 'XLIFF parse error — check the file format.';
+        importErr.style.display = '';
+        _resetDropZone();
+        selectedFile = null;
+        return;
+      }
+      // Count translatable labels from the parsed result
+      const count = parsed.labels ? Object.keys(parsed.labels).length : 0;
+      _cachedXliffText  = text;
+      _cachedLabelCount = count;
+      _showDropZoneSuccess(f.name, count);
+    };
+    reader.onerror = () => {
+      importErr.textContent   = 'Could not read the file.';
+      importErr.style.display = '';
+      _resetDropZone();
+      selectedFile = null;
+    };
+    reader.readAsText(f);
   });
 
   dlg.querySelector('#nlp-cancel').addEventListener('click', () => dlg.remove());
   dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
 
   dlg.querySelector('#nlp-create').addEventListener('click', () => {
-    const name = dlg.querySelector('#nlp-name').value.trim();
-    const baseId = dlg.querySelector('#nlp-base').value || 'en';
+    const name    = dlg.querySelector('#nlp-name').value.trim();
+    const baseId  = dlg.querySelector('#nlp-base').value || 'en';
     const nameErr = dlg.querySelector('#nlp-name-err');
-    const importErr = dlg.querySelector('#nlp-import-err');
 
-    nameErr.style.display = 'none';
+    nameErr.style.display   = 'none';
     importErr.style.display = 'none';
 
     if (!name) {
@@ -89,23 +147,31 @@ function _openNewLabelPackModal(course, renderModal) {
       return;
     }
 
-    // XLIFF selected — parse, create pack, merge translations
+    if (_cachedXliffText) {
+      // Pre-parsed on file select — reuse cached text, no second parse
+      const pack   = LabelEngine.createCustomPack(name, baseId);
+      const result = LabelEngine.importXliff(pack.id, _cachedXliffText, { name });
+      _finaliseLabelPack(pack.id, name, renderModal, result.applied || 0);
+      dlg.remove();
+      return;
+    }
+
+    // Fallback: file was selected but pre-parse is still in-flight (edge case)
     const reader = new FileReader();
     reader.onload = (ev) => {
       const parsed = LabelEngine.parseXliff(ev.target.result);
       if (!parsed.ok) {
-        importErr.textContent = 'XLIFF parse error — check the file format.';
+        importErr.textContent   = 'XLIFF parse error — check the file format.';
         importErr.style.display = '';
         return;
       }
-      const pack = LabelEngine.createCustomPack(name, baseId);
-      // importXliff merges translated strings over the seeded base
+      const pack   = LabelEngine.createCustomPack(name, baseId);
       const result = LabelEngine.importXliff(pack.id, ev.target.result, { name });
       _finaliseLabelPack(pack.id, name, renderModal, result.applied || 0);
       dlg.remove();
     };
     reader.onerror = () => {
-      importErr.textContent = 'Could not read the file.';
+      importErr.textContent   = 'Could not read the file.';
       importErr.style.display = '';
     };
     reader.readAsText(selectedFile);
