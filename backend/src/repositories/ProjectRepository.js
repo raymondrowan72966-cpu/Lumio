@@ -79,6 +79,21 @@ export class ProjectRepository {
     );
   }
 
+  // ── Folders ───────────────────────────────────────────────────────────────
+
+  async upsertFolder(id, workspaceId, name, color) {
+    const now = Date.now();
+    await this._db.run(
+      `INSERT INTO folders (id, workspace_id, name, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name       = excluded.name,
+         color      = excluded.color,
+         updated_at = excluded.updated_at`,
+      [id, workspaceId, name, color || 'purple', now, now],
+    );
+  }
+
   // ── Courses ───────────────────────────────────────────────────────────────
 
   async getCourse(projectId) {

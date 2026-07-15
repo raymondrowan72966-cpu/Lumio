@@ -2787,13 +2787,22 @@ function _buildCloudPayload(p) {
       lessonsMap[l.id] = LumioState.lessons[l.id] || [];
     });
   }
+  // Resolve folder metadata so the Worker can upsert it before referencing it
+  // via the FK constraint on projects.folder_id → folders.id.
+  // folderId is derived from folderObj (not p.folder directly) so that a stale
+  // reference to a locally-deleted folder never reaches the Worker as a non-null
+  // folderId without a corresponding folder row to satisfy the FK.
+  const folderObj = p.folder
+    ? (LumioState.folders || []).find(function (f) { return f.id === p.folder; }) || null
+    : null;
   return {
     id:       p.id,          // client-assigned; server uses it if provided
     title:    p.title,
     type:     p.type,
     status:   p.status,
     health:   p.health,
-    folderId: p.folder || null,
+    folderId: folderObj ? folderObj.id : null,
+    folder:   folderObj ? { id: folderObj.id, name: folderObj.name, color: folderObj.color || 'purple' } : null,
     course:   course,
     lessons:  lessonsMap,
   };
@@ -2824,6 +2833,7 @@ async function cloudPersistProject(id) {
           lastAccessedAt: p.lastAccessed || Date.now(),
           labelSet:       (LumioState.courses[id] || {}).labelSet || null,
         },
+        folder:  payload.folder,
         course:  payload.course,
         lessons: payload.lessons,
       });

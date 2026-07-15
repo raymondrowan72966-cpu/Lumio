@@ -31,7 +31,7 @@ async function handleCreate(request, _params, ctx) {
   let body;
   try { body = await request.json(); } catch { body = {}; }
 
-  const { title, type, course, lessons } = body;
+  const { title, type, folder, course, lessons } = body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ValidationError('title is required');
   }
@@ -46,6 +46,12 @@ async function handleCreate(request, _params, ctx) {
   const wsId   = ctx.auth.currentWorkspace.id;
   const userId = ctx.auth.currentUser.id;
   const now    = Date.now();
+
+  // Upsert the folder into D1 before creating the project — the FK constraint
+  // on projects.folder_id → folders.id requires the folder to exist first.
+  if (folder && folder.id) {
+    await repo.upsertFolder(folder.id, wsId, folder.name || 'Untitled', folder.color);
+  }
 
   await repo.createProject({
     id,
@@ -116,8 +122,14 @@ async function handleUpdate(request, params, ctx) {
   let body;
   try { body = await request.json(); } catch { body = {}; }
 
-  const { project, course, lessons } = body;
+  const { project, folder, course, lessons } = body;
   if (!project) throw new ValidationError('project is required');
+
+  // Upsert the folder into D1 before updating the project — the FK constraint
+  // on projects.folder_id → folders.id requires the folder to exist first.
+  if (folder && folder.id) {
+    await repo.upsertFolder(folder.id, ctx.auth.currentWorkspace.id, folder.name || 'Untitled', folder.color);
+  }
 
   await repo.updateProject(params.id, {
     title:          project.title          != null ? project.title          : existing.title,
