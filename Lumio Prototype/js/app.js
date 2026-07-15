@@ -2854,7 +2854,7 @@ async function cloudPersistProject(id) {
   // Upload any locally-stored assets that haven't been synced to R2 yet.
   // Fire-and-forget — asset sync failure does not roll back the project save.
   const course  = LumioState.courses[id];
-  const lessons = LumioState.lessons[id];
+  const lessons = payload.lessons;
   const refs    = _collectProjectAssetRefs(course, Object.values(lessons || {}));
   _cloudSyncAssets(id, refs).catch(function (err) {
     console.warn('[Lumio] Asset sync failed for project', id, err);
