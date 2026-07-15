@@ -487,8 +487,10 @@ async function openProject(id) {
   if (p.type === 'Microlearning') {
     toast('Microlearning editor uses the same Builder — opening course view for this prototype', '⚡');
   }
-  // Cloud-backed project: fetch course+lessons from D1 if not already in memory.
-  if (p._cloud && !LumioState.courses[id]) {
+  // Cloud-backed project: always fetch course+lessons from D1 so the editor
+  // never renders stale localStorage data. D1 is the single source of truth
+  // for authenticated users; the local cache is overwritten on every open.
+  if (p._cloud) {
     await _cloudLoadCourse(id);
   }
   // Ensure a course object exists (fallback to template if cloud fetch failed or user is local-only).
