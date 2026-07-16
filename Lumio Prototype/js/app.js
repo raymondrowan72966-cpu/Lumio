@@ -2861,6 +2861,30 @@ async function cloudPersistProject(id) {
   });
 }
 
+// Resets all cloud-identity fields on a project object so the next
+// cloudPersistProject() call follows the POST (CREATE) path, not PUT.
+// Call this whenever a project is being introduced as a new entity:
+// .lumio import, duplicate, or any future importer.
+function _stripCloudIdentity(p) {
+  p._cloud           = false;
+  p.workspaceId      = (LumioState.session && LumioState.session.currentWorkspaceId) || null;
+  p.folder           = null;
+  p.ownerId          = (getCurrentUser() && getCurrentUser().id) || null;
+  p.sharedWith       = [];
+  p.sharedScope      = null;
+  p.sharedPermission = 'view';
+  p.deleted          = false;
+  p.deletedAt        = null;
+  p.status           = 'draft';
+  p.reviewStatus     = null;
+  p.reviewedBy       = null;
+  p.reviewedAt       = null;
+  p.reviewComments   = null;
+  p.submittedBy      = null;
+  p.submittedAt      = null;
+  p.reviewHistory    = [];
+}
+
 /**
  * Upload all locally-stored asset blobs for a project to R2/D1.
  * Assets already in R2 are skipped (D1 insert uses INSERT OR IGNORE).
@@ -3105,12 +3129,7 @@ function _restoreProjectPayload(payload) {
   p.id = remap(p.id, 'p');
   p.title = (p.title || 'Imported Project') + ' (Imported)';
   p.lastAccessed = Date.now();
-  p.deleted = false;
-  p.deletedAt = null;
-  p.ownerId = getCurrentUser()?.id;
-  p.sharedWith = [];
-  p.sharedScope = null;
-  p.sharedPermission = 'view';
+  _stripCloudIdentity(p);
 
   let course = null;
   if (payload.course) {

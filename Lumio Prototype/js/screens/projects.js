@@ -691,15 +691,7 @@ function duplicateProject(id) {
   copy.id = newId;
   copy.title = newTitle;
   copy.lastAccessed = Date.now();
-  copy.deleted = false;
-  copy.deletedAt = null;
-  copy.status = 'draft';
-  copy.reviewStatus = null;
-  copy.submittedBy = null;
-  copy.submittedAt = null;
-  copy.reviewComments = null;
-  copy.reviewHistory = [];
-  copy._cloud = false; // treat as new — cloudPersistProject will POST, not PUT
+  _stripCloudIdentity(copy);
 
   const srcCourse = LumioState.courses && LumioState.courses[id];
   if (srcCourse) {
