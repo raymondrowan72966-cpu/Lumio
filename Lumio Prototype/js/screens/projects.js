@@ -958,7 +958,10 @@ function openCreateNewModal() {
             <p class="text-sm text-muted mt-8">Answer 2 quick questions and Lumio will recommend the best format.</p>
           </div>
         </div>
-        <div class="flex justify-end mt-24">
+        <div class="flex justify-between items-center mt-24">
+          <button class="btn btn-ghost" id="import-existing" style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:15px;">📥</span> Import Existing Content
+          </button>
           <button class="btn btn-ghost" id="cancel-create">Cancel</button>
         </div>
       </div>
@@ -977,8 +980,108 @@ function openCreateNewModal() {
       }
     });
   });
+  overlay.querySelector('#import-existing').addEventListener('click', () => {
+    overlay.remove();
+    openImportContentModal();
+  });
   overlay.querySelector('#cancel-create').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+/* ---------------- IMPORT CONTENT MODAL (Milestone 1) ---------------- */
+function openImportContentModal() {
+  const FORMATS = [
+    { id: 'word',  icon: '📝', label: 'Word Document',  hint: 'Import text, headings, and lists from a .docx file', enabled: false },
+    { id: 'pdf',   icon: '📄', label: 'PDF Document',   hint: 'Extract content from a PDF file',                  enabled: false },
+    { id: 'pptx',  icon: '📊', label: 'PowerPoint',     hint: 'Convert slides into Lumio lessons (.pptx)',        enabled: false },
+  ];
+
+  const overlay = el(`
+    <div class="overlay" role="dialog" aria-modal="true" aria-label="Import Existing Content">
+      <div class="modal" style="width:520px; padding:36px;">
+
+        <div class="flex items-center gap-12 mb-20">
+          <button class="btn btn-ghost btn-sm" id="imp-back" aria-label="Back to Create New">← Back</button>
+        </div>
+
+        <h2 style="font-size:22px; color:var(--ink-900);">Import Existing Content</h2>
+        <p class="text-sm text-muted mt-8 mb-28">Choose a format to import and convert into a Lumio course.</p>
+
+        <div class="flex-col gap-12" role="list">
+
+          <!-- SCORM — enabled -->
+          <input type="file" id="imp-scorm-file" accept=".zip" style="display:none;" aria-hidden="true" />
+          <button class="card card-pad" id="imp-scorm" role="listitem"
+            style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
+            aria-label="Import SCORM Package (.zip)">
+            <div class="flex items-center gap-16">
+              <div style="font-size:28px; line-height:1;" aria-hidden="true">📦</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:15px; color:var(--ink-900);">SCORM Package</div>
+                <div class="text-sm text-muted mt-4">SCORM 1.2 packages and compatible exports (.zip)</div>
+              </div>
+              <span class="pill pill-cyan" style="flex-shrink:0;">Available</span>
+            </div>
+          </button>
+
+          <!-- Disabled formats -->
+          ${FORMATS.map(f => `
+            <div class="card card-pad" role="listitem" aria-disabled="true"
+              style="opacity:.5; cursor:not-allowed; user-select:none;">
+              <div class="flex items-center gap-16">
+                <div style="font-size:28px; line-height:1;" aria-hidden="true">${f.icon}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-weight:700; font-size:15px; color:var(--ink-900);">${f.label}</div>
+                  <div class="text-sm text-muted mt-4">${f.hint}</div>
+                </div>
+                <span class="pill" style="flex-shrink:0; background:var(--surface-50); color:var(--ink-400); border:1px solid var(--border);">Coming Soon</span>
+              </div>
+            </div>
+          `).join('')}
+
+        </div>
+
+        <div class="flex justify-end mt-28">
+          <button class="btn btn-ghost" id="imp-cancel">Cancel</button>
+        </div>
+
+      </div>
+    </div>
+  `);
+
+  document.body.appendChild(overlay);
+
+  const scormBtn = overlay.querySelector('#imp-scorm');
+  const scormFile = overlay.querySelector('#imp-scorm-file');
+
+  scormBtn.addEventListener('mouseenter', () => {
+    scormBtn.style.borderColor = 'var(--violet-border)';
+    scormBtn.style.boxShadow = 'var(--shadow-md)';
+  });
+  scormBtn.addEventListener('mouseleave', () => {
+    scormBtn.style.borderColor = 'transparent';
+    scormBtn.style.boxShadow = '';
+  });
+
+  scormBtn.addEventListener('click', () => scormFile.click());
+
+  scormFile.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    overlay.remove();
+    ScormInspector.inspect(file);
+    e.target.value = '';
+  });
+
+  overlay.querySelector('#imp-back').addEventListener('click', () => {
+    overlay.remove();
+    openCreateNewModal();
+  });
+  overlay.querySelector('#imp-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Focus the first actionable element on open
+  requestAnimationFrame(() => scormBtn.focus());
 }
 
 function openHelpMeDecide() {
