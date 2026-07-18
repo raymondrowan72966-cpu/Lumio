@@ -11,12 +11,18 @@ const WELCOME_TOUR_STEPS = [
   { iconId: 'publish', title: 'Publishing', body: 'When you\'re ready, publish your course and share it with learners — or keep refining anytime.' },
 ];
 
+function _welcomeWorkspaceName() {
+  const identity = ensureWorkspaceIdentity();
+  const isDefault = !identity.activeProfileId || identity.activeProfileId === 'default';
+  return isDefault ? 'Lumio' : getWorkspaceDisplayName();
+}
+
 function renderWelcome() {
   const app = document.getElementById('app');
   const firstName = getCurrentUser()?.firstName || '';
   app.innerHTML = `
     <div style="min-height:100vh; position:relative; overflow:hidden; background:var(--ws-surface, var(--surface-50)); padding:48px 24px;">
-      <div class="mesh-bg"></div>
+      <div class="ws-mesh-bg"></div>
       ${ambientBlobs([
         ['color-mix(in srgb, var(--ws-primary) 45%, transparent)', '400px', '400px', '-150px', '-130px', null, null],
         ['color-mix(in srgb, var(--ws-accent) 50%, transparent)', '340px', '340px', null, null, '-110px', '-90px'],
@@ -27,7 +33,7 @@ function renderWelcome() {
         <div style="margin-bottom:20px;">${renderWorkspaceLogo(LOGO_SLOTS.WELCOME)}</div>
 
         <h1 style="font-size:38px; line-height:1.25;">
-          Welcome to <span class="gradient-text">Lumio</span>, ${firstName}!
+          Welcome to <span class="ws-gradient-text">${_welcomeWorkspaceName()}</span>, ${firstName}!
         </h1>
         <p style="font-size:17px; color:var(--ws-text); margin-top:14px;">
           How would you like to begin?
@@ -109,9 +115,9 @@ function openWelcomeTour() {
     const s = WELCOME_TOUR_STEPS[step];
     content.innerHTML = `
       <div class="flex gap-6" style="margin-bottom:32px;">
-        ${WELCOME_TOUR_STEPS.map((_, i) => `<div style="height:4px; flex:1; border-radius:var(--r-pill); background:${i <= step ? 'var(--gradient-primary)' : 'var(--border)'};"></div>`).join('')}
+        ${WELCOME_TOUR_STEPS.map((_, i) => `<div class="tour-progress${i <= step ? ' tour-progress--active' : ''}"></div>`).join('')}
       </div>
-      <div class="choice-icon" style="background:var(--gradient-aurora);">${platformIcon(s.iconId)}</div>
+      <div class="choice-icon choice-icon--ws-gradient">${platformIcon(s.iconId)}</div>
       <h2 style="font-size:20px; margin-top:24px;">${s.title}</h2>
       <p class="text-sm text-muted mt-16" style="line-height:1.7; margin-bottom:36px;">${s.body}</p>
       <div class="flex justify-between items-center">

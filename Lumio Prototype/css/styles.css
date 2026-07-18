@@ -241,6 +241,14 @@ button { font-family: var(--font-body); cursor: pointer; }
   color: transparent;
 }
 
+/* Workspace-token-aware gradient text — consumed by Welcome screen title */
+.ws-gradient-text {
+  background: linear-gradient(90deg, var(--ws-primary) 0%, var(--ws-secondary) 55%, var(--ws-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 /* ============================================================
    BUTTONS
    ============================================================ */
@@ -1400,6 +1408,18 @@ button { font-family: var(--font-body); cursor: pointer; }
   inset: 0;
   z-index: 0;
   background: var(--gradient-mesh);
+}
+
+/* Workspace-token-aware mesh — same layout as .mesh-bg, colours from --ws-* tokens */
+.ws-mesh-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(at 15% 20%, color-mix(in srgb, var(--ws-primary) 35%, transparent) 0px, transparent 50%),
+    radial-gradient(at 85% 10%, color-mix(in srgb, var(--ws-accent) 30%, transparent) 0px, transparent 50%),
+    radial-gradient(at 70% 80%, color-mix(in srgb, var(--ws-secondary) 25%, transparent) 0px, transparent 50%),
+    radial-gradient(at 10% 90%, color-mix(in srgb, var(--ws-accent) 25%, transparent) 0px, transparent 50%);
   opacity: 0.9;
 }
 .aurora-panel {
@@ -1455,6 +1475,20 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .choice-card:hover .choice-glow { opacity: 0.55; }
 .choice-card > * { position: relative; z-index: 1; }
+/* Welcome tour progress bars */
+.tour-progress {
+  height: 4px; flex: 1; border-radius: var(--r-pill);
+  background: var(--border);
+}
+.tour-progress--active {
+  background: linear-gradient(90deg, var(--ws-primary) 0%, var(--ws-secondary) 55%, var(--ws-accent) 100%);
+}
+
+/* Tour step icon — workspace-gradient background instead of hardcoded aurora */
+.choice-icon--ws-gradient {
+  background: linear-gradient(135deg, var(--ws-primary) 0%, var(--ws-secondary) 55%, var(--ws-accent) 100%);
+}
+
 .choice-icon {
   width: 56px; height: 56px; border-radius: var(--r-lg);
   display: flex; align-items: center; justify-content: center;
