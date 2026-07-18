@@ -36,6 +36,7 @@ function _courseLangName(course) {
 }
 
 function folderColorVar(color) {
+  if (color && color.startsWith('#')) return color;
   return FOLDER_COLORS[color] || 'var(--violet)';
 }
 
@@ -800,34 +801,30 @@ function confirmDeleteFolder(folderId) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
-const FOLDER_COLOR_OPTIONS = [
-  { value: 'purple', label: 'Purple', css: 'var(--violet)' },
-  { value: 'orange', label: 'Orange', css: 'var(--orange)' },
-  { value: 'green',  label: 'Green',  css: 'var(--teal)' },
-  { value: 'teal',   label: 'Teal',   css: 'var(--cyan)' },
-  { value: 'pink',   label: 'Pink',   css: 'var(--magenta)' },
-];
-
-function colorSwatchesHtml(selectedColor) {
-  return FOLDER_COLOR_OPTIONS.map(c => `
-    <button type="button" class="folder-color-swatch" data-color="${c.value}" title="${c.label}"
-      style="width:28px; height:28px; border-radius:50%; background:${c.css}; border:3px solid ${selectedColor === c.value ? '#fff' : 'transparent'};
-             box-shadow:${selectedColor === c.value ? `0 0 0 2px ${c.css}` : 'none'}; cursor:pointer; transition:all .12s;"></button>
-  `).join('');
-}
+const FOLDER_COLOR_HEX = {
+  purple:  '#7C3AED',
+  orange:  '#F97316',
+  green:   '#14B8A6',
+  teal:    '#06B6D4',
+  pink:    '#D946EF',
+  indigo:  '#4F46E5',
+  magenta: '#D946EF',
+};
 
 function openNewFolderModal(existingFolder) {
   const isEdit = !!existingFolder;
-  let selectedColor = isEdit ? (existingFolder.color || 'purple') : 'purple';
+  const rawColor = isEdit ? (existingFolder.color || 'purple') : 'purple';
+  let selectedColor = (rawColor.startsWith('#') ? rawColor : (FOLDER_COLOR_HEX[rawColor] || '#7C3AED'));
   const overlay = el(`
     <div class="overlay">
       <div class="modal" style="width:400px; padding:28px;">
         <h3 style="font-size:16px; margin-bottom:16px;">${isEdit ? 'Edit Folder' : 'New Folder'}</h3>
         <input class="input" id="folder-name-input" value="${(isEdit ? existingFolder.name : 'Untitled Folder').replace(/"/g,'&quot;')}" placeholder="Folder name" />
         <div style="margin-top:16px;">
-          <div class="text-sm text-muted mb-8">Colour</div>
-          <div style="display:flex; gap:10px; align-items:center;" id="folder-color-swatches">
-            ${colorSwatchesHtml(selectedColor)}
+          <div class="text-sm text-muted mb-8">Folder Colour</div>
+          <div class="color-input-row">
+            <input type="color" id="folder-color-input" value="${selectedColor}" />
+            <span class="text-sm">Folder colour</span>
           </div>
         </div>
         <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
@@ -842,11 +839,8 @@ function openNewFolderModal(existingFolder) {
   const input = overlay.querySelector('#folder-name-input');
   input.focus(); input.select();
 
-  overlay.querySelector('#folder-color-swatches').addEventListener('click', (e) => {
-    const swatch = e.target.closest('[data-color]');
-    if (!swatch) return;
-    selectedColor = swatch.dataset.color;
-    overlay.querySelector('#folder-color-swatches').innerHTML = colorSwatchesHtml(selectedColor);
+  overlay.querySelector('#folder-color-input').addEventListener('input', (e) => {
+    selectedColor = e.target.value;
   });
 
   const save = () => {
