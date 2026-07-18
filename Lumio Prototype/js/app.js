@@ -1986,12 +1986,55 @@ const LOGO_SLOTS = {
  * @param {string} slot   - One of the LOGO_SLOTS values.
  * @param {object} [opts] - { id: string } — optional DOM id for event binding.
  */
+// Session-scoped cache of resolved blob URLs for workspace logo slots.
+// Populated on upload (after full validation) and on session load (Sprint B).
+// Never persisted — keyed by slot name, values are object URLs or data URIs.
+const _logoUrlCache = {};
+
+// Resolves every asset:// identifier in workspaceIdentity.logos into a
+// renderable URL and stores it in _logoUrlCache.  Called after cloud workspace
+// load and after applyWorkspaceIdentity() so logos are visible on first render.
+// Purely read-only, idempotent, best-effort: per-slot failures are caught and
+// logged without aborting the remaining slots.  Never modifies workspaceIdentity,
+// calls saveLumioState(), or writes to D1.
+async function _resolveLogoCache() {
+  const identity = LumioState.workspaceIdentity;
+  const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
+  const slots    = Object.keys(logos);
+  if (!slots.length) return;
+
+  await Promise.allSettled(slots.map(async slot => {
+    const val = logos[slot];
+    if (!val || !AssetStore.isAssetRef(val)) return;
+    try {
+      const url = await AssetStore.resolveUrl(val);
+      if (!url) return;
+      // Revoke the previously cache-owned URL before replacing, but only when
+      // it is not an AssetStore-managed URL (AssetStore manages its own object
+      // URL lifetimes; we must not double-revoke those).
+      const prev = _logoUrlCache[slot];
+      if (prev && prev !== url && !AssetStore.isAssetRef(prev)) {
+        URL.revokeObjectURL(prev);
+      }
+      _logoUrlCache[slot] = url;
+    } catch (err) {
+      console.warn('[Lumio] _resolveLogoCache: could not resolve slot', slot, err);
+    }
+  }));
+}
+
 function renderWorkspaceLogo(slot, opts = {}) {
   const identity = LumioState.workspaceIdentity;
   const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
   const SLOT_FALLBACKS = { 'login-background': 'assets/lumio-login-backdrop.png' };
   const FALLBACK = SLOT_FALLBACKS[slot] || 'assets/lumio-logo-transparent.png';
-  const src      = logos[slot] || FALLBACK;
+  const rawValue = logos[slot];
+  // Prefer a pre-resolved URL from the cache (set after upload is fully validated).
+  // Fall back to the raw value only for legacy data: URIs — asset:// IDs are not
+  // directly renderable and require async resolution via AssetStore.
+  const src = _logoUrlCache[slot]
+    || (rawValue && !AssetStore.isAssetRef(rawValue) ? rawValue : null)
+    || FALLBACK;
   const idAttr   = opts.id  ? ` id="${opts.id}"` : '';
   const alt      = opts.alt !== undefined ? opts.alt : 'Workspace logo';
   return `<img src="${src}" alt="${alt}" class="ws-logo ws-logo--${slot}"${idAttr} />`;
@@ -3185,6 +3228,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Apply persisted Workspace Identity immediately so the first paint reflects
   // any previously loaded identity (avoids a flash of default brand on reload).
   applyWorkspaceIdentity();
+  _resolveLogoCache();
 
   // Restore server-managed session first. If a valid cookie exists, the server
   // returns the full auth context and we populate LumioSession — the user
@@ -3209,6 +3253,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       // Re-apply after cloud load — server values take precedence over the
       // persisted snapshot applied at startup above.
       applyWorkspaceIdentity();
+      await _resolveLogoCache();
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
       LumioSession.clear();

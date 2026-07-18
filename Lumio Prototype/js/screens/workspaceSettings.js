@@ -239,60 +239,121 @@ function _processLogoFile(file, spec) {
       return reject(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 2 MB.`);
     }
 
-    const reader = new FileReader();
-    reader.onerror = () => reject('Could not read the file — please try again.');
-
-    // SVG: store as-is without rasterising.
+    // SVG: no resize needed — use the original File directly, no FileReader required.
     if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-      return;
+      return resolve({ previewUrl: URL.createObjectURL(file), fileToStore: file });
     }
 
-    // Raster (PNG / JPG): fit-inside canvas resize → PNG data URL.
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject('Could not decode the image. Please check the file and try again.');
-      img.onload = () => {
-        const { maxW, maxH } = spec;
-        // Fit-inside: scale down only, never up.
-        const scale  = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
-        const dw     = Math.round(img.naturalWidth  * scale);
-        const dh     = Math.round(img.naturalHeight * scale);
-
-        // Dimension guard — must produce at least 1×1.
-        if (dw < 1 || dh < 1) return reject('Image dimensions are too small.');
-
-        const canvas  = document.createElement('canvas');
-        canvas.width  = dw;
-        canvas.height = dh;
-        const ctx     = canvas.getContext('2d');
-        // Clear to transparent before drawing so PNG alpha is preserved.
-        ctx.clearRect(0, 0, dw, dh);
-        ctx.drawImage(img, 0, 0, dw, dh);
-
-        try {
-          resolve(canvas.toDataURL('image/png'));
-        } catch (e) {
-          reject('Could not export the image. The file may be cross-origin or corrupted.');
-        }
-      };
-      img.src = reader.result;
+    // Raster (PNG / JPG): fit-inside canvas resize → binary Blob (no base64).
+    // URL.createObjectURL replaces FileReader.readAsDataURL for loading the image.
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject('Could not decode the image. Please check the file and try again.');
     };
-    reader.readAsDataURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const { maxW, maxH } = spec;
+      // Fit-inside: scale down only, never up.
+      const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+      const dw    = Math.round(img.naturalWidth  * scale);
+      const dh    = Math.round(img.naturalHeight * scale);
+
+      // Dimension guard — must produce at least 1×1.
+      if (dw < 1 || dh < 1) return reject('Image dimensions are too small.');
+
+      const canvas  = document.createElement('canvas');
+      canvas.width  = dw;
+      canvas.height = dh;
+      const ctx     = canvas.getContext('2d');
+      // Clear to transparent before drawing so PNG alpha is preserved.
+      ctx.clearRect(0, 0, dw, dh);
+      ctx.drawImage(img, 0, 0, dw, dh);
+
+      // toBlob produces binary output directly — no base64 intermediate.
+      canvas.toBlob(blob => {
+        if (!blob) return reject('Could not export the image. The file may be cross-origin or corrupted.');
+        const resizedFile = new File([blob], file.name || 'logo.png', { type: 'image/png' });
+        resolve({ previewUrl: URL.createObjectURL(resizedFile), fileToStore: resizedFile });
+      }, 'image/png');
+    };
+    img.src = objectUrl;
   });
 }
 
 /**
- * Commit a processed data: URL into workspaceIdentity.logos[slot], persist,
- * and cloud-sync. Then trigger live updates across the shell.
+ * Atomic logo upload commit.
+ *
+ * Phase 1 (Preview): sets _logoUrlCache immediately so the UI feels responsive.
+ *                    workspaceIdentity is NOT touched.
+ * Phase 2 (Upload + Validate): uploads to AssetStore and R2, then validates all
+ *                    four conditions before allowing any persistence.
+ * Phase 3 (Persist): only reached when all validations pass. Writes the asset://
+ *                    ID into workspaceIdentity and syncs to D1.
+ *
+ * On any Phase 2 failure: workspaceIdentity, localStorage, and D1 are untouched.
+ * The temporary preview remains visible and the user can retry.
+ *
+ * @param {string} slot           - logo slot key
+ * @param {string} previewUrl     - object URL for immediate display (from _processLogoFile)
+ * @param {File}   fileToStore    - the File to upload (original SVG or resized PNG)
+ * @param {Element} errorContainer - element to receive upload error text on failure
  */
-function _commitLogoUpload(slot, dataUrl) {
-  const identity = ensureWorkspaceIdentity();
-  if (typeof identity.logos !== 'object' || identity.logos === null) identity.logos = {};
-  identity.logos[slot] = dataUrl;
-  saveLumioState();
-  cloudSyncWorkspace('workspaceIdentity');
+async function _commitLogoUpload(slot, previewUrl, fileToStore, errorContainer) {
+  // ── Phase 1: Preview ─────────────────────────────────────────
+  // Show the image immediately. workspaceIdentity is not modified here.
+  _logoUrlCache[slot] = previewUrl;
+
+  try {
+    // ── Phase 2: Upload and validate ─────────────────────────────
+
+    // Step 1: store in AssetStore (IDB), get content-addressed ID.
+    const assetId = await AssetStore.put(fileToStore);
+    if (!assetId || !AssetStore.isAssetRef(assetId)) {
+      throw new Error('AssetStore did not return a valid asset reference.');
+    }
+
+    // Step 2: upload binary blob to R2.
+    const uploadResult = await LumioAPI.assets.upload(assetId, fileToStore, null);
+
+    // Step 3: validate the upload response payload.
+    if (!uploadResult
+        || uploadResult.id    !== assetId
+        || !uploadResult.r2Key
+        || !(uploadResult.sizeBytes > 0)) {
+      throw new Error('R2 upload response failed validation — asset may not have been stored correctly.');
+    }
+
+    // Step 4: confirm the asset is resolvable via AssetStore.
+    const resolvedUrl = await AssetStore.resolveUrl(assetId);
+    if (!resolvedUrl) {
+      throw new Error('AssetStore could not resolve the uploaded asset — IDB storage may have failed.');
+    }
+
+    // ── Phase 3: Persist ─────────────────────────────────────────
+    // All four validations passed. Replace the temporary preview URL and persist.
+    URL.revokeObjectURL(previewUrl);
+    _logoUrlCache[slot] = resolvedUrl;
+
+    const identity = ensureWorkspaceIdentity();
+    if (typeof identity.logos !== 'object' || identity.logos === null) identity.logos = {};
+    identity.logos[slot] = assetId;
+    saveLumioState();
+    cloudSyncWorkspace('workspaceIdentity');
+
+  } catch (err) {
+    // Phase 2 or 3 failed. workspaceIdentity is untouched. Temporary preview remains
+    // in _logoUrlCache so the logo continues to display for this session only.
+    console.error('[Lumio] Logo upload failed for slot', slot, err);
+
+    const msg = 'Upload failed — the logo was not saved. Please try again.';
+    if (errorContainer) {
+      errorContainer.textContent = msg;
+      errorContainer.classList.add('ws-logo-upload-error--visible');
+    }
+  }
 }
 
 /**
@@ -301,6 +362,11 @@ function _commitLogoUpload(slot, dataUrl) {
 function _removeLogoUpload(slot) {
   const identity = ensureWorkspaceIdentity();
   if (identity.logos && slot in identity.logos) {
+    const prevId = identity.logos[slot];
+    if (prevId && AssetStore.isAssetRef(prevId)) {
+      AssetStore.revokeUrl(prevId);
+    }
+    delete _logoUrlCache[slot];
     delete identity.logos[slot];
     saveLumioState();
     cloudSyncWorkspace('workspaceIdentity');
@@ -744,7 +810,7 @@ function _wsLoginBrandSection() {
   const bgSpec       = _LOGO_LOGIN_SPECS.find(s => s.slot === 'login-background');
   const hasBadge     = !!(logos['login-badge']      && logos['login-badge']      !== FALLBACK);
   const hasBg        = !!(logos['login-background']);
-  const bgSrc        = logos['login-background'] || 'assets/lumio-login-backdrop.png';
+  const bgSrc        = _logoUrlCache['login-background'] || 'assets/lumio-login-backdrop.png';
 
   return `
     <div class="card card-pad mb-24">
@@ -800,7 +866,7 @@ function _wsLoginBrandSection() {
           <div class="ws-logo-slot-card" data-logo-slot="login-background" style="flex:1;">
             <div class="ws-logo-slot-preview" style="background:var(--surface-alt); overflow:hidden; padding:0; position:relative;">
               ${hasBg
-                ? `<img src="${escapeHtml(logos['login-background'])}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" />`
+                ? `<img src="${escapeHtml(_logoUrlCache['login-background'] || 'assets/lumio-login-backdrop.png')}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" />`
                 : `<img src="assets/lumio-login-backdrop.png" alt="" style="width:100%; height:100%; object-fit:cover; display:block; opacity:0.5;" />`}
             </div>
             <div class="ws-logo-slot-body">
@@ -1106,22 +1172,25 @@ function _bindWorkspaceAppearanceSections() {
       host.querySelectorAll(`[id^="ws-logo-err-${slot}"]`).forEach(el => { el.textContent = ''; el.classList.remove('ws-logo-upload-error--visible'); });
 
       _processLogoFile(file, spec)
-        .then(dataUrl => {
-          _commitLogoUpload(slot, dataUrl);
-          // Full re-render of the settings page updates Logos cards, Login Branding,
-          // and the Live Preview. _refreshLogoInstances already updated sidebar/topbar.
+        .then(({ previewUrl, fileToStore }) => {
+          // Resolve the error display element once so _commitLogoUpload can surface
+          // upload failures without needing access to the host element closure.
+          const errEl = host.querySelector(`#ws-logo-err-${slot}, [id^="ws-logo-err-${slot}"]`);
+          // Restore label text now — Phase 1 (preview) is synchronous inside _commitLogoUpload.
+          if (label) label.childNodes[0].textContent = origTxt;
+          _commitLogoUpload(slot, previewUrl, fileToStore, errEl);
+          // Re-render immediately so the preview from _logoUrlCache is visible.
           renderWorkspaceSettings();
         })
         .catch(errMsg => {
-          // Restore label text.
+          // _processLogoFile validation failure (bad type, too large, decode error).
           if (label) label.childNodes[0].textContent = origTxt;
-          // Display inline error beneath the upload button.
           const errEl = host.querySelector(`#ws-logo-err-${slot}, [id^="ws-logo-err-${slot}"]`);
           if (errEl) {
             errEl.textContent = errMsg;
             errEl.classList.add('ws-logo-upload-error--visible');
           }
-          // Reset the file input so the same file can be retried.
+          // Reset so the same file can be retried.
           input.value = '';
         });
     });
