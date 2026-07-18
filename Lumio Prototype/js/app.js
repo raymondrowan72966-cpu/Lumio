@@ -2150,6 +2150,8 @@ const _IC_PATHS = {
   'media-type-audio':    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   'media-type-video':    '<rect x="2" y="6" width="20" height="12" rx="2"/><rect x="2" y="6" width="3" height="3"/><rect x="2" y="12" width="3" height="3"/><rect x="19" y="6" width="3" height="3"/><rect x="19" y="12" width="3" height="3"/>',
   'media-type-document': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+  // Import modal file-type IDs
+  'file-document':       '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
 };
 
 // Emoji for the Lumio (default) icon pack.
@@ -2291,6 +2293,8 @@ const _IC_EMOJI = {
   'media-type-audio':    '🎵',
   'media-type-video':    '🎬',
   'media-type-document': '📎',
+  // Import modal file-type IDs
+  'file-document':       '📄',
 };
 
 // Published pack identifiers. Only 'lumio', 'outline', 'sketch' are implemented.
@@ -2313,7 +2317,7 @@ const ICON_PACKS = {
 // A pack may not ship to production while its status is INCOMPLETE or RESERVED.
 const ICON_PACK_STATUS = {
   lumio:     'COMPLETE',    // canonical fallback — every ID has a Lumio emoji
-  outline:   'COMPLETE',    // 133 / 133 IDs have SVG paths; Artwork Migration complete Sprint 7E
+  outline:   'COMPLETE',    // 134 / 134 IDs have SVG paths; +file-document (Import modal sprint)
   sketch:    'INCOMPLETE',  // 47 / 133 IDs have SVG paths; awaiting Artwork Migration sprint
   corporate: 'RESERVED',
   minimal:   'RESERVED',

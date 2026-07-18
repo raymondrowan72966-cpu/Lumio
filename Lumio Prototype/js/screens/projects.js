@@ -983,9 +983,9 @@ function openCreateNewModal() {
 /* ---------------- IMPORT CONTENT MODAL (Milestone 1) ---------------- */
 function openImportContentModal() {
   const FORMATS = [
-    { id: 'word',  icon: '📝', label: 'Word Document',  hint: 'Import text, headings, and lists from a .docx file', enabled: false },
-    { id: 'pdf',   icon: '📄', label: 'PDF Document',   hint: 'Extract content from a PDF file',                  enabled: false },
-    { id: 'pptx',  icon: '📊', label: 'PowerPoint',     hint: 'Convert slides into Lumio lessons (.pptx)',        enabled: false },
+    { id: 'word',  iconId: 'notes',         label: 'Word Document',  hint: 'Import text, headings, and lists from a .docx file', enabled: false },
+    { id: 'pdf',   iconId: 'file-document', label: 'PDF Document',   hint: 'Extract content from a PDF file',                  enabled: false },
+    { id: 'pptx',  iconId: 'cat-charts',   label: 'PowerPoint',     hint: 'Convert slides into Lumio lessons (.pptx)',        enabled: false },
   ];
 
   const overlay = el(`
@@ -1007,7 +1007,7 @@ function openImportContentModal() {
             style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
             aria-label="Import SCORM Package (.zip)">
             <div class="flex items-center gap-16">
-              <div style="font-size:28px; line-height:1;" aria-hidden="true">📦</div>
+              <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon('export-pack')}</div>
               <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:15px; color:var(--ink-900);">SCORM Package</div>
                 <div class="text-sm text-muted mt-4">SCORM 1.2 packages and compatible exports (.zip)</div>
@@ -1021,7 +1021,7 @@ function openImportContentModal() {
             <div class="card card-pad" role="listitem" aria-disabled="true"
               style="opacity:.5; cursor:not-allowed; user-select:none;">
               <div class="flex items-center gap-16">
-                <div style="font-size:28px; line-height:1;" aria-hidden="true">${f.icon}</div>
+                <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon(f.iconId)}</div>
                 <div style="flex:1; min-width:0;">
                   <div style="font-weight:700; font-size:15px; color:var(--ink-900);">${f.label}</div>
                   <div class="text-sm text-muted mt-4">${f.hint}</div>

@@ -1410,16 +1410,19 @@ button { font-family: var(--font-body); cursor: pointer; }
   background: var(--gradient-mesh);
 }
 
-/* Workspace-token-aware mesh — same layout as .mesh-bg, colours from --ws-* tokens */
+/* Workspace-token-aware mesh — same layout as .mesh-bg, colours from --ws-* tokens.
+   Uses CSS relative color syntax (oklch(from … l c h / alpha)) instead of
+   color-mix(…, transparent): the latter mixes toward rgba(0,0,0,0) in sRGB, darkening
+   the output; relative color syntax preserves the hue and only sets alpha. */
 .ws-mesh-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
   background:
-    radial-gradient(at 15% 20%, color-mix(in srgb, var(--ws-primary) 35%, transparent) 0px, transparent 50%),
-    radial-gradient(at 85% 10%, color-mix(in srgb, var(--ws-accent) 30%, transparent) 0px, transparent 50%),
-    radial-gradient(at 70% 80%, color-mix(in srgb, var(--ws-secondary) 25%, transparent) 0px, transparent 50%),
-    radial-gradient(at 10% 90%, color-mix(in srgb, var(--ws-accent) 25%, transparent) 0px, transparent 50%);
+    radial-gradient(at 15% 20%, oklch(from var(--ws-primary) l c h / 0.35) 0px, transparent 50%),
+    radial-gradient(at 85% 10%, oklch(from var(--ws-primary) l c h / 0.20) 0px, transparent 50%),
+    radial-gradient(at 70% 80%, oklch(from var(--ws-secondary) l c h / 0.25) 0px, transparent 50%),
+    radial-gradient(at 10% 90%, oklch(from var(--ws-accent) l c h / 0.25) 0px, transparent 50%);
   opacity: 0.9;
 }
 .aurora-panel {
