@@ -88,28 +88,28 @@ const LumioData = {
   // ============================================================
   academyPaths: [
     {
-      id: 'foundations', title: 'Foundations', icon: '🧭', color: 'var(--violet)', pill: 'pill-indigo',
+      id: 'foundations', title: 'Foundations', icon: '🧭', iconId: 'hub', color: 'var(--violet)', pill: 'pill-indigo',
       description: 'The big-picture ideas every instructional designer should know.',
       topics: [
-        { id: 'what-is-id', title: 'What is Instructional Design?', duration: '4 min read', icon: '🧭',
+        { id: 'what-is-id', title: 'What is Instructional Design?', duration: '4 min read', icon: '🧭', iconId: 'hub',
           summary: 'A friendly introduction to instructional design — what it is, why it matters, and how it differs from "just making slides."',
           body: `<p style="line-height:1.7;">Instructional design is the practice of creating learning experiences that help people gain specific knowledge or skills — efficiently, effectively, and enjoyably. It blends a bit of psychology, a bit of storytelling, and a bit of project management.</p>
                  <div class="card card-pad mt-16" style="background:var(--pastel-lavender); border:none;">
                    <p class="text-sm">Great instructional design starts with the <strong>learner's goal</strong>, not the content you already have.</p>
                  </div>` },
-        { id: 'addie', title: 'The ADDIE Model', duration: '5 min read', icon: '🔁',
+        { id: 'addie', title: 'The ADDIE Model', duration: '5 min read', icon: '🔁', iconId: 'restore',
           summary: 'Analyze, Design, Develop, Implement, Evaluate — the classic five-phase framework for building learning.',
           body: `<p style="line-height:1.7;">ADDIE breaks course development into five phases: <strong>Analyze</strong> the problem and audience, <strong>Design</strong> the learning plan, <strong>Develop</strong> the content, <strong>Implement</strong> it with learners, and <strong>Evaluate</strong> the results.</p>
                  <div class="card card-pad mt-16" style="background:var(--pastel-cyan); border:none;">
                    <p class="text-sm">Lumio's Course Wizard mirrors ADDIE — the early steps (audience, objectives) are Analyze &amp; Design; the AI Blueprint kicks off Develop.</p>
                  </div>` },
-        { id: 'sam', title: 'SAM (Successive Approximation Model)', duration: '4 min read', icon: '🔄',
+        { id: 'sam', title: 'SAM (Successive Approximation Model)', duration: '4 min read', icon: '🔄', iconId: 'replace-media',
           summary: 'A faster, iterative alternative to ADDIE built around quick prototypes and feedback loops.',
           body: `<p style="line-height:1.7;">SAM favors rapid, repeated cycles of <em>prototype → review → refine</em> instead of one long linear process. Build something small, get feedback early, and adjust before investing in a full course.</p>` },
-        { id: 'agile-ld', title: 'Agile Learning Design', duration: '5 min read', icon: '⚡',
+        { id: 'agile-ld', title: 'Agile Learning Design', duration: '5 min read', icon: '⚡', iconId: 'rocket',
           summary: 'Borrowing sprints, backlogs, and MVPs from software teams to ship learning faster.',
           body: `<p style="line-height:1.7;">Treat your course like a product: maintain a backlog of lessons, ship a minimum viable course, and improve it in sprints based on learner feedback and data.</p>` },
-        { id: 'adult-learning', title: 'Adult Learning Principles', duration: '6 min read', icon: '✨',
+        { id: 'adult-learning', title: 'Adult Learning Principles', duration: '6 min read', icon: '✨', iconId: 'lightbulb',
           summary: 'Understand andragogy — how adult learners differ from students, and what motivates them.',
           body: `<div class="card card-pad" style="background:var(--pastel-pink); border:none;">
                    <p class="text-sm">Adult learners want to know <strong>"what's in it for me?"</strong> Frame outcomes around real tasks they'll do, not abstract topics.</p>
@@ -117,17 +117,17 @@ const LumioData = {
       ],
     },
     {
-      id: 'objectives', title: 'Learning Objectives', icon: '🎯', color: 'var(--pillar-learn)', pill: 'pill-indigo',
+      id: 'objectives', title: 'Learning Objectives', icon: '🎯', iconId: 'target', color: 'var(--pillar-learn)', pill: 'pill-indigo',
       description: 'Set clear, measurable destinations for every course and lesson.',
       topics: [
-        { id: 'writing-objectives', title: 'Writing Measurable Learning Objectives', duration: '6 min read', icon: '🎯',
+        { id: 'writing-objectives', title: 'Writing Measurable Learning Objectives', duration: '6 min read', icon: '🎯', iconId: 'target',
           summary: 'Use Bloom’s Taxonomy to write objectives that are specific, observable, and easy to assess.',
           body: `<div class="card card-pad" style="background:var(--pastel-lavender); border:none;">
                    <p class="text-sm"><strong>Try this formula:</strong></p>
                    <p class="text-sm mt-8">"By the end of this lesson, learners will be able to <strong>[verb]</strong> [content] [condition]."</p>
                    <p class="text-sm text-muted mt-8">Example: "...will be able to <strong>identify</strong> the five steps of our return process when shown a customer scenario."</p>
                  </div>` },
-        { id: 'blooms-verbs', title: 'Bloom’s Taxonomy Verb Bank', duration: '2 min read', icon: '📖',
+        { id: 'blooms-verbs', title: "Bloom’s Taxonomy Verb Bank", duration: '2 min read', icon: '📖', iconId: 'notes',
           summary: 'A reference list of strong, measurable verbs for every level — from Remember to Create.',
           body: `<div class="card card-pad" style="background:var(--pastel-pink); border:none;">
                    <p class="text-sm"><strong>Remember:</strong> List, Recall, Identify, Name, Define<br/>
@@ -137,133 +137,133 @@ const LumioData = {
                    <strong>Evaluate:</strong> Justify, Critique, Assess, Recommend<br/>
                    <strong>Create:</strong> Design, Develop, Construct, Compose</p>
                  </div>` },
-        { id: 'constructive-alignment', title: 'Constructive Alignment 101', duration: '4 min read', icon: '🔗',
+        { id: 'constructive-alignment', title: 'Constructive Alignment 101', duration: '4 min read', icon: '🔗', iconId: 'share',
           summary: 'Make sure your objectives, content, and assessments all point in the same direction.',
           body: `<div class="card card-pad" style="background:var(--pastel-lavender); border:none;">
                    <p class="text-sm">Constructive alignment means your <strong>objectives</strong>, <strong>content</strong>, and <strong>assessments</strong> all point at the same outcome. If you assess something you never taught, learners will struggle — and it's not their fault.</p>
                  </div>` },
-        { id: 'avoiding-vague-verbs', title: 'Avoiding Vague Verbs', duration: '3 min read', icon: '🚫',
+        { id: 'avoiding-vague-verbs', title: 'Avoiding Vague Verbs', duration: '3 min read', icon: '🚫', iconId: 'remove',
           summary: 'Why words like "understand" and "know" make objectives hard to assess — and what to use instead.',
           body: `<p style="line-height:1.7;">Vague verbs like <em>understand</em>, <em>know</em>, <em>learn about</em>, <em>be familiar with</em>, and <em>appreciate</em> can't be observed or measured. Swap them for action verbs from Bloom's Taxonomy that describe something a learner can <em>do</em>.</p>` },
       ],
     },
     {
-      id: 'assessment', title: 'Assessment Design', icon: '✅', color: 'var(--pillar-success)', pill: 'pill-teal',
+      id: 'assessment', title: 'Assessment Design', icon: '✅', iconId: 'cat-knowledge-checks', color: 'var(--pillar-success)', pill: 'pill-teal',
       description: 'Check for understanding in ways that are fair, useful, and aligned to your goals.',
       topics: [
-        { id: 'course-vs-micro', title: 'Choosing Course vs. Microlearning', duration: '3 min read', icon: '⚖️',
+        { id: 'course-vs-micro', title: 'Choosing Course vs. Microlearning', duration: '3 min read', icon: '⚖️', iconId: 'duplicate',
           summary: 'A quick guide to picking the right format based on your goal, audience, and content volume.',
           body: `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
                    <p class="text-sm">Choose <strong>Course</strong> for multi-topic content that builds over 30+ minutes. Choose <strong>Microlearning</strong> for a single focused topic under 10 minutes.</p>
                  </div>` },
-        { id: 'kc-types', title: 'Types of Knowledge Checks', duration: '5 min read', icon: '❓',
+        { id: 'kc-types', title: 'Types of Knowledge Checks', duration: '5 min read', icon: '❓', iconId: 'cat-knowledge-checks',
           summary: 'Multiple choice, multiple response, matching, ordering, fill-the-gap — when to use each.',
           body: `<p style="line-height:1.7;">Match the question type to the skill: use <strong>Ordering</strong> for sequences/processes, <strong>Matching</strong> for terminology, <strong>Multiple Response</strong> when more than one answer is correct, and <strong>Fill the Gap</strong> for recall of exact terms.</p>` },
-        { id: 'aligning-assessments', title: 'Aligning Assessments to Objectives', duration: '4 min read', icon: '🔗',
+        { id: 'aligning-assessments', title: 'Aligning Assessments to Objectives', duration: '4 min read', icon: '🔗', iconId: 'share',
           summary: 'Every objective deserves at least one check — here\'s how to map them cleanly.',
           body: `<p style="line-height:1.7;">For every learning objective, ask: "How would a learner prove they can do this?" That answer is your assessment. Lumio's AI Blueprint maps each suggested knowledge check back to an objective automatically.</p>` },
-        { id: 'feedback-design', title: 'Designing Helpful Feedback', duration: '3 min read', icon: '💬',
+        { id: 'feedback-design', title: 'Designing Helpful Feedback', duration: '3 min read', icon: '💬', iconId: 'cat-statements',
           summary: 'Why "Incorrect, try again" isn\'t enough — and what to write instead.',
           body: `<p style="line-height:1.7;">Good feedback explains <em>why</em> an answer is right or wrong and points learners back to the relevant content — turning a quiz into one more learning moment.</p>` },
       ],
     },
     {
-      id: 'content', title: 'Content Design', icon: '🧩', color: 'var(--pillar-design)', pill: 'pill-orange',
+      id: 'content', title: 'Content Design', icon: '🧩', iconId: 'notes', color: 'var(--pillar-design)', pill: 'pill-orange',
       description: 'Structure and write content that\'s easy to follow and easy to remember.',
       topics: [
-        { id: 'chunking', title: 'Chunking Content for Retention', duration: '5 min read', icon: '🧩',
+        { id: 'chunking', title: 'Chunking Content for Retention', duration: '5 min read', icon: '🧩', iconId: 'cat-text',
           summary: 'Discover why breaking lessons into small, focused chunks improves how much learners actually remember.',
           body: `<div class="card card-pad" style="background:var(--pastel-cyan); border:none;">
                    <p class="text-sm">Aim for lessons of <strong>5–10 minutes</strong>. If a topic feels bigger than that, split it into two lessons or add a "Continue" divider to pace reveal.</p>
                  </div>` },
-        { id: 'cognitive-load', title: 'Cognitive Load Theory', duration: '5 min read', icon: '🧠',
+        { id: 'cognitive-load', title: 'Cognitive Load Theory', duration: '5 min read', icon: '🧠', iconId: 'lightbulb',
           summary: 'How to avoid overwhelming working memory — and design content that sticks.',
           body: `<p style="line-height:1.7;">Working memory can only hold a handful of new ideas at once. Reduce <em>extraneous</em> load (clutter, decoration) so learners can spend their mental effort on the concept itself.</p>` },
-        { id: 'storyboarding', title: 'Storyboarding Basics', duration: '6 min read', icon: '🗂️',
+        { id: 'storyboarding', title: 'Storyboarding Basics', duration: '6 min read', icon: '🗂️', iconId: 'notes',
           summary: 'Plan your lesson flow before you build — block by block.',
           body: `<p style="line-height:1.7;">A storyboard is a rough sketch of every screen: what's shown, what's said, and what the learner does. Sketching this out before opening the Lesson Builder saves rework later.</p>` },
-        { id: 'writing-for-elearning', title: 'Writing for eLearning', duration: '4 min read', icon: '✍️',
+        { id: 'writing-for-elearning', title: 'Writing for eLearning', duration: '4 min read', icon: '✍️', iconId: 'edit',
           summary: 'Short sentences, active voice, and a conversational tone go a long way.',
           body: `<p style="line-height:1.7;">Write the way you'd explain something to a colleague — short sentences, active voice, and a friendly tone. Cut any sentence that doesn't help the learner act.</p>` },
       ],
     },
     {
-      id: 'engagement', title: 'Engagement', icon: '🌟', color: 'var(--pillar-inspire)', pill: 'pill-magenta',
+      id: 'engagement', title: 'Engagement', icon: '🌟', iconId: 'celebration', color: 'var(--pillar-inspire)', pill: 'pill-magenta',
       description: 'Keep learners curious, motivated, and coming back.',
       topics: [
-        { id: 'scenario-based', title: 'Scenario-Based Learning', duration: '6 min read', icon: '🌳',
+        { id: 'scenario-based', title: 'Scenario-Based Learning', duration: '6 min read', icon: '🌳', iconId: 'block-scenario',
           summary: 'Put learners in realistic situations where their choices have consequences.',
           body: `<p style="line-height:1.7;">Scenarios let learners practice judgment in a safe space. Branch the story based on choices, and use the Scenario block to map decisions to outcomes.</p>` },
-        { id: 'microlearning-strategies', title: 'Microlearning Strategies', duration: '4 min read', icon: '⏱️',
+        { id: 'microlearning-strategies', title: 'Microlearning Strategies', duration: '4 min read', icon: '⏱️', iconId: 'recent',
           summary: 'Designing short, focused experiences that fit into a learner\'s day.',
           body: `<p style="line-height:1.7;">Microlearning works best for a single objective, a single skill, or a quick refresher — think "just enough, just in time."</p>` },
-        { id: 'gamification', title: 'Gamification Basics', duration: '5 min read', icon: '🎮',
+        { id: 'gamification', title: 'Gamification Basics', duration: '5 min read', icon: '🎮', iconId: 'celebration',
           summary: 'Points, progress, and play — used thoughtfully, not just for decoration.',
           body: `<p style="line-height:1.7;">Gamification works when it reinforces the learning goal — progress bars, flashcards, and friendly challenges all add motivation without distracting from the content.</p>` },
-        { id: 'interactive-elements', title: 'Choosing Interactive Elements', duration: '4 min read', icon: '🧩',
+        { id: 'interactive-elements', title: 'Choosing Interactive Elements', duration: '4 min read', icon: '🧩', iconId: 'cat-interactive',
           summary: 'Accordions, tabs, flashcards, processes — match the interaction to the content.',
           body: `<p style="line-height:1.7;">Use <strong>Accordions/Tabs</strong> to let learners explore optional depth, <strong>Process</strong> blocks for sequences, and <strong>Flashcards</strong> for vocabulary or quick recall practice.</p>` },
       ],
     },
     {
-      id: 'visual-design', title: 'Visual Design', icon: '🎨', color: 'var(--orange)', pill: 'pill-orange',
+      id: 'visual-design', title: 'Visual Design', icon: '🎨', iconId: 'cat-images', color: 'var(--orange)', pill: 'pill-orange',
       description: 'Make your courses beautiful, on-brand, and easy on the eyes.',
       topics: [
-        { id: 'visual-hierarchy', title: 'Visual Hierarchy', duration: '4 min read', icon: '🪜',
+        { id: 'visual-hierarchy', title: 'Visual Hierarchy', duration: '4 min read', icon: '🪜', iconId: 'arrow-up',
           summary: 'Guide the eye with size, weight, color, and spacing.',
           body: `<p style="line-height:1.7;">The most important thing on a screen should look the most important. Use heading size, color, and whitespace to create a clear path for the eye.</p>` },
-        { id: 'color-typography', title: 'Color & Typography', duration: '5 min read', icon: '🎨',
+        { id: 'color-typography', title: 'Color & Typography', duration: '5 min read', icon: '🎨', iconId: 'cat-images',
           summary: 'Pick palettes and fonts that feel cohesive — and how Lumio\'s Theme Designer helps.',
           body: `<p style="line-height:1.7;">Pick one primary color, one accent, and a neutral background. Pair a distinctive display font for headings with a highly readable body font — exactly what Lumio's Theme Designer sets up for you.</p>` },
-        { id: 'using-imagery', title: 'Using Imagery Effectively', duration: '4 min read', icon: '🖼️',
+        { id: 'using-imagery', title: 'Using Imagery Effectively', duration: '4 min read', icon: '🖼️', iconId: 'image-placeholder',
           summary: 'Choosing images that support the message instead of just filling space.',
           body: `<p style="line-height:1.7;">Every image should answer "what is this helping the learner understand?" If it's purely decorative, consider a simpler background or color block instead.</p>` },
-        { id: 'branding-consistency', title: 'Branding & Consistency', duration: '3 min read', icon: '🏷️',
+        { id: 'branding-consistency', title: 'Branding & Consistency', duration: '3 min read', icon: '🏷️', iconId: 'tag',
           summary: 'Why a consistent theme across lessons builds trust and polish.',
           body: `<p style="line-height:1.7;">Apply your theme — colors, fonts, button styles — consistently across the landing page and every lesson so the course feels like one cohesive product.</p>` },
       ],
     },
     {
-      id: 'multimedia', title: 'Multimedia Design', icon: '🎬', color: 'var(--indigo)', pill: 'pill-indigo',
+      id: 'multimedia', title: 'Multimedia Design', icon: '🎬', iconId: 'cat-multimedia', color: 'var(--indigo)', pill: 'pill-indigo',
       description: 'Use audio, video, and graphics with purpose and accessibility in mind.',
       topics: [
-        { id: 'audio-video-best-practices', title: 'Audio & Video Best Practices', duration: '5 min read', icon: '🎬',
+        { id: 'audio-video-best-practices', title: 'Audio & Video Best Practices', duration: '5 min read', icon: '🎬', iconId: 'cat-multimedia',
           summary: 'Length, captions, and when video actually beats text.',
           body: `<p style="line-height:1.7;">Keep videos short and purposeful, always provide captions, and avoid autoplay with sound — let the learner choose when to engage.</p>` },
-        { id: 'designing-graphics', title: 'Designing Effective Graphics', duration: '4 min read', icon: '📊',
+        { id: 'designing-graphics', title: 'Designing Effective Graphics', duration: '4 min read', icon: '📊', iconId: 'cat-charts',
           summary: 'Charts, diagrams, and labelled graphics that clarify rather than decorate.',
           body: `<p style="line-height:1.7;">A diagram should reduce text, not add to it. Use labelled graphics to connect parts of an image directly to explanations.</p>` },
-        { id: 'multimedia-accessibility', title: 'Accessibility for Multimedia', duration: '5 min read', icon: '♿',
+        { id: 'multimedia-accessibility', title: 'Accessibility for Multimedia', duration: '5 min read', icon: '♿', iconId: 'info',
           summary: 'Captions, transcripts, alt text, and color contrast — designing for everyone.',
           body: `<p style="line-height:1.7;">Add alt text to every image, captions to every video, and transcripts for audio. Check color contrast so text stays readable for learners with low vision.</p>` },
       ],
     },
     {
-      id: 'ai-learning-design', title: 'AI for Learning Design', icon: '🤖', color: 'var(--pillar-ai)', pill: 'pill-cyan',
+      id: 'ai-learning-design', title: 'AI for Learning Design', icon: '🤖', iconId: 'ai', color: 'var(--pillar-ai)', pill: 'pill-cyan',
       description: 'Use Lumio\'s AI as a creative partner — without losing your voice.',
       topics: [
-        { id: 'ai-drafting', title: 'Using AI to Draft Content', duration: '4 min read', icon: '✨',
+        { id: 'ai-drafting', title: 'Using AI to Draft Content', duration: '4 min read', icon: '✨', iconId: 'ai',
           summary: 'Letting AI generate a first pass, then making it your own.',
           body: `<p style="line-height:1.7;">AI is great at first drafts — outlines, descriptions, objectives. Treat its output as a starting point: review, simplify, and add your own examples.</p>` },
-        { id: 'ai-assessments', title: 'AI-Assisted Assessment Writing', duration: '4 min read', icon: '✅',
+        { id: 'ai-assessments', title: 'AI-Assisted Assessment Writing', duration: '4 min read', icon: '✅', iconId: 'cat-knowledge-checks',
           summary: 'Generating knowledge checks that are aligned and not too easy.',
           body: `<p style="line-height:1.7;">Ask AI to generate a knowledge check from your lesson content, then check that the distractors (wrong answers) are plausible — not obviously silly.</p>` },
-        { id: 'reviewing-ai', title: 'Reviewing AI Suggestions Critically', duration: '4 min read', icon: '🔍',
+        { id: 'reviewing-ai', title: 'Reviewing AI Suggestions Critically', duration: '4 min read', icon: '🔍', iconId: 'search',
           summary: 'Spotting generic, inaccurate, or off-tone AI output before it ships.',
           body: `<p style="line-height:1.7;">Always fact-check AI-generated content against your source material, and rewrite anything that sounds generic so it matches your organization's voice.</p>` },
       ],
     },
     {
-      id: 'evaluation', title: 'Learning Evaluation', icon: '📈', color: 'var(--teal)', pill: 'pill-teal',
+      id: 'evaluation', title: 'Learning Evaluation', icon: '📈', iconId: 'block-chart-line', color: 'var(--teal)', pill: 'pill-teal',
       description: 'Find out if your course actually worked — and improve it.',
       topics: [
-        { id: 'kirkpatrick', title: 'Kirkpatrick\'s Four Levels', duration: '5 min read', icon: '📈',
+        { id: 'kirkpatrick', title: 'Kirkpatrick\'s Four Levels', duration: '5 min read', icon: '📈', iconId: 'block-chart-line',
           summary: 'Reaction, Learning, Behavior, Results — the classic evaluation framework.',
           body: `<p style="line-height:1.7;">Level 1 (Reaction) asks "did they like it?" Level 4 (Results) asks "did it move the business needle?" Most teams start at Level 1-2 and grow from there.</p>` },
-        { id: 'gathering-feedback', title: 'Gathering Learner Feedback', duration: '3 min read', icon: '🗣️',
+        { id: 'gathering-feedback', title: 'Gathering Learner Feedback', duration: '3 min read', icon: '🗣️', iconId: 'team',
           summary: 'Quick surveys and signals that tell you what to fix next.',
           body: `<p style="line-height:1.7;">A single end-of-course question — "What's one thing that was unclear?" — often surfaces more useful feedback than a 10-question survey.</p>` },
-        { id: 'iterating-on-data', title: 'Iterating Based on Data', duration: '4 min read', icon: '🔁',
+        { id: 'iterating-on-data', title: 'Iterating Based on Data', duration: '4 min read', icon: '🔁', iconId: 'restore',
           summary: 'Using completion rates and quiz scores to find weak spots.',
           body: `<p style="line-height:1.7;">If most learners miss the same knowledge check question, the issue is usually the content before it, not the learner. Revisit that lesson first.</p>` },
       ],

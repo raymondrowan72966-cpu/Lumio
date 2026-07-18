@@ -3,12 +3,12 @@
    ============================================================ */
 
 const WELCOME_TOUR_STEPS = [
-  { icon: '🗂️', title: 'Projects Dashboard', body: 'Your creative workspace — organize courses and microlearning into folders, see status and progress at a glance.' },
-  { icon: '🧙', title: 'Course Builder', body: 'A guided wizard takes you from idea to AI-generated course blueprint in minutes.' },
-  { icon: '🎨', title: 'Theme Designer', body: 'Pick colors, fonts, and styles for your course — and preview them live before you publish.' },
-  { icon: '🧩', title: 'Lesson Builder', body: 'Drag in blocks — text, images, video, interactions, knowledge checks — and arrange them on the canvas.' },
-  { icon: '✨', title: 'AI Assistant', body: 'Your built-in creative partner — drafts content, suggests blocks, and gives contextual coaching as you build.' },
-  { icon: '🚀', title: 'Publishing', body: 'When you\'re ready, publish your course and share it with learners — or keep refining anytime.' },
+  { iconId: 'projects', title: 'Projects Dashboard', body: 'Your creative workspace — organize courses and microlearning into folders, see status and progress at a glance.' },
+  { iconId: 'rocket', title: 'Course Builder', body: 'A guided wizard takes you from idea to AI-generated course blueprint in minutes.' },
+  { iconId: 'cat-images', title: 'Theme Designer', body: 'Pick colors, fonts, and styles for your course — and preview them live before you publish.' },
+  { iconId: 'cat-interactive', title: 'Lesson Builder', body: 'Drag in blocks — text, images, video, interactions, knowledge checks — and arrange them on the canvas.' },
+  { iconId: 'ai', title: 'AI Assistant', body: 'Your built-in creative partner — drafts content, suggests blocks, and gives contextual coaching as you build.' },
+  { iconId: 'publish', title: 'Publishing', body: 'When you\'re ready, publish your course and share it with learners — or keep refining anytime.' },
 ];
 
 function renderWelcome() {
@@ -37,43 +37,43 @@ function renderWelcome() {
 
           <div class="choice-card" id="card-new-to-id" style="background:var(--ws-surface); border-color:var(--ws-border);">
             <div class="choice-glow" style="background:var(--ws-primary);"></div>
-            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-primary), var(--ws-secondary));">🧠</div>
+            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-primary), var(--ws-secondary));">${platformIcon('lightbulb')}</div>
             <h3 style="font-size:17px; margin-bottom:8px; color:var(--ws-text);">New to Instructional Design?</h3>
             <p class="text-sm text-muted mb-16">
               Start with the Instructional Design Academy — bite-sized lessons on the concepts every great course uses.
             </p>
             <ul class="text-sm text-muted" style="list-style:none; padding:0; margin:0 0 20px; display:grid; gap:4px;">
-              <li>🧭 What is Instructional Design? · ADDIE · SAM</li>
-              <li>🎯 Bloom's Taxonomy · Adult Learning Principles</li>
-              <li>🧩 Cognitive Load · Scenario-Based Learning</li>
-              <li>♿ Storyboarding · Microlearning · Accessibility</li>
+              <li>${platformIcon('hub')} What is Instructional Design? · ADDIE · SAM</li>
+              <li>${platformIcon('target')} Bloom's Taxonomy · Adult Learning Principles</li>
+              <li>${platformIcon('cat-interactive')} Cognitive Load · Scenario-Based Learning</li>
+              <li>${platformIcon('notes')} Storyboarding · Microlearning · Accessibility</li>
             </ul>
             <button class="btn btn-primary w-full" id="start-learning-btn">Start Learning →</button>
           </div>
 
           <div class="choice-card" id="card-tour" style="background:var(--ws-surface); border-color:var(--ws-border);">
             <div class="choice-glow" style="background:var(--ws-accent);"></div>
-            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-accent), var(--ws-secondary));">🧭</div>
+            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-accent), var(--ws-secondary));">${platformIcon('target')}</div>
             <h3 style="font-size:17px; margin-bottom:8px; color:var(--ws-text);">Take a Quick Tour</h3>
             <p class="text-sm text-muted mb-16">
               See how Lumio fits together in under a minute.
             </p>
             <ul class="text-sm text-muted" style="list-style:none; padding:0; margin:0 0 20px; display:grid; gap:4px;">
-              ${WELCOME_TOUR_STEPS.map(s => `<li>${s.icon} ${s.title}</li>`).join('')}
+              ${WELCOME_TOUR_STEPS.map(s => `<li>${platformIcon(s.iconId)} ${s.title}</li>`).join('')}
             </ul>
             <button class="btn btn-secondary w-full" id="start-tour-btn">Start Tour →</button>
           </div>
 
           <div class="choice-card" id="card-create-course" style="background:var(--ws-surface); border-color:var(--ws-border);">
             <div class="choice-glow" style="background:var(--ws-secondary);"></div>
-            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-secondary), var(--ws-accent));">🚀</div>
+            <div class="choice-icon" style="background:linear-gradient(135deg, var(--ws-secondary), var(--ws-accent));">${platformIcon('rocket')}</div>
             <h3 style="font-size:17px; margin-bottom:8px; color:var(--ws-text);">Build Your First Course</h3>
             <p class="text-sm text-muted mb-16">
               Jump straight into the Course Wizard — Lumio's AI will help shape your idea into a full blueprint.
             </p>
             <div class="card card-pad" style="background:var(--ws-surface-alt); border:none; margin-bottom:20px;">
               <div class="flex items-center gap-12">
-                <div style="font-size:22px;">✨</div>
+                <div style="font-size:22px;">${platformIcon('ai')}</div>
                 <p class="text-sm" style="margin:0;">Tell us your topic and audience — we'll suggest objectives, lessons, and a theme.</p>
               </div>
             </div>
@@ -111,7 +111,7 @@ function openWelcomeTour() {
       <div class="flex gap-6" style="margin-bottom:32px;">
         ${WELCOME_TOUR_STEPS.map((_, i) => `<div style="height:4px; flex:1; border-radius:var(--r-pill); background:${i <= step ? 'var(--gradient-primary)' : 'var(--border)'};"></div>`).join('')}
       </div>
-      <div class="choice-icon" style="background:var(--gradient-aurora);">${s.icon}</div>
+      <div class="choice-icon" style="background:var(--gradient-aurora);">${platformIcon(s.iconId)}</div>
       <h2 style="font-size:20px; margin-top:24px;">${s.title}</h2>
       <p class="text-sm text-muted mt-16" style="line-height:1.7; margin-bottom:36px;">${s.body}</p>
       <div class="flex justify-between items-center">

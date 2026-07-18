@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    LESSON BUILDER
    ============================================================ */
 
@@ -185,7 +185,7 @@ function renderBlockLibrary(lesson, course) {
   if (BuilderUI.leftCollapsed) {
     return `
       <div style="width:48px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
-        <button class="btn-icon" id="expand-library" title="Expand library">${platformIcon('expand-right')}</button>
+        <button class="btn-icon" id="expand-library" title="Expand library">${platformIcon('chevron-right')}</button>
       </div>
     `;
   }
@@ -199,7 +199,7 @@ function renderBlockLibrary(lesson, course) {
           <span class="icon">${platformIcon('search')}</span>
           <input class="input" id="block-search" placeholder="Search blocks..." />
         </div>
-        <button class="btn-icon" id="collapse-library" title="Collapse">${platformIcon('collapse-left')}</button>
+        <button class="btn-icon" id="collapse-library" title="Collapse">${platformIcon('chevron-left')}</button>
       </div>
       <div style="flex:1; overflow-y:auto; padding:8px 10px;" id="block-library-scroll">
         <div class="block-category" data-cat="Recommended">
@@ -3042,7 +3042,7 @@ function renderRightPanel(blocks, course, lesson) {
   if (BuilderUI.rightCollapsed) {
     return `
       <div style="width:48px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
-        <button class="btn-icon" id="expand-right" title="Expand panel">${platformIcon('collapse-left')}</button>
+        <button class="btn-icon" id="expand-right" title="Expand panel">${platformIcon('chevron-left')}</button>
       </div>
     `;
   }
@@ -3054,7 +3054,7 @@ function renderRightPanel(blocks, course, lesson) {
       <div style="width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
         <div class="flex items-center justify-between">
           <h3 class="text-sm" style="font-weight:700;">Lesson Insights</h3>
-          <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('expand-right')}</button>
+          <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('chevron-right')}</button>
         </div>
         <label class="flex items-center gap-8 text-sm mt-12" style="cursor:pointer;">
           <input type="checkbox" id="toggle-insights" ${BuilderUI.showInsights ? 'checked' : ''}/> Show Lesson Insights
@@ -3079,7 +3079,7 @@ function renderRightPanel(blocks, course, lesson) {
           <div class="tab ${BuilderUI.rightTab==='design'?'active':''}" data-rtab="design">Design</div>
           <div class="tab ${BuilderUI.rightTab==='settings'?'active':''}" data-rtab="settings">Settings</div>
         </div>
-        <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('expand-right')}</button>
+        <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('chevron-right')}</button>
       </div>
       <div style="padding:18px; flex:1; overflow-y:auto;" id="right-panel-scroll">
         ${renderRightTabContent(block, BuilderUI.selected, course)}
@@ -8339,3 +8339,4 @@ function bindDragAndDrop(lesson, blocks) {
     });
   }
 }
+

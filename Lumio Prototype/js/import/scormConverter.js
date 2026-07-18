@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SCORM CONVERTER — Import Engine Milestone 5
    Executes the approved Conversion Plan from M4.
    Produces a complete Lumio Course Model in memory only.
@@ -390,8 +390,8 @@ const ScormConverter = (() => {
           <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${validation.valid ? '#92400e' : '#7f1d1d'};margin-bottom:10px;">
             Validation ${validation.valid ? 'Warnings' : 'Errors'}
           </div>
-          ${validation.errors.map(e => `<p style="font-size:12px;color:var(--ink-800);margin:3px 0;">⛔ ${_esc(e)}</p>`).join('')}
-          ${validation.warnings.map(w => `<p style="font-size:12px;color:var(--ink-700);margin:3px 0;">⚠ ${_esc(w)}</p>`).join('')}
+          ${validation.errors.map(e => `<p style="font-size:12px;color:var(--ink-800);margin:3px 0;">${platformIcon('error')} ${_esc(e)}</p>`).join('')}
+          ${validation.warnings.map(w => `<p style="font-size:12px;color:var(--ink-700);margin:3px 0;">${platformIcon('warning')} ${_esc(w)}</p>`).join('')}
         </div>`
       : '';
 
@@ -521,7 +521,7 @@ const ScormConverter = (() => {
       <div class="overlay" role="dialog" aria-modal="true" aria-label="Conversion Error">
         <div class="modal" style="width:480px;max-width:94vw;padding:36px;">
           <div style="text-align:center;margin-bottom:20px;">
-            <div style="font-size:40px;line-height:1;margin-bottom:12px;">⛔</div>
+            <div style="font-size:40px;line-height:1;margin-bottom:12px;">${platformIcon('error')}</div>
             <h2 style="font-size:18px;color:var(--ink-900);">Conversion Failed</h2>
           </div>
           <div style="padding:14px;border-radius:var(--r-md);background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.18);margin-bottom:24px;">
@@ -580,3 +580,4 @@ const ScormConverter = (() => {
   return { convert };
 
 })();
+

@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    WORKSPACE SETTINGS (Workspace Owners only)
    Administrative area: workspace user management (roles,
    status, invitations) and read-only system information.
@@ -144,8 +144,8 @@ function bindWorkspaceReviewsTab() {
     const comment = await promptModal('Add an optional comment for the project creator', '');
     if (comment === null) return; // cancelled
     const result = transitionProjectStatus(p, 'approve', comment);
-    if (!result.ok) { toast(result.reason, '⚠️'); return; }
-    toast(`"${projectDisplayTitle(p)}" approved`, '✅');
+    if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
+    toast(`"${projectDisplayTitle(p)}" approved`, platformIcon('success'));
     renderWorkspaceSettingsTab();
   }));
   host.querySelectorAll('[data-review-reject]').forEach(btn => btn.addEventListener('click', async () => {
@@ -154,11 +154,11 @@ function bindWorkspaceReviewsTab() {
     while (comment === null || !comment.trim()) {
       comment = await promptModal('A comment is required when rejecting a submission', '');
       if (comment === null) return; // cancelled
-      if (!comment.trim()) toast('A comment is required to reject a submission.', '⚠️');
+      if (!comment.trim()) toast('A comment is required to reject a submission.', platformIcon('warning'));
     }
     const result = transitionProjectStatus(p, 'reject', comment);
-    if (!result.ok) { toast(result.reason, '⚠️'); return; }
-    toast(`"${projectDisplayTitle(p)}" rejected`, '↩️');
+    if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
+    toast(`"${projectDisplayTitle(p)}" rejected`, platformIcon('restore'));
     renderWorkspaceSettingsTab();
   }));
 }
@@ -1600,7 +1600,7 @@ function bindWorkspaceUsersTab() {
 
       if (user.role === ROLE_WORKSPACE_OWNER && newRole === ROLE_ADMINISTRATOR && workspaceOwnerCount() <= 1) {
         sel.value = user.role;
-        toast('At least one Workspace Owner is required. Promote another user before changing this role.', '⚠️');
+        toast('At least one Workspace Owner is required. Promote another user before changing this role.', platformIcon('warning'));
         return;
       }
 
@@ -1628,11 +1628,11 @@ function bindWorkspaceUsersTab() {
 
       if (user.status === 'active') {
         if (isSelf) {
-          toast('You cannot disable your own account.', '⚠️');
+          toast('You cannot disable your own account.', platformIcon('warning'));
           return;
         }
         if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-          toast('At least one Workspace Owner is required. You cannot disable the only remaining Workspace Owner.', '⚠️');
+          toast('At least one Workspace Owner is required. You cannot disable the only remaining Workspace Owner.', platformIcon('warning'));
           return;
         }
       }
@@ -1652,14 +1652,14 @@ function bindWorkspaceUsersTab() {
 
       if (isSelf) {
         if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-          toast('You are the only Workspace Owner — at least one Workspace Owner is required.', '⚠️');
+          toast('You are the only Workspace Owner — at least one Workspace Owner is required.', platformIcon('warning'));
         } else {
-          toast('You cannot remove your own account.', '⚠️');
+          toast('You cannot remove your own account.', platformIcon('warning'));
         }
         return;
       }
       if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-        toast('At least one Workspace Owner is required. You cannot remove the only remaining Workspace Owner.', '⚠️');
+        toast('At least one Workspace Owner is required. You cannot remove the only remaining Workspace Owner.', platformIcon('warning'));
         return;
       }
 
@@ -1670,7 +1670,7 @@ function bindWorkspaceUsersTab() {
       // workspace," never "delete the account."
       const ws = getCurrentWorkspace();
       if (ws) LumioState.workspaceMemberships = LumioState.workspaceMemberships.filter(m => !(m.userId === id && m.workspaceId === ws.id));
-      toast(`Removed ${user.firstName} ${user.lastName}`, '🗑️');
+      toast(`Removed ${user.firstName} ${user.lastName}`, platformIcon('delete'));
       renderWorkspaceSettings();
       scheduleLumioSave();
     });
@@ -1912,3 +1912,4 @@ function workspaceSystemTab() {
     </div>
   `;
 }
+

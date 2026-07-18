@@ -117,7 +117,7 @@ function pathCard(path) {
   return `
     <div class="card card-premium card-interactive card-pad path-card" data-id="${path.id}" style="border-top:4px solid ${path.color};">
       <div class="flex justify-between items-start mb-16">
-        <div style="font-size:28px;">${path.icon}</div>
+        <div style="font-size:28px;">${platformIcon(path.iconId || 'hub')}</div>
         <span class="pill ${path.pill}">${path.topics.length} topics</span>
       </div>
       <h3 style="font-size:15px; margin-bottom:8px;">${path.title}</h3>
@@ -132,7 +132,7 @@ function renderAcademyPath(pathId) {
     <header class="app-topbar">
       <div>
         <button class="btn btn-ghost btn-sm mb-8" id="back-to-academy">${platformIcon('back')} All Learning Paths</button>
-        <h2 style="font-size:20px;">${path.icon} ${path.title}</h2>
+        <h2 style="font-size:20px;">${platformIcon(path.iconId || 'hub')} ${path.title}</h2>
         <p class="text-sm text-muted">${path.description}</p>
       </div>
     </header>
@@ -166,12 +166,12 @@ function topicCard(topic, path) {
   return `
     <div class="card card-premium card-interactive card-pad topic-card" data-id="${topic.id}" style="border-top:4px solid ${path.color};">
       <div class="flex justify-between items-start mb-16">
-        <div style="font-size:28px;">${topic.icon}</div>
+        <div style="font-size:28px;">${platformIcon(topic.iconId || 'notes')}</div>
         <span class="pill ${path.pill}">${path.title}</span>
       </div>
       <h3 style="font-size:15px; margin-bottom:8px;">${topic.title}</h3>
       <p class="text-sm text-muted">${topic.summary}</p>
-      <p class="text-sm mt-16" style="color:var(--ink-400);">📖 ${topic.duration}</p>
+      <p class="text-sm mt-16" style="color:var(--ink-400);">${platformIcon('notes')} ${topic.duration}</p>
     </div>
   `;
 }
@@ -181,13 +181,13 @@ function showAcademyTopic(topic, path) {
     <div class="overlay">
       <div class="modal" style="width:560px; padding:32px;">
         <div class="flex items-center gap-12 mb-16">
-          <div style="font-size:32px;">${topic.icon}</div>
+          <div style="font-size:32px;">${platformIcon(topic.iconId || 'notes')}</div>
           <div>
             <span class="pill ${path.pill}">${path.title}</span>
             <h2 style="font-size:22px; margin-top:6px;">${topic.title}</h2>
           </div>
         </div>
-        <p class="text-sm text-muted mb-16">📖 ${topic.duration}</p>
+        <p class="text-sm text-muted mb-16">${platformIcon('notes')} ${topic.duration}</p>
         <p style="line-height:1.7;">${topic.summary}</p>
 
         <div class="mt-16">${topic.body}</div>

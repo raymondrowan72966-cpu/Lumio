@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    PROJECTS PAGE
    ============================================================ */
 
@@ -83,7 +83,7 @@ function renderProjects() {
           <option ${LumioState.typeFilter==='Course'?'selected':''}>Course</option>
           <option ${LumioState.typeFilter==='Microlearning'?'selected':''}>Microlearning</option>
         </select>
-        <button class="btn btn-ghost" id="import-project-btn" title="Import .lumio backup file">⬆ Import</button>
+        <button class="btn btn-ghost" id="import-project-btn" title="Import .lumio backup file">${platformIcon('upload-media')} Import</button>
         <input type="file" id="import-file-input" accept=".lumio" style="display:none;">
         <button class="btn btn-primary" id="create-new-btn">+ Create New</button>
       </div>
@@ -172,7 +172,7 @@ function teamProjectsChip() {
   const active = LumioState.currentFolder === '__team__';
   return `
     <div class="pill" style="background:${active ? 'var(--ws-primary)' : 'var(--surface-0)'}; border:1px solid ${active ? 'var(--ws-primary)' : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="__team__">
-      <span style="font-size:14px;">👥</span>
+      <span style="font-size:14px;">${platformIcon('team')}</span>
       <span style="color:${active ? '#fff' : 'var(--ink-900)'}; font-weight:600;">Team Projects</span>
       <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'};">${count}</span>
     </div>
@@ -189,7 +189,7 @@ function folderChip(f) {
       <span style="width:8px; height:8px; border-radius:50%; background:${active ? '#fff' : colorVar}; display:inline-block;"></span>
       <span style="color:${active ? '#fff' : 'var(--ink-900)'}; font-weight:600;">${f.name}</span>
       <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'};">${count}</span>
-      <span class="folder-menu-btn" data-folder-menu="${f.id}" style="margin-left:4px; color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'}; padding:0 2px;">⋯</span>
+      <span class="folder-menu-btn" data-folder-menu="${f.id}" style="margin-left:4px; color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'}; padding:0 2px;">${platformIcon('more-options')}</span>
     </div>
   `;
 }
@@ -203,9 +203,9 @@ function projectCard(p) {
         ${thumb.heroSrc ? '' : '<div class="mesh-bg" style="opacity:0.35;"></div>'}
         <span class="pill ${TYPE_BADGE[p.type]}" style="position:absolute; top:10px; left:10px; z-index:1;">${p.type}</span>
         <span class="pill ${STATUS_BADGE[p.status]}" style="position:absolute; top:10px; right:10px; z-index:1;">${PROJECT_STATUS_LABELS[p.status] || p.status}</span>
-        ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1;">${p.type === 'Course' ? '📘' : '⚡'}</span>`}
+        ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1;">${p.type === 'Course' ? platformIcon('hub') : platformIcon('rocket')}</span>`}
         <button class="btn-icon dup-icon" data-dup="${p.id}" title="Duplicate"
-          style="position:absolute; bottom:10px; right:10px; opacity:0; transition:opacity .15s; background:rgba(255,255,255,0.9); z-index:1;">⧉</button>
+          style="position:absolute; bottom:10px; right:10px; opacity:0; transition:opacity .15s; background:rgba(255,255,255,0.9); z-index:1;">${platformIcon('duplicate')}</button>
       </div>
       <div style="padding:14px 16px;">
         <div class="flex justify-between items-start gap-8">
@@ -213,7 +213,7 @@ function projectCard(p) {
             <div style="font-size:14px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
             <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
           </div>
-          <button class="btn-icon" data-menu="${p.id}" title="More">⋯</button>
+          <button class="btn-icon" data-menu="${p.id}" title="More">${platformIcon('more-options')}</button>
         </div>
         <div class="mt-16" style="display:flex; align-items:center; gap:8px;">
           <span class="proj-lang-badge" title="Course language">${_courseLangName(p)}</span>
@@ -326,7 +326,7 @@ function trashCard(p) {
         ${thumb.img}
         ${thumb.heroSrc ? '' : '<div class="mesh-bg" style="opacity:0.35;"></div>'}
         <span class="pill ${TYPE_BADGE[p.type]}" style="position:absolute; top:10px; left:10px; z-index:1;">${p.type}</span>
-        ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1; display:flex; align-items:center; justify-content:center; height:100%;">${p.type === 'Course' ? '📘' : '⚡'}</span>`}
+        ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1; display:flex; align-items:center; justify-content:center; height:100%;">${p.type === 'Course' ? platformIcon('hub') : platformIcon('rocket')}</span>`}
       </div>
       <div style="padding:14px 16px;">
         <div style="font-size:14px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
@@ -373,7 +373,7 @@ function restoreProject(id) {
   p.deleted = false;
   p.deletedAt = null;
   renderTrash();
-  toast(`Restored "${projectDisplayTitle(p)}"`, '↩️');
+  toast(`Restored "${projectDisplayTitle(p)}"`, platformIcon('restore'));
 }
 
 function confirmDeleteForever(id) {
@@ -397,7 +397,7 @@ function confirmDeleteForever(id) {
     deleteProjectForever(id);
     overlay.remove();
     renderTrash();
-    toast(`"${projectDisplayTitle(p)}" permanently deleted`, '🗑️');
+    toast(`"${projectDisplayTitle(p)}" permanently deleted`, platformIcon('delete'));
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
@@ -485,7 +485,7 @@ async function openProject(id) {
   if (!p) return;
   p.lastAccessed = Date.now();
   if (p.type === 'Microlearning') {
-    toast('Microlearning editor uses the same Builder — opening course view for this prototype', '⚡');
+    toast('Microlearning editor uses the same Builder — opening course view for this prototype', platformIcon('rocket'));
   }
   // Cloud-backed project: always fetch course+lessons from D1 so the editor
   // never renders stale localStorage data. D1 is the single source of truth
@@ -609,13 +609,13 @@ function openProjectMenu(btn, id) {
         while (comment === null || !comment.trim()) {
           comment = await promptModal('A comment is required when rejecting a submission', '');
           if (comment === null) return; // cancelled
-          if (!comment.trim()) toast('A comment is required to reject a submission.', '⚠️');
+          if (!comment.trim()) toast('A comment is required to reject a submission.', platformIcon('warning'));
         }
       }
       const result = transitionProjectStatus(p, action, comment);
-      if (!result.ok) { if (result.modal) { await alertModal(result.reason); } else { toast(result.reason, '⚠️'); } return; }
+      if (!result.ok) { if (result.modal) { await alertModal(result.reason); } else { toast(result.reason, platformIcon('warning')); } return; }
       renderProjects();
-      toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, '✅');
+      toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, platformIcon('success'));
     });
   });
 
@@ -668,7 +668,7 @@ function renameProjectInline(id) {
       const course = LumioState.courses[id];
       if (course) course.title = name.trim();
       renderProjects();
-      toast('Project renamed', '✏️');
+      toast('Project renamed', platformIcon('edit'));
     }
   });
 }
@@ -720,7 +720,7 @@ function duplicateProject(id) {
   LumioState.projects.splice(idx + 1, 0, copy);
   persistCourse(newId); // POST to D1 (copy._cloud=false) then sets _cloud=true
   renderProjects();
-  toast(`Duplicated "${baseTitle}"`, '⧉');
+  toast(`Duplicated "${baseTitle}"`, platformIcon('duplicate'));
 }
 
 function confirmDeleteProject(id) {
@@ -744,7 +744,7 @@ function confirmDeleteProject(id) {
     p.deletedAt = Date.now();
     overlay.remove();
     renderProjects();
-    toast('Moved to Trash · Undo', '🗑️');
+    toast('Moved to Trash · Undo', platformIcon('delete'));
     cloudDeleteProject(p.id);
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
@@ -795,7 +795,7 @@ function confirmDeleteFolder(folderId) {
     affected.forEach(p => cloudPersistProject(p.id));
     overlay.remove();
     renderProjects();
-    toast('Folder deleted', '🗑️');
+    toast('Folder deleted', platformIcon('delete'));
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
@@ -855,7 +855,7 @@ function openNewFolderModal(existingFolder) {
     if (isEdit) {
       existingFolder.name = name;
       existingFolder.color = selectedColor;
-      toast('Folder updated', '✏️');
+      toast('Folder updated', platformIcon('edit'));
     } else {
       LumioState.folders.push({ id: 'f' + Date.now(), name, color: selectedColor, semanticId: 'folder' });
       NotifySystem.notify({ message: 'Folder created', type: 'success' });
@@ -935,17 +935,17 @@ function openCreateNewModal() {
         <p class="text-sm text-muted mt-8 mb-24">Choose a format, or let Lumio help you decide.</p>
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
           <div class="card card-pad create-option" data-type="Course" style="cursor:pointer; text-align:center;">
-            <div style="font-size:32px;">📘</div>
+            <div style="font-size:32px;">${platformIcon('hub')}</div>
             <h3 style="font-size:15px; margin-top:12px;">Course</h3>
             <p class="text-sm text-muted mt-8">Structured, multi-lesson experiences — best for 30+ minutes across multiple topics.</p>
           </div>
           <div class="card card-pad create-option" data-type="Microlearning" style="cursor:pointer; text-align:center;">
-            <div style="font-size:32px;">⚡</div>
+            <div style="font-size:32px;">${platformIcon('rocket')}</div>
             <h3 style="font-size:15px; margin-top:12px;">Microlearning</h3>
             <p class="text-sm text-muted mt-8">Short, focused content on a single topic — best for 3-10 minutes.</p>
           </div>
           <div class="card card-pad create-option" data-type="ai" style="cursor:pointer; text-align:center; border:1px solid var(--violet-border); background:linear-gradient(135deg, var(--violet-tint), rgba(6,182,212,0.04));">
-            <div class="ai-spark" style="margin:0 auto;">✨</div>
+            <div class="ai-spark" style="margin:0 auto;">${platformIcon('ai')}</div>
             <h3 style="font-size:15px; margin-top:12px;">Help Me Decide</h3>
             <p class="text-sm text-muted mt-8">Answer 2 quick questions and Lumio will recommend the best format.</p>
           </div>
@@ -1092,7 +1092,7 @@ function openHelpMeDecide() {
         <div class="flex gap-6 mb-16">
           ${questions.map((_, i) => `<div style="height:4px; flex:1; border-radius:var(--r-pill); background:${i <= step ? 'var(--gradient-primary)' : 'var(--border)'};"></div>`).join('')}
         </div>
-        <div class="ai-spark mb-16">✨</div>
+        <div class="ai-spark mb-16">${platformIcon('ai')}</div>
         <h2 style="font-size:20px;">${q.label}</h2>
         <p class="text-sm text-muted mt-8 mb-24">Step ${step + 1} of ${questions.length} — Lumio uses this to recommend Course or Microlearning.</p>
         <div class="flex-col gap-12">
@@ -1105,7 +1105,7 @@ function openHelpMeDecide() {
     } else {
       const rec = LumioData.ai.formatRecommendation(answers);
       content.innerHTML = `
-        <div class="ai-spark mb-16">✨</div>
+        <div class="ai-spark mb-16">${platformIcon('ai')}</div>
         <h2 style="font-size:20px;">Lumio recommends: <span class="gradient-text">${rec.format}</span></h2>
         <p class="text-sm mt-16" style="line-height:1.7;">${rec.rationale}</p>
         <div class="flex gap-12 mt-32" style="justify-content:flex-end;">
@@ -1200,7 +1200,7 @@ function openShareModal(id) {
           <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeTeam ? 'var(--ws-primary)' : 'var(--border)'}; background:${scopeTeam ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-team-label">
             <input type="radio" name="share-scope" value="team" ${scopeTeam ? 'checked' : ''} style="margin-top:2px;">
             <div>
-              <div style="font-weight:600; font-size:13px;">👥 Share with Team</div>
+              <div style="font-weight:600; font-size:13px;">${platformIcon('team')} Share with Team</div>
               <div class="text-sm text-muted mt-4">Visible to all workspace members.</div>
             </div>
           </label>
@@ -1227,14 +1227,14 @@ function openShareModal(id) {
             ${['view','comment','edit'].map(perm => `
               <label style="flex:1; text-align:center; cursor:pointer; padding:10px 8px; border-radius:var(--r-md); border:2px solid ${currentPermission===perm ? 'var(--ws-primary)' : 'var(--border)'}; background:${currentPermission===perm ? 'var(--violet-tint-md)' : 'var(--surface-0)'}; font-size:13px; font-weight:${currentPermission===perm ? '600' : '400'};" class="perm-label" data-perm="${perm}">
                 <input type="radio" name="share-perm" value="${perm}" ${currentPermission===perm ? 'checked' : ''} style="display:none;">
-                ${{ view:'👁️ View', comment:'💬 Comment', edit:'✏️ Edit' }[perm]}
+                ${{ view:platformIcon('info')+' View', comment:platformIcon('notes')+' Comment', edit:platformIcon('edit')+' Edit' }[perm]}
               </label>
             `).join('')}
           </div>
         </div>
 
         <div class="flex gap-12" style="justify-content:space-between; align-items:center;">
-          <button class="btn btn-ghost btn-sm text-destructive" id="share-remove" style="${currentScope ? '' : 'visibility:hidden;'}">🗑️ Remove Sharing</button>
+          <button class="btn btn-ghost btn-sm text-destructive" id="share-remove" style="${currentScope ? '' : 'visibility:hidden;'}">${platformIcon('delete')} Remove Sharing</button>
           <div class="flex gap-12">
             <button class="btn btn-ghost" id="share-cancel">Cancel</button>
             <button class="btn btn-primary" id="share-save">Save</button>
@@ -1289,11 +1289,11 @@ function openShareModal(id) {
       p.sharedWith = [];
     } else if (scope === 'individual') {
       const uid = userSel ? userSel.value : '';
-      if (!uid) { toast('Please select a person to share with', '⚠️'); return; }
+      if (!uid) { toast('Please select a person to share with', platformIcon('warning')); return; }
       p.sharedScope = 'individual';
       p.sharedWith = [uid];
     } else {
-      toast('Please select a sharing option', '⚠️'); return;
+      toast('Please select a sharing option', platformIcon('warning')); return;
     }
     p.sharedPermission = perm;
     overlay.remove();
@@ -1317,3 +1317,5 @@ function startWizard(type) {
   };
   navigate('#/wizard');
 }
+
+

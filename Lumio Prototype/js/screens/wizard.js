@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    COURSE CREATION WIZARD
    ============================================================ */
 
@@ -60,7 +60,7 @@ function renderWizard() {
       <!-- Nav buttons -->
       <div class="flex justify-between items-center" style="padding:24px 32px; position:relative; z-index:1;">
         <button class="btn btn-secondary" id="wiz-back" ${stepIdx===0?'disabled style="visibility:hidden;"':''}>← Back</button>
-        <button class="btn btn-primary btn-lg" id="wiz-next">${stepIdx === WIZARD_STEPS.length-1 ? '✨ Create Course' : 'Continue →'}</button>
+        <button class="btn btn-primary btn-lg" id="wiz-next">${stepIdx === WIZARD_STEPS.length-1 ? `${platformIcon('ai')} Create Course` : 'Continue →'}</button>
       </div>
     </div>
   `;
@@ -84,7 +84,7 @@ function renderWizard() {
   document.getElementById('wizard-logo').addEventListener('click', () => {
     if (LumioState.wizard) {
       confirmLeaveModal('You have a course draft in progress. Your progress will be saved, but the wizard will close.', () => {
-        toast('Draft saved — find it in your Projects', '💾');
+        toast('Draft saved — find it in your Projects', platformIcon('save'));
         navigate('#/welcome');
       });
     } else {
@@ -92,7 +92,7 @@ function renderWizard() {
     }
   });
   document.getElementById('exit-wizard').addEventListener('click', () => {
-    toast('Draft saved — find it in your Projects', '💾');
+    toast('Draft saved — find it in your Projects', platformIcon('save'));
     navigate('#/projects');
   });
   document.getElementById('wiz-back').addEventListener('click', () => {
@@ -112,7 +112,7 @@ function renderWizard() {
 function tipPanel(html) {
   return `
     <div class="ai-card mt-24">
-      <div class="ai-spark">💡</div>
+      <div class="ai-spark">${platformIcon('lightbulb')}</div>
       <div>
         <strong style="font-size:13px; color:var(--ink-900);">Why we're asking</strong>
         <p class="text-sm mt-8">${html}</p>
@@ -141,7 +141,7 @@ function wizardStepContent(stepKey, w) {
           <textarea class="textarea" id="w-description" rows="4" placeholder="Describe what this course covers and why it matters...">${w.description || ''}</textarea>
           <span class="hint" id="char-count">${(w.description||'').length} / 160 characters</span>
         </div>
-        <button class="btn btn-secondary" id="w-gen-desc">✨ Generate with AI</button>
+        <button class="btn btn-secondary" id="w-gen-desc">${platformIcon('ai')} Generate with AI</button>
         ${tipPanel('Write this for the learner, not for yourself — what\'s in it for them? Focus on the benefit, not just the topic.')}
       `;
     case 'audience':
@@ -193,7 +193,7 @@ function wizardStepContent(stepKey, w) {
         </div>
         <div class="flex gap-12 mt-16">
           <button class="btn btn-secondary btn-sm" id="add-objective">+ Add objective</button>
-          <button class="btn btn-secondary btn-sm" id="ai-suggest-objectives">✨ Suggest objectives from my description</button>
+          <button class="btn btn-secondary btn-sm" id="ai-suggest-objectives">${platformIcon('ai')} Suggest objectives from my description</button>
         </div>
         ${tipPanel('Try the formula: "By the end of this course, learners will be able to <strong>[verb]</strong> [content] [condition]." Avoid vague verbs like "understand" or "know" — they\'re hard to measure. Pick a verb from the list to see Lumio\'s suggestions.')}
       `;
@@ -206,11 +206,11 @@ function wizardStepContent(stepKey, w) {
           <div class="card" style="overflow:hidden; ${w.heroImage && w.heroImage.src ? '' : 'display:flex; align-items:center; justify-content:center; height:160px; background:var(--surface-50);'}">
             ${w.heroImage && w.heroImage.src
               ? `<img src="${AssetStore.resolveMediaSrc(w.heroImage.src)}" alt="" style="width:100%; height:200px; object-fit:cover; display:block;" />`
-              : `<div style="text-align:center; padding:20px;"><div style="font-size:32px;">🖼️</div><p class="text-sm text-muted mt-8">No image selected — a themed gradient will be used by default.</p></div>`}
+              : `<div style="text-align:center; padding:20px;"><div style="font-size:32px;">${platformIcon('image-placeholder')}</div><p class="text-sm text-muted mt-8">No image selected — a themed gradient will be used by default.</p></div>`}
           </div>
           <div class="flex gap-12 mt-16" style="justify-content:center;">
-            <button class="btn btn-secondary" id="wiz-hero-upload">${w.heroImage && w.heroImage.src ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-            ${w.heroImage && w.heroImage.src ? `<button class="btn btn-ghost text-destructive" id="wiz-hero-remove">🗑️ Remove Image</button>` : ''}
+            <button class="btn btn-secondary" id="wiz-hero-upload">${w.heroImage && w.heroImage.src ? `${platformIcon('replace-media')} Replace Image` : `${platformIcon('upload-media')} Upload Image`}</button>
+            ${w.heroImage && w.heroImage.src ? `<button class="btn btn-ghost text-destructive" id="wiz-hero-remove">${platformIcon('delete')} Remove Image</button>` : ''}
           </div>
           <div class="text-sm text-muted mt-16 text-center">Supported formats: PNG, JPG, JPEG, WEBP · Max size ${_formatUploadLimit(UPLOAD_LIMITS.image)}.</div>
           <div id="wiz-hero-error" class="text-sm mt-8 text-center text-destructive" style="display:none;"></div>
@@ -379,7 +379,7 @@ function reviewRow(label, value, jumpStep) {
         <div class="text-sm text-muted">${label}</div>
         <div style="font-weight:600; color:var(--ink-900); margin-top:4px; font-size:14px;">${value || '—'}</div>
       </div>
-      <span class="text-muted">✏️</span>
+      <span class="text-muted">${platformIcon('edit')}</span>
     </div>
   `;
 }
@@ -409,10 +409,10 @@ function objectiveRow(o, i) {
 /* ---------------- VALIDATION ---------------- */
 function validateStep(stepKey, w) {
   if (stepKey === 'title' && !(w.title||'').trim()) {
-    toast('Please give your course a title', '⚠️'); return false;
+    toast('Please give your course a title', platformIcon('warning')); return false;
   }
   if (stepKey === 'objectives' && (w.objectives||[]).length === 0) {
-    toast('Add at least one learning objective', '⚠️'); return false;
+    toast('Add at least one learning objective', platformIcon('warning')); return false;
   }
   return true;
 }
@@ -462,14 +462,14 @@ function bindWizardEvents(stepKey) {
     }));
     root.querySelector('#add-objective').addEventListener('click', () => {
       w.objectives = w.objectives || [];
-      if (w.objectives.length >= 6) { toast('Consider keeping it to 5-6 objectives — more may spread your course too thin', '⚠️'); }
+      if (w.objectives.length >= 6) { toast('Consider keeping it to 5-6 objectives — more may spread your course too thin', platformIcon('warning')); }
       w.objectives.push({ verb: 'Identify', text: '' });
       renderWizard();
     });
     root.querySelector('#ai-suggest-objectives').addEventListener('click', () => {
       w.objectives = LumioData.ai.suggestObjectives(w.title || 'this course', w.audRole || '');
       renderWizard();
-      toast('Suggested 3 objectives — feel free to edit them', '✨');
+      toast('Suggested 3 objectives — feel free to edit them', platformIcon('ai'));
     });
   }
 
@@ -563,7 +563,7 @@ function renderBlueprintScreen() {
       <div style="max-width:760px; width:100%; margin:0 auto; position:relative; z-index:1;" class="fade-in">
         ${w.blueprintLoading ? `
           <div class="text-center" style="padding-top:80px;">
-            <div class="ai-spark" style="margin:0 auto 20px; width:48px; height:48px; font-size:22px;">✨</div>
+            <div class="ai-spark" style="margin:0 auto 20px; width:48px; height:48px; font-size:22px;">${platformIcon('ai')}</div>
             <h2 style="font-size:22px;">Lumio is sketching your course...</h2>
             <p class="text-muted mt-8">Mapping your objectives to lessons, assessments, and interactions</p>
             <div class="card mt-24" style="height:14px; overflow:hidden;"><div class="shimmer" style="height:100%;"></div></div>
@@ -572,7 +572,7 @@ function renderBlueprintScreen() {
           </div>
         ` : `
           <div class="text-center mb-32">
-            <span class="pill pill-cyan">✨ AI Course Blueprint</span>
+            <span class="pill pill-cyan">${platformIcon('ai')} AI Course Blueprint</span>
             <h2 style="font-size:26px; margin-top:12px;">Here's your AI-generated course plan</h2>
             <p class="text-muted mt-8">
               Review and adjust below — uncheck anything you'd like to skip. Everything is editable later.
@@ -581,8 +581,8 @@ function renderBlueprintScreen() {
 
           <div class="card glass-card card-pad mb-24">
             <div class="flex items-center justify-between mb-16">
-              <h3 style="font-size:15px;">🎯 Learning Objectives</h3>
-              <span class="pill pill-indigo">⏱ ${bp.estimatedDuration}</span>
+              <h3 style="font-size:15px;">${platformIcon('target')} Learning Objectives</h3>
+              <span class="pill pill-indigo">${platformIcon('recent')} ${bp.estimatedDuration}</span>
             </div>
             <div class="flex-col gap-8">
               ${w.objectives.map((o,i) => `<div class="text-sm"><strong>${i+1}.</strong> ${o.verb} ${o.text}</div>`).join('')}
@@ -590,7 +590,7 @@ function renderBlueprintScreen() {
           </div>
 
           <div class="card card-pad mb-24">
-            <h3 style="font-size:15px; margin-bottom:16px;">📚 Suggested Lessons</h3>
+            <h3 style="font-size:15px; margin-bottom:16px;">${platformIcon('notes')} Suggested Lessons</h3>
             <div class="flex-col gap-12">
               ${bp.lessons.map((b, i) => `
                 <div class="acc-item" style="border:1px solid var(--border);">
@@ -609,7 +609,7 @@ function renderBlueprintScreen() {
           </div>
 
           <div class="card card-pad mb-24">
-            <h3 style="font-size:15px; margin-bottom:16px;">✅ Suggested Assessments &amp; Knowledge Checks</h3>
+            <h3 style="font-size:15px; margin-bottom:16px;">${platformIcon('cat-knowledge-checks')} Suggested Assessments &amp; Knowledge Checks</h3>
             <div class="flex-col gap-12">
               ${bp.assessments.map((a, i) => `
                 <div class="acc-item" style="border:1px solid var(--border);">
@@ -626,16 +626,16 @@ function renderBlueprintScreen() {
           </div>
 
           <div class="card card-pad mb-24">
-            <h3 style="font-size:15px; margin-bottom:16px;">🔄 Suggested Learning Flow</h3>
+            <h3 style="font-size:15px; margin-bottom:16px;">${platformIcon('restore')} Suggested Learning Flow</h3>
             <div class="flex items-center gap-8" style="flex-wrap:wrap;">
               ${bp.lessons.map((b, i) => `
-                <span class="pill pill-indigo">🎯 Obj ${b.objectiveIndex+1}</span>
+                <span class="pill pill-indigo">${platformIcon('target')} Obj ${b.objectiveIndex+1}</span>
                 <span class="text-muted">→</span>
-                <span class="pill pill-cyan">📘 Lesson ${i+1}</span>
+                <span class="pill pill-cyan">${platformIcon('hub')} Lesson ${i+1}</span>
                 <span class="text-muted">→</span>
                 <span class="pill pill-magenta">🧩 ${bp.interactions[i] ? bp.interactions[i].type : 'Activity'}</span>
                 <span class="text-muted">→</span>
-                <span class="pill pill-teal">✅ Check ${i+1}</span>
+                <span class="pill pill-teal">${platformIcon('success')} Check ${i+1}</span>
                 ${i < bp.lessons.length - 1 ? '<span class="text-muted" style="margin:0 8px;">|</span>' : ''}
               `).join('')}
             </div>
@@ -711,7 +711,9 @@ function createCourseFromWizard(blueprint) {
 
   LumioState.currentCourseId = id;
   LumioState.wizard = null;
-  toast('Course created!', '🎉');
+  toast('Course created!', platformIcon('celebration'));
   navigate('#/course/' + id);
   persistCourse(id);
 }
+
+
