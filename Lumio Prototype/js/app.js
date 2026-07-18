@@ -1894,6 +1894,7 @@ const BUILTIN_THEMES = [
       radius:     '20px',
       sidebarBg:  '#FFFFFF',
       topbarBg:   '#FFFFFF',
+      progress:   '#F97316',
     },
   },
   {
@@ -1914,6 +1915,7 @@ const BUILTIN_THEMES = [
       radius:     '16px',
       sidebarBg:  '#F0F9FF',
       topbarBg:   '#FFFFFF',
+      progress:   '#F97316',
     },
   },
   {
@@ -1934,6 +1936,7 @@ const BUILTIN_THEMES = [
       radius:     '20px',
       sidebarBg:  '#16131F',
       topbarBg:   '#1E1B2E',
+      progress:   '#F97316',
     },
   },
   {
@@ -1954,6 +1957,7 @@ const BUILTIN_THEMES = [
       radius:     '8px',
       sidebarBg:  '#F1F5F9',
       topbarBg:   '#FFFFFF',
+      progress:   '#F97316',
     },
   },
 ];
@@ -2736,6 +2740,7 @@ function applyWorkspaceIdentity() {
     ['--ws-text-muted',  theme.textMuted  ],
     ['--ws-icon',        theme.icon       ],
     ['--ws-shadow',      theme.shadow     ],
+    ['--ws-progress',    theme.progress   ],
     ['--ws-radius',      theme.radius     ],
     ['--ws-sidebar-bg',  theme.sidebarBg  ],
     ['--ws-topbar-bg',   theme.topbarBg   ],
@@ -2753,9 +2758,14 @@ function applyWorkspaceIdentity() {
     document.head.appendChild(sheet);
   }
 
+  // Derive shadow colour from the full box-shadow shorthand for hover rules.
+  const shadowColorMatch = (theme.shadow || '').match(/rgba?\([^)]+\)/i);
+  const shadowColorDecl  = shadowColorMatch ? `  --ws-shadow-color: ${shadowColorMatch[0]};` : '';
+
   // Atomic: every token written in a single textContent assignment.
   // Platform Shell never exists in an intermediate visual state.
-  sheet.textContent = declarations ? `:root {\n${declarations}\n}` : '';
+  const allDeclarations = [declarations, shadowColorDecl].filter(Boolean).join('\n');
+  sheet.textContent = allDeclarations ? `:root {\n${allDeclarations}\n}` : '';
 }
 
 /**

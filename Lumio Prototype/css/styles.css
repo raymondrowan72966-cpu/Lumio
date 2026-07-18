@@ -54,6 +54,8 @@
   --shadow-soft: 0 8px 24px rgba(31, 27, 58, 0.06);
   --shadow-md: 0 12px 32px rgba(31, 27, 58, 0.10);
   --shadow-lift: 0 16px 40px rgba(124, 58, 237, 0.18);
+  --ws-shadow-color: rgba(124, 58, 237, 0.18);
+  --ws-progress:    var(--orange);
 
   /* Elevation tokens — use these instead of raw shadow values.
      elevation-0: flat (no shadow)
@@ -1447,7 +1449,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .card-premium:hover {
   transform: translateY(-4px);
-  box-shadow: var(--shadow-lift);
+  box-shadow: 0 16px 40px var(--ws-shadow-color);
   border-color: rgba(124,58,237,0.25);
 }
 .card-interactive {
@@ -1468,7 +1470,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .choice-card:hover {
   transform: translateY(-6px) scale(1.01);
-  box-shadow: var(--shadow-lift);
+  box-shadow: 0 16px 40px var(--ws-shadow-color);
   border-color: transparent;
 }
 .choice-card .choice-glow {

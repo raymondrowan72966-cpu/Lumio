@@ -590,6 +590,7 @@ function _wsThemeSection(selectedTheme) {
     { key: 'sidebarBg',  label: 'Sidebar Background', type: 'color'  },
     { key: 'topbarBg',   label: 'Topbar Background',  type: 'color'  },
     { key: 'icon',       label: 'Icon Colour',        type: 'color'  },
+    { key: 'progress',   label: 'Project Progress Colour', type: 'color' },
     { key: 'radius',     label: 'Radius',             type: 'text'   },
     { key: 'shadow',     label: 'Shadow',             type: 'shadow' },
   ];

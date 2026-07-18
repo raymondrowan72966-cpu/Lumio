@@ -219,7 +219,7 @@ function projectCard(p) {
         <div class="mt-16" style="display:flex; align-items:center; gap:8px;">
           <span class="proj-lang-badge" title="Course language">${_courseLangName(p)}</span>
           <div style="flex:1; height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
-            <div style="width:${p.health}%; height:100%; background:${p.health >= 80 ? 'var(--teal)' : p.health >= 60 ? 'var(--orange)' : 'var(--magenta)'};"></div>
+            <div style="width:${p.health}%; height:100%; background:var(--ws-progress);"></div>
           </div>
           <span class="text-sm text-muted" title="Lumio Health Score — based on objective alignment, content variety & accessibility">${p.health}</span>
         </div>
