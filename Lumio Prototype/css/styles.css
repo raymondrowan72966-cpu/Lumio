@@ -1215,7 +1215,6 @@ button { font-family: var(--font-body); cursor: pointer; }
 .ambient-bg {
   position: absolute;
   inset: 0;
-  overflow: hidden;
   z-index: 0;
   pointer-events: none;
 }
