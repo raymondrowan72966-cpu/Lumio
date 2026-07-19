@@ -2007,7 +2007,7 @@ async function _migrateBase64Logos() {
 
   let anyMigrated = false;
 
-  await Promise.allSettled(slots.map(async slot => {
+  for (const slot of slots) {
     const dataUri = logos[slot];
     try {
       // Decode the Base64 data URI into a binary Blob.
@@ -2055,7 +2055,7 @@ async function _migrateBase64Logos() {
       // render correctly via the legacy fallback path in renderWorkspaceLogo().
       console.warn('[Lumio] _migrateBase64Logos: could not migrate slot', slot, err);
     }
-  }));
+  }
 
   if (anyMigrated) {
     saveLumioState();
