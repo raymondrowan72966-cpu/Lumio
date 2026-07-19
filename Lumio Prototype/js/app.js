@@ -1991,6 +1991,39 @@ const LOGO_SLOTS = {
 // Never persisted — keyed by slot name, values are object URLs or data URIs.
 const _logoUrlCache = {};
 
+// Fetches the public workspace branding from the Worker and populates
+// _logoUrlCache with the server-sourced asset URLs.  Called fire-and-forget
+// at startup in parallel with the session check so the login page renders
+// with correct branding on every device, regardless of local cache state.
+// Purely additive: never modifies workspaceIdentity, saveLumioState(),
+// cloudSyncWorkspace(), or any authenticated data path.
+async function _applyPublicBranding() {
+  try {
+    const branding = await LumioAPI.workspace.getPublicBranding();
+    if (!branding || typeof branding.logos !== 'object') return;
+
+    let anySlotUpdated = false;
+    for (const [slot, url] of Object.entries(branding.logos)) {
+      if (url && typeof url === 'string') {
+        // The Worker returns paths relative to itself (/branding/assets/...).
+        // Prepend the Pages /api proxy base so the browser routes the request
+        // through the same proxy used by every other LumioAPI call.
+        _logoUrlCache[slot] = '/api' + url;
+        anySlotUpdated = true;
+      }
+    }
+
+    // If the login page is already rendered and at least one slot was
+    // updated, re-render so the correct branding is visible immediately.
+    if (anySlotUpdated && location.hash === '#/login') {
+      render();
+    }
+  } catch (_err) {
+    // Network failure or Worker error — login page falls back to local cache
+    // or default images.  This is best-effort; never block startup.
+  }
+}
+
 // Migrates any workspaceIdentity.logos entries still stored as Base64 data URIs
 // to asset:// references.  Runs once per authenticated session, after cloud load.
 // Idempotent: slots already holding asset:// references are skipped unconditionally.
@@ -3301,6 +3334,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // any previously loaded identity (avoids a flash of default brand on reload).
   applyWorkspaceIdentity();
   _resolveLogoCache();
+  _applyPublicBranding();
 
   // Restore server-managed session first. If a valid cookie exists, the server
   // returns the full auth context and we populate LumioSession — the user

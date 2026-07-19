@@ -282,6 +282,16 @@ const LumioAPI = (function () {
     syncResources: function (type, items) {
       return request('PUT', '/workspace/resources/' + encodeURIComponent(type), { items });
     },
+
+    /**
+     * Fetch the public branding projection for the login page.
+     * No session required — safe to call before authentication.
+     *
+     * @returns {Promise<{ name, shortName, logos: Record<string,string>, theme: object }>}
+     */
+    getPublicBranding: function () {
+      return get('/workspace/public');
+    },
   };
 
   // -------------------------------------------------------------------------
