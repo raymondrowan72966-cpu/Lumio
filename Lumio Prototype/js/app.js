@@ -1991,6 +1991,78 @@ const LOGO_SLOTS = {
 // Never persisted — keyed by slot name, values are object URLs or data URIs.
 const _logoUrlCache = {};
 
+// Migrates any workspaceIdentity.logos entries still stored as Base64 data URIs
+// to asset:// references.  Runs once per authenticated session, after cloud load.
+// Idempotent: slots already holding asset:// references are skipped unconditionally.
+// Per-slot failures leave the original Base64 value intact and do not abort other slots.
+// Never modifies _processLogoFile, _commitLogoUpload, or any other write-path function.
+async function _migrateBase64Logos() {
+  const identity = LumioState.workspaceIdentity;
+  const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
+  const slots    = Object.keys(logos).filter(slot => {
+    const val = logos[slot];
+    return typeof val === 'string' && val.startsWith('data:image/');
+  });
+  if (!slots.length) return;
+
+  let anyMigrated = false;
+
+  await Promise.allSettled(slots.map(async slot => {
+    const dataUri = logos[slot];
+    try {
+      // Decode the Base64 data URI into a binary Blob.
+      const [meta, b64] = dataUri.split(',');
+      const mimeMatch   = meta.match(/data:([^;]+)/);
+      const mime        = mimeMatch ? mimeMatch[1] : 'image/png';
+      const ext         = mime === 'image/svg+xml' ? 'svg'
+                        : mime === 'image/jpeg'    ? 'jpg'
+                        : 'png';
+      const binary      = atob(b64);
+      const bytes       = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob        = new Blob([bytes], { type: mime });
+      const file        = new File([blob], `logo-${slot}.${ext}`, { type: mime });
+
+      // Step 1: store in AssetStore (IDB), get content-addressed ID.
+      const assetId = await AssetStore.put(file);
+      if (!assetId || !AssetStore.isAssetRef(assetId)) {
+        throw new Error('AssetStore did not return a valid asset reference.');
+      }
+
+      // Step 2: upload binary blob to R2.
+      const uploadResult = await LumioAPI.assets.upload(assetId, file, null);
+
+      // Step 3: validate the upload response payload (same checks as Sprint A).
+      if (!uploadResult
+          || uploadResult.id    !== assetId
+          || !uploadResult.r2Key
+          || !(uploadResult.sizeBytes > 0)) {
+        throw new Error('R2 upload response failed validation.');
+      }
+
+      // Step 4: confirm the asset is resolvable via AssetStore.
+      const resolvedUrl = await AssetStore.resolveUrl(assetId);
+      if (!resolvedUrl) {
+        throw new Error('AssetStore could not resolve the uploaded asset.');
+      }
+
+      // All validations passed — replace the Base64 value atomically.
+      logos[slot]  = assetId;
+      anyMigrated  = true;
+      console.info('[Lumio] _migrateBase64Logos: migrated slot', slot, '→', assetId);
+    } catch (err) {
+      // Leave the original Base64 value untouched so the slot continues to
+      // render correctly via the legacy fallback path in renderWorkspaceLogo().
+      console.warn('[Lumio] _migrateBase64Logos: could not migrate slot', slot, err);
+    }
+  }));
+
+  if (anyMigrated) {
+    saveLumioState();
+    cloudSyncWorkspace('workspaceIdentity');
+  }
+}
+
 // Resolves every asset:// identifier in workspaceIdentity.logos into a
 // renderable URL and stores it in _logoUrlCache.  Called after cloud workspace
 // load and after applyWorkspaceIdentity() so logos are visible on first render.
@@ -3253,6 +3325,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       // Re-apply after cloud load — server values take precedence over the
       // persisted snapshot applied at startup above.
       applyWorkspaceIdentity();
+      await _migrateBase64Logos();
       await _resolveLogoCache();
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
