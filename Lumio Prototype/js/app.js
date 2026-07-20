@@ -2002,21 +2002,23 @@ async function _applyPublicBranding() {
     const branding = await LumioAPI.workspace.getPublicBranding();
     if (!branding || typeof branding.logos !== 'object') return;
 
-    let anySlotUpdated = false;
+    // The Worker returns paths relative to itself (/branding/assets/...).
+    // Prepend the Pages /api proxy base so the browser routes the request
+    // through the same proxy used by every other LumioAPI call.
+    const updatedSlots = {};
     for (const [slot, url] of Object.entries(branding.logos)) {
       if (url && typeof url === 'string') {
-        // The Worker returns paths relative to itself (/branding/assets/...).
-        // Prepend the Pages /api proxy base so the browser routes the request
-        // through the same proxy used by every other LumioAPI call.
-        _logoUrlCache[slot] = '/api' + url;
-        anySlotUpdated = true;
+        const resolved = '/api' + url;
+        _logoUrlCache[slot] = resolved;
+        updatedSlots[slot]  = resolved;
       }
     }
 
-    // If the login page is already rendered and at least one slot was
-    // updated, re-render so the correct branding is visible immediately.
-    if (anySlotUpdated && location.hash === '#/login') {
-      render();
+    // Patch any already-rendered ws-logo elements directly — consistent with
+    // _applyWorkspaceLogos().  Avoids a full render() that would reset form
+    // state and only targeted the login page.  Works on any page.
+    for (const [slot, src] of Object.entries(updatedSlots)) {
+      document.querySelectorAll(`.ws-logo--${slot}`).forEach(img => { img.src = src; });
     }
   } catch (_err) {
     // Network failure or Worker error — login page falls back to local cache
@@ -2110,6 +2112,38 @@ async function _migrateBase64Logos() {
   if (anyMigrated) {
     saveLumioState();
     cloudSyncWorkspace('workspaceIdentity');
+  }
+}
+
+// Evicts stale _logoUrlCache entries, re-resolves all active logo slots via
+// _resolveLogoCache(), then patches the src attribute of any ws-logo <img>
+// elements already in the DOM.  Called fire-and-forget from applyWorkspaceIdentity()
+// so logos participate in the same apply lifecycle as CSS colour tokens — no
+// separate call site required in profile-switch or theme-switch code paths.
+async function _applyWorkspaceLogos() {
+  const identity = LumioState.workspaceIdentity;
+  const current  = (identity && typeof identity.logos === 'object') ? identity.logos : {};
+
+  // Remove cache entries for slots absent from the new logo set so stale images
+  // from a previous profile never bleed into the current one.
+  for (const slot of Object.values(LOGO_SLOTS)) {
+    if (!(slot in current) && slot in _logoUrlCache) {
+      delete _logoUrlCache[slot];
+    }
+  }
+
+  await _resolveLogoCache();
+
+  // Patch src on ws-logo elements already in the DOM.  Mirrors the fallback
+  // chain in renderWorkspaceLogo() so the result is visually identical.
+  const SLOT_FALLBACKS = { 'login-background': 'assets/lumio-login-backdrop.png' };
+  for (const slot of Object.values(LOGO_SLOTS)) {
+    const rawValue = current[slot];
+    const src = _logoUrlCache[slot]
+      || (rawValue && !AssetStore.isAssetRef(rawValue) ? rawValue : null)
+      || SLOT_FALLBACKS[slot]
+      || 'assets/lumio-logo-transparent.png';
+    document.querySelectorAll(`.ws-logo--${slot}`).forEach(img => { img.src = src; });
   }
 }
 
@@ -2931,6 +2965,10 @@ function applyWorkspaceIdentity() {
   // Platform Shell never exists in an intermediate visual state.
   const allDeclarations = [declarations, shadowColorDecl].filter(Boolean).join('\n');
   sheet.textContent = allDeclarations ? `:root {\n${allDeclarations}\n}` : '';
+
+  // Logos participate in the same apply lifecycle as colours: evict stale cache
+  // entries, re-resolve asset:// refs, and patch <img> elements already in the DOM.
+  _applyWorkspaceLogos();
 }
 
 /**
@@ -3350,7 +3388,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Apply persisted Workspace Identity immediately so the first paint reflects
   // any previously loaded identity (avoids a flash of default brand on reload).
   applyWorkspaceIdentity();
-  _resolveLogoCache();
+  await _resolveLogoCache();
   _applyPublicBranding();
 
   // Restore server-managed session first. If a valid cookie exists, the server
