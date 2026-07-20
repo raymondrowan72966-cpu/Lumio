@@ -2024,24 +2024,41 @@ async function _applyPublicBranding() {
   }
 }
 
-// Migrates any workspaceIdentity.logos entries still stored as Base64 data URIs
-// to asset:// references.  Runs once per authenticated session, after cloud load.
+// Migrates any Base64 data URI logo values within workspaceIdentity to asset://
+// references.  Scans both identity.logos (active slot assignments) and every
+// identity.profiles[id].logos (saved profile slot assignments) in a single pass.
+// Runs once per authenticated session, after cloud load.
 // Idempotent: slots already holding asset:// references are skipped unconditionally.
 // Per-slot failures leave the original Base64 value intact and do not abort other slots.
 // Never modifies _processLogoFile, _commitLogoUpload, or any other write-path function.
 async function _migrateBase64Logos() {
   const identity = LumioState.workspaceIdentity;
-  const logos    = (identity && typeof identity.logos === 'object') ? identity.logos : {};
-  const slots    = Object.keys(logos).filter(slot => {
-    const val = logos[slot];
-    return typeof val === 'string' && val.startsWith('data:image/');
-  });
-  if (!slots.length) return;
+  if (!identity) return;
+
+  // Collect every { container, slot } pair that still holds a Base64 data URI.
+  // Covers the active slot assignments (identity.logos) and every saved profile's
+  // slot assignments (identity.profiles[id].logos) in a single pass.
+  const targets  = [];
+  const topLogos = (typeof identity.logos === 'object' && identity.logos) ? identity.logos : {};
+  for (const slot of Object.keys(topLogos)) {
+    if (typeof topLogos[slot] === 'string' && topLogos[slot].startsWith('data:image/')) {
+      targets.push({ container: topLogos, slot });
+    }
+  }
+  for (const profile of Object.values(identity.profiles || {})) {
+    if (!profile || typeof profile.logos !== 'object') continue;
+    for (const slot of Object.keys(profile.logos)) {
+      if (typeof profile.logos[slot] === 'string' && profile.logos[slot].startsWith('data:image/')) {
+        targets.push({ container: profile.logos, slot });
+      }
+    }
+  }
+  if (!targets.length) return;
 
   let anyMigrated = false;
 
-  for (const slot of slots) {
-    const dataUri = logos[slot];
+  for (const { container, slot } of targets) {
+    const dataUri = container[slot];
     try {
       // Decode the Base64 data URI into a binary Blob.
       const [meta, b64] = dataUri.split(',');
@@ -2080,8 +2097,8 @@ async function _migrateBase64Logos() {
       }
 
       // All validations passed — replace the Base64 value atomically.
-      logos[slot]  = assetId;
-      anyMigrated  = true;
+      container[slot] = assetId;
+      anyMigrated     = true;
       console.info('[Lumio] _migrateBase64Logos: migrated slot', slot, '→', assetId);
     } catch (err) {
       // Leave the original Base64 value untouched so the slot continues to
