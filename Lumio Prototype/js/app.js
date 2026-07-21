@@ -2124,12 +2124,12 @@ async function _applyWorkspaceLogos() {
   const identity = LumioState.workspaceIdentity;
   const current  = (identity && typeof identity.logos === 'object') ? identity.logos : {};
 
-  // Remove cache entries for slots absent from the new logo set so stale images
-  // from a previous profile never bleed into the current one.
+  // Clear all logo cache entries before re-resolving.  Clearing unconditionally
+  // (rather than only absent slots) ensures that if _resolveLogoCache() fails for
+  // a slot, the DOM patch falls through to the static fallback — never a stale or
+  // invalid URL from a previous profile.
   for (const slot of Object.values(LOGO_SLOTS)) {
-    if (!(slot in current) && slot in _logoUrlCache) {
-      delete _logoUrlCache[slot];
-    }
+    delete _logoUrlCache[slot];
   }
 
   await _resolveLogoCache();
@@ -2165,13 +2165,12 @@ async function _resolveLogoCache() {
     try {
       const url = await AssetStore.resolveUrl(val);
       if (!url) return;
-      // Revoke the previously cache-owned URL before replacing, but only when
-      // it is not an AssetStore-managed URL (AssetStore manages its own object
-      // URL lifetimes; we must not double-revoke those).
-      const prev = _logoUrlCache[slot];
-      if (prev && prev !== url && !AssetStore.isAssetRef(prev)) {
-        URL.revokeObjectURL(prev);
-      }
+      // AssetStore owns the lifecycle of all blob URLs it creates — never call
+      // URL.revokeObjectURL() on a URL returned by resolveUrl().  Doing so
+      // invalidates AssetStore's internal _urlCache entry: the next resolveUrl()
+      // call returns the same (now-revoked) URL without re-fetching, breaking
+      // any <img> that subsequently uses it.  Let AssetStore's pagehide handler
+      // free blob URLs at page unload.
       _logoUrlCache[slot] = url;
     } catch (err) {
       console.warn('[Lumio] _resolveLogoCache: could not resolve slot', slot, err);
