@@ -145,11 +145,11 @@ function renderLessonBuilder(lessonId) {
    ============================================================ */
 function renderBuilderTopbar(course, lesson) {
   return `
-    <div class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0;">
+    <div class="flex items-center justify-between" style="padding:12px 20px; border-bottom:1px solid var(--border); background:var(--ws-topbar-bg, var(--surface-0)); flex-shrink:0;">
       <div class="flex items-center gap-16" style="min-width:0; flex:1; overflow:hidden;">
         ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'builder-logo' })}
         <button class="btn btn-ghost btn-sm" id="back-to-course" title="Back to ${course ? course.title : 'Course'}" style="flex-shrink:0; white-space:nowrap;">${platformIcon('back')} Back to Course</button>
-        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" title="${escapeHtml(lesson ? lesson.title : 'Untitled Lesson')}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:17px; color:var(--ink-900); min-width:0; flex:1; padding:6px 8px; text-overflow:ellipsis; margin-right:12px;" />
+        <input id="lesson-name-input" class="input" value="${lesson ? lesson.title : 'Untitled Lesson'}" title="${escapeHtml(lesson ? lesson.title : 'Untitled Lesson')}" style="border:none; font-family:var(--font-display); font-weight:600; font-size:17px; color:var(--ws-text, var(--ink-900)); min-width:0; flex:1; padding:6px 8px; text-overflow:ellipsis; margin-right:12px;" />
       </div>
       <div class="flex items-center gap-12" style="flex-shrink:0;">
         <span class="text-sm text-muted" id="save-status">Saved ${platformIcon('check')}</span>
@@ -184,7 +184,7 @@ function recommendedBlocks(lesson, course) {
 function renderBlockLibrary(lesson, course) {
   if (BuilderUI.leftCollapsed) {
     return `
-      <div style="width:48px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
+      <div style="width:48px; flex-shrink:0; border-right:1px solid var(--border); background:var(--ws-sidebar-bg, var(--surface-0)); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
         <button class="btn-icon" id="expand-library" title="Expand library">${platformIcon('chevron-right')}</button>
       </div>
     `;
@@ -193,7 +193,7 @@ function renderBlockLibrary(lesson, course) {
   const rec = recommendedBlocks(lesson, course);
 
   let html = `
-    <div style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; min-height:0;">
+    <div style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--ws-sidebar-bg, var(--surface-0)); display:flex; flex-direction:column; min-height:0;">
       <div style="padding:14px; border-bottom:1px solid var(--border);" class="flex items-center gap-8">
         <div class="input-icon-wrap" style="flex:1;">
           <span class="icon">${platformIcon('search')}</span>
@@ -3041,7 +3041,7 @@ function knowledgeCheckMatchingCards(d, editable, ds, settings) {
 function renderRightPanel(blocks, course, lesson) {
   if (BuilderUI.rightCollapsed) {
     return `
-      <div style="width:48px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
+      <div style="width:48px; flex-shrink:0; border-left:1px solid var(--ws-border); background:var(--ws-surface-alt, var(--ws-surface, var(--surface-0))); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:10px;">
         <button class="btn-icon" id="expand-right" title="Expand panel">${platformIcon('chevron-left')}</button>
       </div>
     `;
@@ -3051,7 +3051,7 @@ function renderRightPanel(blocks, course, lesson) {
 
   if (!block) {
     return `
-      <div style="width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:20px;" id="right-panel-scroll">
+      <div style="width:320px; flex-shrink:0; border-left:1px solid var(--ws-border); background:var(--ws-surface-alt, var(--ws-surface, var(--surface-0))); overflow-y:auto; padding:20px;" id="right-panel-scroll">
         <div class="flex items-center justify-between">
           <h3 class="text-sm" style="font-weight:700;">Lesson Insights</h3>
           <button class="btn-icon" id="collapse-right" title="Collapse panel">${platformIcon('chevron-right')}</button>
@@ -3060,7 +3060,7 @@ function renderRightPanel(blocks, course, lesson) {
           <input type="checkbox" id="toggle-insights" ${BuilderUI.showInsights ? 'checked' : ''}/> Show Lesson Insights
         </label>
         ${BuilderUI.showInsights ? lessonInsights(blocks, course, lesson) : `<p class="text-sm text-muted mt-16">Insights are hidden. Toggle them on anytime.</p>`}
-        <div class="prop-section" style="border-top:1px solid var(--border); margin-top:20px; padding-top:16px; border-bottom:none;">
+        <div class="prop-section" style="border-top:1px solid var(--ws-border); margin-top:20px; padding-top:16px; border-bottom:none;">
           <div class="prop-section-title">Block Behaviour</div>
           <label class="flex items-center gap-8 text-sm" style="cursor:pointer;">
             <input type="checkbox" id="toggle-multi-expand" ${BuilderUI.allowMultipleExpanded ? 'checked' : ''}/> Allow Multiple Expanded Blocks
@@ -3072,7 +3072,7 @@ function renderRightPanel(blocks, course, lesson) {
   }
 
   return `
-    <div style="width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--surface-0); overflow-y:auto; display:flex; flex-direction:column;">
+    <div style="width:320px; flex-shrink:0; border-left:1px solid var(--ws-border); background:var(--ws-surface-alt, var(--ws-surface, var(--surface-0))); overflow-y:auto; display:flex; flex-direction:column;">
       <div class="flex items-center justify-between" style="padding:8px 16px 0;">
         <div class="tabs" style="border-bottom:none;">
           <div class="tab ${BuilderUI.rightTab==='content'?'active':''}" data-rtab="content">Content</div>
@@ -3097,9 +3097,9 @@ function lessonInsights(blocks, course, lesson) {
   const courseObjs = course ? (course.objectives || []) : [];
 
   return `
-    <div class="card card-pad mt-16" style="background:var(--pastel-lavender); border:none;">
+    <div class="card card-pad mt-16" style="background:color-mix(in srgb, var(--ws-primary) 8%, var(--ws-surface)); border:1px solid color-mix(in srgb, var(--ws-primary) 20%, transparent);">
       <div class="flex justify-between items-center"><span class="text-sm" style="font-weight:600;">Content Variety</span><span class="text-sm">${variety} types</span></div>
-      <div style="height:6px; background:#fff; border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
+      <div style="height:6px; background:var(--ws-border); border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
     </div>
     <div class="card card-pad mt-12">
       <div class="flex justify-between items-center text-sm"><span>${platformIcon('target')} ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>

@@ -3752,9 +3752,9 @@ function applyThemeVars(course) {
 
 function ambientBlobs(colors) {
   colors = colors || [
-    ['var(--pastel-lavender)', '420px', '420px', '-120px', '-100px'],
-    ['var(--pastel-cyan)', '360px', '360px', 'auto', '-80px', '0', 'auto'],
-    ['var(--pastel-pink)', '300px', '300px', '60%', 'auto', 'auto', '10%'],
+    ['oklch(from var(--ws-primary) l c h / 0.22)', '420px', '420px', '-120px', '-100px'],
+    ['oklch(from var(--ws-accent) l c h / 0.15)', '360px', '360px', 'auto', '-80px', '0', 'auto'],
+    ['oklch(from var(--ws-secondary) l c h / 0.12)', '300px', '300px', '60%', 'auto', 'auto', '10%'],
   ];
   let html = '<div class="ambient-bg">';
   colors.forEach(c => {

@@ -34,7 +34,7 @@ function renderWorkspaceSettings() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-cyan)', '320px', '320px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1; max-width:820px;">
         <div class="tabs mb-24" id="ws-tabs">
@@ -1886,8 +1886,8 @@ function renderAcceptInvite(token) {
     <div style="min-height:100vh; position:relative; overflow:hidden; background:var(--surface-50); display:flex; align-items:center; justify-content:center; padding:24px;">
       <div class="mesh-bg"></div>
       ${ambientBlobs([
-        ['var(--pastel-lavender)', '420px', '420px', '-140px', '-120px', null, null],
-        ['var(--pastel-cyan)', '360px', '360px', null, null, '-120px', '-100px'],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
+        ['oklch(from var(--ws-accent) l c h / 0.06)', '800px', '800px', null, null, '-320px', '-260px'],
       ])}
       <div class="card card-pad fade-in" style="position:relative; z-index:1; max-width:440px; width:100%; text-align:center;">
         ${inv ? `

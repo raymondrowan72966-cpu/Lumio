@@ -196,7 +196,7 @@ function courseNavSidebar(course, progress, activeLessonId, sticky = false, mobi
     ? `position:absolute; top:0; left:0; bottom:0; z-index:200; transform:translateX(-100%); transition:transform 0.25s ease; box-shadow:var(--elevation-2);`
     : ``;
   return `
-    <aside ${mobileDrawer ? 'id="lp-mobile-sidebar"' : ''} style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface-0); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0; ${stickyStyle}${drawerStyle}">
+    <aside ${mobileDrawer ? 'id="lp-mobile-sidebar"' : ''} style="width:260px; flex-shrink:0; border-right:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0)); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0; ${stickyStyle}${drawerStyle}">
       <div style="margin-bottom:16px;">
         <div class="flex items-center justify-between" style="margin-bottom:6px;">
           <span style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400);">${L('sidebar.progress')}</span>
@@ -325,7 +325,7 @@ function learnerShellProduction(course, bodyHtml, opts = {}) {
   const sidebarHtml = isOverview ? '' : courseNavSidebar(course, progress, activeLessonId, false, true);
 
   const prodHeader = `
-    <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+    <header style="z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0)); display:flex; align-items:center; gap:12px; flex-shrink:0;">
       ${!isOverview ? `<button class="btn btn-ghost btn-sm" id="lp-menu-toggle" style="display:none;" aria-label="${L('a11y.open_nav')}">${platformIcon('menu')}</button>` : ''}
       ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.back')}</button>` : ''}
       <strong style="font-size:14px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${course.title}</strong>
@@ -409,7 +409,7 @@ function learnerShell(course, bodyHtml, opts = {}) {
   LearnerUI.lastLessonId = activeLessonId;
 
   const headerHtml = `
-    <header id="lp-header" class="flex items-center justify-between" style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface-0); flex-shrink:0; gap:16px; flex-wrap:wrap;">
+    <header id="lp-header" class="flex items-center justify-between" style="position:sticky; top:0; z-index:50; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0)); flex-shrink:0; gap:16px; flex-wrap:wrap;">
       <div class="flex items-center gap-12" style="min-width:0;">
         ${renderWorkspaceLogo(LOGO_SLOTS.COMPACT, { id: 'lp-logo' })}
         ${opts.showReturn ? `<button class="btn btn-ghost btn-sm" id="lp-return">${L('nav.return')}</button>` : ''}
@@ -433,8 +433,8 @@ function learnerShell(course, bodyHtml, opts = {}) {
       // Fullscreen desktop: page scroll, sticky mini-header
       app.innerHTML = `
         <div class="lumio-learner-root" style="min-height:100vh; ${themeVarStyle(course.themeDesign)}">
-          <div id="lp-header" style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface-0);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
+          <div id="lp-header" style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0));">
+            <button class="btn btn-course-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="display:flex;">
             ${sidebarHtml}
@@ -445,16 +445,16 @@ function learnerShell(course, bodyHtml, opts = {}) {
       `;
     } else if (isMobile) {
       // Fullscreen mobile: drawer sidebar overlaying device frame
-      const mobileMenuBtn = !isOverview ? `<button class="btn btn-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} ${L('nav.open_lessons')}</button>` : '';
+      const mobileMenuBtn = !isOverview ? `<button class="btn btn-course-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} ${L('nav.open_lessons')}</button>` : '';
       const mobileBodyHtml = !isOverview ? `
-        <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--theme-bg-solid, var(--surface-0)); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
           ${mobileMenuBtn}
           ${progressBarHtml(course, progress)}
         </div>${bodyHtml}` : bodyHtml;
       app.innerHTML = `
-        <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
-          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
+        <div class="lumio-learner-root" style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0));">
+            <button class="btn btn-course-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center;">
             ${sidebarHtml}
@@ -469,9 +469,9 @@ function learnerShell(course, bodyHtml, opts = {}) {
     } else {
       // Fullscreen tablet: sidebar in flex row beside device frame
       app.innerHTML = `
-        <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-0); ${themeVarStyle(course.themeDesign)}">
-          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border);">
-            <button class="btn btn-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
+        <div class="lumio-learner-root" style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+          <div style="display:flex; align-items:center; justify-content:flex-end; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); background:var(--theme-bg-solid, var(--surface-0));">
+            <button class="btn btn-course-secondary btn-sm" id="lp-fullscreen-exit">${platformIcon('close')} Exit Full Screen</button>
           </div>
           <div style="flex:1; display:flex; min-height:0;">
             ${sidebarHtml}
@@ -530,14 +530,14 @@ function learnerShell(course, bodyHtml, opts = {}) {
   } else if (isMobile) {
     // Normal mobile: drawer sidebar overlaying device frame, ☰ Lessons button in-frame
     const mobileBodyHtml = !isOverview ? `
-      <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--surface-0); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
-        <button class="btn btn-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} Lessons</button>
+      <div id="lp-mobile-bar" style="position:sticky; top:0; z-index:100; background:var(--theme-bg-solid, var(--surface-0)); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <button class="btn btn-course-secondary btn-sm" id="lp-menu-toggle">${platformIcon('menu')} Lessons</button>
         ${progressBarHtml(course, progress)}
       </div>${bodyHtml}` : bodyHtml;
     app.innerHTML = `
-      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+      <div class="lumio-learner-root" style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
         ${headerHtml}
-        <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center; background:var(--surface-0);">
+        <div style="flex:1; position:relative; overflow:hidden; display:flex; justify-content:center;">
           ${sidebarHtml}
           <div id="lp-sidebar-backdrop" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.4); z-index:199;"></div>
           <div style="${frameStyle}">
@@ -574,11 +574,11 @@ function learnerShell(course, bodyHtml, opts = {}) {
   } else {
     // Normal tablet: sidebar in flex row beside device frame
     app.innerHTML = `
-      <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
+      <div class="lumio-learner-root" style="height:100vh; display:flex; flex-direction:column; overflow:hidden; ${themeVarStyle(course.themeDesign)}">
         ${headerHtml}
         <div style="flex:1; display:flex; min-height:0;">
           ${sidebarHtml}
-          <div style="flex:1; overflow:hidden; display:flex; justify-content:center; background:var(--surface-0);">
+          <div style="flex:1; overflow:hidden; display:flex; justify-content:center;">
             <div style="${frameStyle}">
               <main style="height:100%; overflow-y:auto; display:flex; flex-direction:column; container-type:inline-size;">${bodyHtml}</main>
             </div>
@@ -787,9 +787,9 @@ function renderLearnerLesson(course, lessonId) {
       </div>
       ${renderLearnerBlocks(blocks, ctx)}
     </div>
-    <div style="position:sticky; bottom:0; background:var(--surface-0); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; min-height:72px; box-sizing:border-box;">
-      <button class="btn btn-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>${L('nav.previous')}</button>
-      <button class="btn btn-primary" id="lp-next" ${nextDisabled ? `disabled title="${L('nav.next_tooltip')}"` : ''}>${nextLabel}</button>
+    <div style="position:sticky; bottom:0; background:var(--theme-bg-solid, var(--surface-0)); border-top:1px solid var(--border); padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; min-height:72px; box-sizing:border-box;">
+      <button class="btn btn-course-secondary" id="lp-prev" ${!prevId ? 'disabled' : ''}>${L('nav.previous')}</button>
+      <button class="btn btn-course-primary" id="lp-next" ${nextDisabled ? `disabled title="${L('nav.next_tooltip')}"` : ''}>${nextLabel}</button>
     </div>
   `;
 
@@ -1059,7 +1059,7 @@ function learnerVideoBlock(block, index, ctx) {
   const watched = !!(ctx.progress.blockProgress && ctx.progress.blockProgress[ctx.lessonId + ':' + index] && ctx.progress.blockProgress[ctx.lessonId + ':' + index].watched);
   return `${html}
     <div class="mt-8" style="text-align:center;">
-      <button class="btn btn-secondary btn-sm lp-mark-watched" data-block-index="${index}" ${watched ? 'disabled' : ''}>${watched ? L('video.marked_watched') : L('video.mark_watched')}</button>
+      <button class="btn btn-course-secondary btn-sm lp-mark-watched" data-block-index="${index}" ${watched ? 'disabled' : ''}>${watched ? L('video.marked_watched') : L('video.mark_watched')}</button>
     </div>`;
 }
 
@@ -1102,11 +1102,11 @@ function learnerCarouselBlock(block, index, ctx) {
       ${slideHtml}
       ${textHtml}
       <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.prev_slide')}">${L('carousel.prev')}</button>
+        <button class="btn btn-course-secondary btn-sm lp-carousel-prev" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.prev_slide')}">${L('carousel.prev')}</button>
         <div class="flex gap-8" role="group" aria-label="${L('carousel.indicators')}">
           ${slides.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
         </div>
-        <button class="btn btn-secondary btn-sm lp-carousel-next" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.next_slide')}">${L('carousel.next')}</button>
+        <button class="btn btn-course-secondary btn-sm lp-carousel-next" data-key="${key}" ${slides.length<2?'disabled':''} aria-label="${L('carousel.next_slide')}">${L('carousel.next')}</button>
       </div>
     </div>`;
 }
@@ -1138,11 +1138,11 @@ function learnerQuoteCarouselBlock(block, index, ctx) {
         ${q.author ? `<p class="text-sm mt-8" style="color:${qcTextColor}; opacity:0.7;${q.authorAlign ? ` text-align:${q.authorAlign};` : ''}">${richTextOut(q.author)}</p>` : ''}
       </div>
       <div class="flex items-center justify-between mt-8">
-        <button class="btn btn-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.prev_quote')}">${L('carousel.prev')}</button>
+        <button class="btn btn-course-secondary btn-sm lp-quote-prev" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.prev_quote')}">${L('carousel.prev')}</button>
         <div class="flex gap-8" role="group" aria-label="${L('carousel.quote_inds')}">
           ${quotes.map((_,i)=>`<span style="width:8px; height:8px; border-radius:50%; display:inline-block; background:${i===active?'var(--indigo)':'var(--border)'};"></span>`).join('')}
         </div>
-        <button class="btn btn-secondary btn-sm lp-quote-next" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.next_quote')}">${L('carousel.next')}</button>
+        <button class="btn btn-course-secondary btn-sm lp-quote-next" data-key="${key}" ${quotes.length<2?'disabled':''} aria-label="${L('carousel.next_quote')}">${L('carousel.next')}</button>
       </div>
     </div>`;
 }
@@ -1226,7 +1226,7 @@ function kcPostSubmitFooter(ans, settings, key, align) {
         <span>${escapeHtml(explanation)}</span>
       </div>
       ${canRetry ? `<div class="kc-footer" style="display:flex; justify-content:${jc}; margin-top:12px;">
-        <button class="btn btn-secondary btn-sm lp-kc-retry" data-kc-key="${key}">${L('kc.try_again')}</button>
+        <button class="btn btn-course-secondary btn-sm lp-kc-retry" data-kc-key="${key}">${L('kc.try_again')}</button>
       </div>` : ''}
     </div>`;
 }

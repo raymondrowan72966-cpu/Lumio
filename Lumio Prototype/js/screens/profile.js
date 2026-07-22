@@ -27,7 +27,7 @@ function renderProfile() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-lavender)', '340px', '340px', '-100px', '-100px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1; max-width:720px;">
 

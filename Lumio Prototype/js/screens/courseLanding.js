@@ -249,7 +249,7 @@ function renderCourseLanding(courseId) {
         ` : `<span class="text-sm text-muted">${platformIcon('preview')} Preview as Learner</span>`}
       </div>
     </header>
-    <main class="app-content">
+    <main class="app-content" style="${themeVarStyle(course.themeDesign)}">
       ${ambientBlobs([
         ['var(--pastel-lavender)', '380px', '380px', '-100px', null, null, '40%'],
       ])}
@@ -1031,7 +1031,7 @@ function openTranslationModal(course) {
     const validationHtml = lastValidation ? renderValidationStats(lastValidation) : '';
     overlay.innerHTML = `
       <div class="modal" style="width:540px; max-width:95vw; max-height:90vh; overflow-y:auto;">
-        <div class="flex items-center justify-between" style="padding:16px 20px; border-bottom:1px solid var(--border);">
+        <div class="flex items-center justify-between" style="padding:16px 20px; border-bottom:1px solid var(--ws-border);">
           <div class="flex items-center gap-8">
             <span style="font-size:20px;">🌐</span>
             <strong style="font-size:16px;">Translate Course</strong>
@@ -1073,7 +1073,7 @@ function openTranslationModal(course) {
             <button class="btn btn-secondary btn-sm" id="tm-export" style="margin-top:12px;">⬇ Export XLIFF</button>
           </section>
 
-          <div style="border-top:1px solid var(--border);"></div>
+          <div style="border-top:1px solid var(--ws-border);"></div>
 
           <!-- Import Section -->
           <section>
@@ -1084,9 +1084,9 @@ function openTranslationModal(course) {
             <p class="text-sm text-muted" style="margin-bottom:12px;">
               Upload the completed XLIFF file to update your course content.
             </p>
-            <div id="tm-drop-zone" style="border:2px dashed var(--border); border-radius:var(--r-lg); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; background:var(--surface-1);">
+            <div id="tm-drop-zone" style="border:2px dashed var(--ws-border); border-radius:var(--r-lg); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; background:var(--ws-surface);">
               ${importFile
-                ? `<p class="text-sm" style="color:var(--ink-900);">📄 <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
+                ? `<p class="text-sm">📄 <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
                    <button class="btn btn-ghost btn-sm" id="tm-clear-file" style="margin-top:6px;">✕ Remove</button>`
                 : `<p class="text-sm text-muted">Drag &amp; drop your .xlf file here, or</p>
                    <button class="btn btn-secondary btn-sm" id="tm-select-file" style="margin-top:8px;">📁 Select File</button>`
@@ -1103,7 +1103,7 @@ function openTranslationModal(course) {
             ` : (importFile ? `<button class="btn btn-secondary btn-sm" id="tm-validate" style="margin-top:12px;">🔍 Validate File</button>` : '')}
           </section>
 
-          <div style="border-top:1px solid var(--border);"></div>
+          <div style="border-top:1px solid var(--ws-border);"></div>
 
           <!-- Label Sets Section -->
           <section>
@@ -1130,14 +1130,14 @@ function openTranslationModal(course) {
             </div>
           </section>
 
-          <div style="border-top:1px solid var(--border);"></div>
+          <div style="border-top:1px solid var(--ws-border);"></div>
 
           <!-- Future / AI Section (reserved) -->
           <section style="opacity:0.5; pointer-events:none;">
             <div class="flex items-center gap-8" style="margin-bottom:8px;">
               <span style="font-size:15px;">✨</span>
               <strong style="font-size:14px;">AI Translation</strong>
-              <span class="text-sm text-muted" style="background:var(--surface-2); padding:2px 8px; border-radius:999px;">Coming soon</span>
+              <span class="text-sm text-muted" style="background:var(--ws-surface); padding:2px 8px; border-radius:999px;">Coming soon</span>
             </div>
             <p class="text-sm text-muted">
               One-click AI translation via OpenAI, Anthropic, Google, Azure, DeepL, or a local model.
@@ -1150,7 +1150,7 @@ function openTranslationModal(course) {
             <div class="flex items-center gap-8" style="margin-bottom:8px;">
               <span style="font-size:15px;">🕐</span>
               <strong style="font-size:14px;">Translation History</strong>
-              <span class="text-sm text-muted" style="background:var(--surface-2); padding:2px 8px; border-radius:999px;">Coming soon</span>
+              <span class="text-sm text-muted" style="background:var(--ws-surface); padding:2px 8px; border-radius:999px;">Coming soon</span>
             </div>
             <p class="text-sm text-muted">
               View and restore previous translations. Multilingual course variants stored per-locale.

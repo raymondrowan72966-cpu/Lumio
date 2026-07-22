@@ -91,7 +91,7 @@ function renderProjects() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-cyan)', '320px', '320px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1;">
 
@@ -157,7 +157,7 @@ function continueCard(p) {
         <span class="pill ${TYPE_BADGE[p.type]}" style="position:absolute; top:8px; left:8px; z-index:1;">${p.type}</span>
       </div>
       <div style="padding:12px 14px;">
-        <div style="font-size:13px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${projectDisplayTitle(p)}</div>
+        <div style="font-size:13px; font-weight:600; color:var(--ws-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${projectDisplayTitle(p)}</div>
         <div class="text-sm text-muted" style="font-size:12px;">${relativeEditedLabel(p.lastAccessed)}</div>
       </div>
     </div>
@@ -172,10 +172,10 @@ function teamProjectsChip() {
   if (count === 0) return '';
   const active = LumioState.currentFolder === '__team__';
   return `
-    <div class="pill" style="background:${active ? 'var(--ws-primary)' : 'var(--surface-0)'}; border:1px solid ${active ? 'var(--ws-primary)' : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="__team__">
+    <div class="pill" style="background:${active ? 'var(--ws-primary)' : 'var(--ws-surface)'}; border:1px solid ${active ? 'var(--ws-primary)' : 'var(--ws-border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="__team__">
       <span style="font-size:14px;">${platformIcon('team')}</span>
-      <span style="color:${active ? '#fff' : 'var(--ink-900)'}; font-weight:600;">Team Projects</span>
-      <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'};">${count}</span>
+      <span style="color:${active ? '#fff' : 'var(--ws-text)'}; font-weight:600;">Team Projects</span>
+      <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ws-text-muted)'};">${count}</span>
     </div>
   `;
 }
@@ -186,11 +186,11 @@ function folderChip(f) {
   const count = visibleProjects().filter(p => p.folder === f.id).length;
   const active = LumioState.currentFolder === f.id;
   return `
-    <div class="pill" style="background:${active ? colorVar : 'var(--surface-0)'}; border:1px solid ${active ? colorVar : 'var(--border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="${f.id}">
+    <div class="pill" style="background:${active ? colorVar : 'var(--ws-surface)'}; border:1px solid ${active ? colorVar : 'var(--ws-border)'}; cursor:pointer; padding:10px 16px; gap:10px;" data-folder="${f.id}">
       <span style="width:8px; height:8px; border-radius:50%; background:${active ? '#fff' : colorVar}; display:inline-block;"></span>
-      <span style="color:${active ? '#fff' : 'var(--ink-900)'}; font-weight:600;">${f.name}</span>
-      <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'};">${count}</span>
-      <span class="folder-menu-btn" data-folder-menu="${f.id}" style="margin-left:4px; color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ink-400)'}; padding:0 2px;">${platformIcon('more-options')}</span>
+      <span style="color:${active ? '#fff' : 'var(--ws-text)'}; font-weight:600;">${f.name}</span>
+      <span style="color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ws-text-muted)'};">${count}</span>
+      <span class="folder-menu-btn" data-folder-menu="${f.id}" style="margin-left:4px; color:${active ? 'rgba(255,255,255,0.7)' : 'var(--ws-text-muted)'}; padding:0 2px;">${platformIcon('more-options')}</span>
     </div>
   `;
 }
@@ -211,14 +211,14 @@ function projectCard(p) {
       <div style="padding:14px 16px;">
         <div class="flex justify-between items-start gap-8">
           <div style="min-width:0; cursor:pointer;" data-open="${p.id}">
-            <div style="font-size:14px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
+            <div style="font-size:14px; font-weight:600; color:var(--ws-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
             <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
           </div>
           <button class="btn-icon" data-menu="${p.id}" title="More">${platformIcon('more-options')}</button>
         </div>
         <div class="mt-16" style="display:flex; align-items:center; gap:8px;">
           <span class="proj-lang-badge" title="Course language">${_courseLangName(p)}</span>
-          <div style="flex:1; height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
+          <div style="flex:1; height:6px; background:var(--ws-border); border-radius:99px; overflow:hidden;">
             <div style="width:${p.health}%; height:100%; background:var(--ws-progress);"></div>
           </div>
           <span class="text-sm text-muted" title="Lumio Health Score — based on objective alignment, content variety & accessibility">${p.health}</span>
@@ -267,7 +267,7 @@ function renderRecent() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-cyan)', '320px', '320px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1;">
         <div id="projects-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px;">
@@ -306,7 +306,7 @@ function renderTrash() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-cyan)', '320px', '320px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1;">
         <div id="trash-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px;">
@@ -330,7 +330,7 @@ function trashCard(p) {
         ${thumb.heroSrc ? '' : `<span style="font-size:38px; opacity:0.55; position:relative; z-index:1; display:flex; align-items:center; justify-content:center; height:100%;">${p.type === 'Course' ? platformIcon('hub') : platformIcon('rocket')}</span>`}
       </div>
       <div style="padding:14px 16px;">
-        <div style="font-size:14px; font-weight:600; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
+        <div style="font-size:14px; font-weight:600; color:var(--ws-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${projectDisplayTitle(p)}">${projectDisplayTitle(p)}</div>
         <div class="text-sm text-muted mt-8">${p.type} · ${relativeEditedLabel(p.lastAccessed)}</div>
         <div class="flex gap-12 mt-16">
           <button class="btn btn-secondary btn-sm restore-btn" data-restore="${p.id}" style="flex:1;">${platformIcon('restore')} Restore</button>
@@ -545,7 +545,7 @@ function popoverAt(btn, itemsHtml, opts) {
 }
 
 function menuItem(label, iconId, danger, disabled) {
-  return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? '0.45' : '1'}; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ink-700);'}">
+  return `<div class="menu-item${danger ? ' danger text-destructive' : ''}" style="padding:9px 12px; border-radius:var(--r-sm); font-size:13px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? '0.45' : '1'}; display:flex; align-items:center; gap:10px;${danger ? '' : ' color:var(--ws-text);'}">
     ${platformIcon(iconId)}<span>${label}</span></div>`;
 }
 
@@ -585,8 +585,8 @@ function openProjectMenu(btn, id) {
     <div class="move-options" style="display:none;">${folderOptions}</div>` : ''}
     <div data-action="preview">${menuItem('Open Learner Preview', 'preview')}</div>
     <div data-action="export">${menuItem('Export Backup (.lumio)', 'export-pack')}</div>
-    ${workflowItems.length ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div>${workflowItems.join('')}` : ''}
-    ${!viewOnly ? `<div style="height:1px; background:var(--border); margin:4px 0;"></div><div data-action="delete">${menuItem('Delete', 'delete', true)}</div>` : ''}
+    ${workflowItems.length ? `<div style="height:1px; background:var(--ws-border); margin:4px 0;"></div>${workflowItems.join('')}` : ''}
+    ${!viewOnly ? `<div style="height:1px; background:var(--ws-border); margin:4px 0;"></div><div data-action="delete">${menuItem('Delete', 'delete', true)}</div>` : ''}
   `);
 
   ['submit_for_review', 'approve', 'reject', 'archive', 'restore'].forEach(action => {
@@ -955,7 +955,7 @@ function openCreateNewModal() {
   `);
   document.body.appendChild(overlay);
   overlay.querySelectorAll('.create-option').forEach(opt => {
-    opt.addEventListener('mouseover', () => opt.style.boxShadow = 'var(--shadow-md)');
+    opt.addEventListener('mouseover', () => opt.style.boxShadow = 'var(--ws-shadow, var(--shadow-md))');
     opt.addEventListener('mouseout', () => opt.style.boxShadow = '');
     opt.addEventListener('click', () => {
       overlay.remove();
@@ -990,7 +990,7 @@ function openImportContentModal() {
           <button class="btn btn-ghost btn-sm" id="imp-back" aria-label="Back to Create New">← Back</button>
         </div>
 
-        <h2 style="font-size:22px; color:var(--ink-900);">Import Existing Content</h2>
+        <h2 style="font-size:22px;">Import Existing Content</h2>
         <p class="text-sm text-muted mt-8 mb-28">Choose a format to import and convert into a Lumio course.</p>
 
         <div class="flex-col gap-12" role="list">
@@ -1003,7 +1003,7 @@ function openImportContentModal() {
             <div class="flex items-center gap-16">
               <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon('export-pack')}</div>
               <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:15px; color:var(--ink-900);">SCORM Package</div>
+                <div style="font-weight:700; font-size:15px;">SCORM Package</div>
                 <div class="text-sm text-muted mt-4">SCORM 1.2 packages and compatible exports (.zip)</div>
               </div>
               <span class="pill pill-cyan" style="flex-shrink:0;">Available</span>
@@ -1017,10 +1017,10 @@ function openImportContentModal() {
               <div class="flex items-center gap-16">
                 <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon(f.iconId)}</div>
                 <div style="flex:1; min-width:0;">
-                  <div style="font-weight:700; font-size:15px; color:var(--ink-900);">${f.label}</div>
+                  <div style="font-weight:700; font-size:15px;">${f.label}</div>
                   <div class="text-sm text-muted mt-4">${f.hint}</div>
                 </div>
-                <span class="pill" style="flex-shrink:0; background:var(--surface-50); color:var(--ink-400); border:1px solid var(--border);">Coming Soon</span>
+                <span class="pill" style="flex-shrink:0; background:var(--ws-surface); color:var(--ws-text-muted); border:1px solid var(--ws-border);">Coming Soon</span>
               </div>
             </div>
           `).join('')}
@@ -1084,7 +1084,7 @@ function openHelpMeDecide() {
       const q = questions[step];
       content.innerHTML = `
         <div class="flex gap-6 mb-16">
-          ${questions.map((_, i) => `<div style="height:4px; flex:1; border-radius:var(--r-pill); background:${i <= step ? 'var(--gradient-primary)' : 'var(--border)'};"></div>`).join('')}
+          ${questions.map((_, i) => `<div style="height:4px; flex:1; border-radius:var(--r-pill); background:${i <= step ? 'var(--gradient-primary)' : 'var(--ws-border)'};"></div>`).join('')}
         </div>
         <div class="ai-spark mb-16">${platformIcon('ai')}</div>
         <h2 style="font-size:20px;">${q.label}</h2>
@@ -1125,8 +1125,8 @@ function openImportModal() {
         <h3 style="font-size:16px; margin-bottom:4px;">Import Project</h3>
         <p class="text-sm text-muted mb-20">Restore a Lumio project from a backup file.</p>
 
-        <div style="margin-bottom:20px; padding:16px; border-radius:var(--r-md); background:var(--surface-0); border:1px solid var(--border);">
-          <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Supported Format</div>
+        <div style="margin-bottom:20px; padding:16px; border-radius:var(--r-md); background:var(--ws-surface); border:1px solid var(--ws-border);">
+          <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ws-text-muted); margin-bottom:10px;">Supported Format</div>
           <div class="flex items-center gap-10" style="margin-bottom:4px;">
             <span style="color:var(--teal); font-weight:700; font-size:15px;">✓</span>
             <span style="font-size:14px; font-weight:600;">.lumio</span>
@@ -1135,7 +1135,7 @@ function openImportModal() {
         </div>
 
         <div style="margin-bottom:24px; padding:16px; border-radius:var(--r-md); background:rgba(229,72,77,0.04); border:1px solid rgba(229,72,77,0.15);">
-          <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-400); margin-bottom:10px;">Not Supported</div>
+          <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ws-text-muted); margin-bottom:10px;">Not Supported</div>
           ${[
             ['Rise 360 exports', '.zip'],
             ['Storyline exports', '.story / .zip'],

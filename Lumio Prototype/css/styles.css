@@ -79,9 +79,11 @@
                    radial-gradient(at 70% 80%, rgba(217,70,239,0.25) 0px, transparent 50%),
                    radial-gradient(at 10% 90%, rgba(20,184,166,0.25) 0px, transparent 50%);
 
-  /* Glass */
-  --glass-bg: rgba(255,255,255,0.55);
-  --glass-border: rgba(255,255,255,0.45);
+  /* Glass — derives from workspace surface/border so it reads correctly on
+     both light and dark themes. Under Lumio this is white glass; under
+     Midnight it becomes a dark semi-transparent panel. */
+  --glass-bg: color-mix(in srgb, var(--ws-surface, #FFFFFF) 55%, transparent);
+  --glass-border: color-mix(in srgb, var(--ws-border, #E5E5EE) 50%, transparent);
   --glass-blur: 18px;
 
   /* Semantic */
@@ -183,12 +185,15 @@ h1, h2, h3, h4 {
 }
 
 /* Page background follows the authored Course Theme background.
-   --theme-bg-style is set on .lumio-learner-root (and its ancestors in the
-   builder) by themeVarStyle() — this rule ensures that variable is actually
-   consumed as the visible background rather than the platform's default
-   --surface-50 grey bleeding through from #app. */
+   --theme-bg-style is set on .lumio-learner-root / .course-landing-root by
+   themeVarStyle() — these rules ensure that variable is actually consumed as
+   the visible background rather than the Platform shell's --ws-surface-alt
+   bleeding through from .app-content. */
 .lumio-learner-root {
   background: var(--theme-bg-style, var(--surface-50));
+}
+.course-landing-root {
+  background: var(--theme-bg-style, var(--surface-0));
 }
 #lesson-canvas h1, #lesson-canvas h2, #lesson-canvas h3, #lesson-canvas h4,
 .lumio-learner-root h1, .lumio-learner-root h2, .lumio-learner-root h3, .lumio-learner-root h4,
@@ -337,10 +342,10 @@ button { font-family: var(--font-body); cursor: pointer; }
    than the mismatched-on-one-side artifacts a real border produced when it
    collided with hover/focus box-shadows. */
 .btn-secondary {
-  background: var(--surface-0);
-  color: var(--ink-700);
+  background: var(--ws-surface, var(--surface-0));
+  color: var(--ws-text, var(--ink-700));
   border: none;
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--ws-border, var(--border));
 }
 .btn-secondary:hover { box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); color: var(--ws-primary, var(--indigo)); }
 #lesson-canvas .btn-secondary:hover,
@@ -366,16 +371,52 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 .btn-ghost {
   background: transparent;
-  color: var(--ink-700);
+  color: var(--ws-text, var(--ink-700));
   border: none;
 }
 .btn-ghost:hover { background: color-mix(in srgb, var(--ws-primary) 8%, transparent); }
 /* Learner/course context — ghost hover follows course theme, not workspace theme */
 .lumio-learner-root .btn-ghost:hover,
-.course-landing-root .btn-ghost:hover { background: color-mix(in srgb, var(--theme-primary) 8%, transparent); }
+.course-landing-root .btn-ghost:hover,
+#lesson-canvas .btn-ghost:hover { background: color-mix(in srgb, var(--theme-primary) 8%, transparent); }
 /* Destructive ghost buttons get a red-tint hover/focus so the intent is clear */
 .btn-ghost.text-destructive:hover { background: var(--color-destructive-tint); }
 .btn-ghost.text-destructive:focus-visible { outline: 2px solid var(--color-destructive); outline-offset: 2px; background: var(--color-destructive-tint); }
+
+/* ============================================================
+   COURSE BUTTON SYSTEM
+   Completely independent of the Platform button system.
+   Derives entirely from --theme-* tokens (Course Theme Engine).
+   Used by all learner-facing course content.
+   ============================================================ */
+.btn-course-primary {
+  background: linear-gradient(90deg, var(--theme-primary, var(--indigo)) 0%, var(--theme-secondary, #4F46E5) 55%, var(--theme-accent, #06B6D4) 100%);
+  color: #fff;
+  border: none;
+  box-shadow: var(--shadow-soft);
+}
+.btn-course-primary:hover { filter: brightness(1.04); box-shadow: var(--shadow-lift); }
+.btn-course-primary:disabled { opacity: 0.5; cursor: not-allowed; filter: none; box-shadow: none; }
+.btn-course-primary:focus-visible { box-shadow: var(--shadow-lift), var(--focus-ring); }
+
+.btn-course-secondary {
+  background: var(--theme-bg-solid, var(--surface-0));
+  color: var(--theme-primary, var(--indigo));
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo));
+}
+.btn-course-secondary:hover { background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, transparent); }
+.btn-course-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-course-secondary:focus-visible { box-shadow: inset 0 0 0 1px var(--theme-primary, var(--indigo)), var(--focus-ring); }
+
+.btn-course-ghost {
+  background: transparent;
+  color: var(--theme-primary, var(--indigo));
+  border: none;
+}
+.btn-course-ghost:hover { background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, transparent); }
+.btn-course-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-course-ghost:focus-visible { box-shadow: var(--focus-ring); }
 
 .btn-danger {
   background: var(--color-destructive);
@@ -405,9 +446,9 @@ button { font-family: var(--font-body); cursor: pointer; }
   height: 36px;
   border-radius: var(--r-md);
   border: none;
-  box-shadow: inset 0 0 0 1px var(--border);
-  background: var(--surface-0);
-  color: var(--ink-400);
+  box-shadow: inset 0 0 0 1px var(--ws-border, var(--border));
+  background: var(--ws-surface, var(--surface-0));
+  color: var(--ws-text-muted, var(--ink-400));
   transition: all 0.15s ease-out;
   outline: none;
 }
@@ -535,17 +576,17 @@ button { font-family: var(--font-body); cursor: pointer; }
    FORM ELEMENTS
    ============================================================ */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
-.field label { font-size: 13px; font-weight: 600; color: var(--ink-700); }
-.field .hint { font-size: 12px; color: var(--ink-400); font-weight: 400; }
+.field label { font-size: 13px; font-weight: 600; color: var(--ws-text, var(--ink-700)); }
+.field .hint { font-size: 12px; color: var(--ws-text-muted, var(--ink-400)); font-weight: 400; }
 
 .input, .textarea, select.input {
   font-family: var(--font-body);
   font-size: 14px;
   padding: 12px 14px;
   border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface-0);
-  color: var(--ink-900);
+  border: 1px solid var(--ws-border, var(--border));
+  background: var(--ws-surface, var(--surface-0));
+  color: var(--ws-text, var(--ink-900));
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
@@ -560,7 +601,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .input-icon-wrap .input { padding-left: 40px; }
 .input-icon-wrap .icon {
   position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
-  color: var(--ink-400); font-size: 16px; pointer-events: none;
+  color: var(--ws-text-muted, var(--ink-400)); font-size: 16px; pointer-events: none;
 }
 
 /* ============================================================
@@ -571,6 +612,16 @@ button { font-family: var(--font-body); cursor: pointer; }
   border-radius: var(--ws-radius);
   box-shadow: var(--ws-shadow);
   border: 1px solid var(--ws-border);
+}
+/* Course content override — cards inside exported surfaces follow the Course
+   Theme, not the Platform Appearance. Uses --theme-* tokens only. */
+.course-landing-root .card,
+.lumio-learner-root .card,
+#lesson-canvas .card {
+  background: var(--theme-bg-solid, var(--surface-0));
+  border-radius: var(--theme-radius, var(--r-lg));
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .card-pad { padding: 24px; }
@@ -1121,7 +1172,28 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* App shell is pinned to the viewport so the sidebar (logo, nav, sign out,
    user profile) never shifts with page content/scroll — only .app-content
    scrolls. */
-.app-shell { display: flex; height: 100vh; overflow: hidden; }
+.app-shell { display: flex; height: 100vh; overflow: hidden; color: var(--ws-text, var(--ink-700)); }
+
+/* Platform heading cascade — follows workspace appearance */
+.app-shell h1, .app-shell h2, .app-shell h3, .app-shell h4 { color: var(--ws-text, var(--ink-900)); }
+
+/* Platform-scoped text-muted — follows workspace appearance */
+.app-shell .text-muted { color: var(--ws-text-muted, var(--ink-400)); }
+
+/* Course container isolation — wins over .app-shell rules via higher specificity.
+   Course content sets its own text colors via --theme-* and --ink-* tokens. */
+.app-shell .lumio-learner-root,
+.app-shell .course-landing-root,
+.app-shell #lesson-canvas { color: var(--ink-900); }
+.app-shell .lumio-learner-root h1, .app-shell .lumio-learner-root h2,
+.app-shell .lumio-learner-root h3, .app-shell .lumio-learner-root h4,
+.app-shell .course-landing-root h1, .app-shell .course-landing-root h2,
+.app-shell .course-landing-root h3, .app-shell .course-landing-root h4,
+.app-shell #lesson-canvas h1, .app-shell #lesson-canvas h2,
+.app-shell #lesson-canvas h3, .app-shell #lesson-canvas h4 { color: var(--ink-900); }
+.app-shell .lumio-learner-root .text-muted,
+.app-shell .course-landing-root .text-muted,
+.app-shell #lesson-canvas .text-muted { color: var(--ink-400); }
 
 .app-sidebar {
   width: 240px;
@@ -1210,6 +1282,13 @@ button { font-family: var(--font-body); cursor: pointer; }
   overflow-y: auto;
   background: var(--ws-surface-alt);
 }
+/* When app-content is presenting exported course content, the entire
+   presentation area belongs to the Course Theme Engine, not the Platform.
+   --theme-bg-style is set via inline style on the <main> element by
+   renderCourseLanding / renderLessonBuilder when course content is active. */
+.app-content:has(.course-landing-root) {
+  background: var(--theme-bg-style, var(--surface-50));
+}
 
 /* ambient blobs */
 .ambient-bg {
@@ -1221,8 +1300,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.55;
+  filter: blur(140px);
+  opacity: 0.45;
 }
 
 /* ============================================================
@@ -1293,9 +1372,10 @@ button { font-family: var(--font-body); cursor: pointer; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
-  background: var(--surface-0);
+  background: var(--ws-surface-alt, var(--ws-surface, var(--surface-0)));
+  color: var(--ws-text, var(--ink-900));
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--ws-shadow, var(--shadow-md));
   max-width: 92vw;
   max-height: 88vh;
   overflow-y: auto;
@@ -1308,9 +1388,9 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 /* Media Picker dropzone */
 .mp-dropzone {
-  border: 2px dashed var(--border);
+  border: 2px dashed var(--ws-border, var(--border));
   border-radius: var(--r-md);
-  background: var(--surface-50);
+  background: var(--ws-surface-alt, var(--surface-50));
   min-height: 180px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
@@ -1440,7 +1520,7 @@ button { font-family: var(--font-body); cursor: pointer; }
    PREMIUM / INTERACTIVE CARDS
    ============================================================ */
 .card-premium {
-  background: var(--surface-0);
+  background: var(--ws-surface, var(--surface-0));
   border-radius: var(--r-xl);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-soft);
@@ -1460,7 +1540,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   position: relative;
   border-radius: var(--r-xl);
   border: 1px solid var(--border);
-  background: var(--surface-0);
+  background: var(--ws-surface, var(--surface-0));
   padding: 28px 24px;
   text-align: left;
   cursor: pointer;
@@ -1632,6 +1712,11 @@ button { font-family: var(--font-body); cursor: pointer; }
   background: var(--surface-0); transition: background .12s;
 }
 .acc-header:hover { background: color-mix(in srgb, var(--ws-primary) 8%, transparent); }
+.course-landing-root .acc-header:hover,
+.lumio-learner-root .acc-header:hover,
+#lesson-canvas .acc-header:hover {
+  background: color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, transparent);
+}
 .acc-body {
   display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease-out;
 }
@@ -1646,7 +1731,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .prop-section { margin-bottom: 18px; }
 .prop-section-title {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--ink-400); margin-bottom: 10px;
+  color: var(--ws-text-muted, var(--ink-400)); margin-bottom: 10px;
 }
 .prop-row { display: flex; gap: 8px; }
 
@@ -1694,8 +1779,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .seg-control button {
   display: flex; align-items: center; justify-content: center;
   flex: 1 1 auto; min-width: max-content; height: 34px; padding: 0 14px;
-  border: none; box-shadow: inset 0 0 0 1px var(--border); border-radius: var(--r-md); background: var(--surface-0);
-  font-size: 12px; font-weight: 600; color: var(--ink-700); white-space: nowrap;
+  border: none; box-shadow: inset 0 0 0 1px var(--ws-border, var(--border)); border-radius: var(--r-md); background: var(--ws-surface, var(--surface-0));
+  font-size: 12px; font-weight: 600; color: var(--ws-text, var(--ink-700)); white-space: nowrap;
   cursor: pointer; transition: all .12s; outline: none;
 }
 .seg-control button:hover { box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); color: var(--ws-primary, var(--indigo)); }
@@ -1800,7 +1885,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .notif-centre {
   position: fixed; top: 0; right: 0; bottom: 0;
   width: 360px; max-width: 100vw;
-  background: var(--surface-0);
+  background: var(--ws-surface, var(--surface-0));
   box-shadow: -4px 0 24px rgba(31,27,58,0.12);
   z-index: 8001; display: flex; flex-direction: column;
   animation: notifCentreIn 0.22s ease-out;

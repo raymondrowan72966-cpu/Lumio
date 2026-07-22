@@ -43,7 +43,7 @@ function renderHub() {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-lavender)', '360px', '360px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1;">
 
@@ -138,7 +138,7 @@ function renderAcademyPath(pathId) {
     </header>
     <main class="app-content">
       ${ambientBlobs([
-        ['var(--pastel-cyan)', '360px', '360px', '-100px', '-80px', null, null],
+        ['oklch(from var(--ws-primary) l c h / 0.08)', '900px', '900px', '-380px', '-280px', null, null],
       ])}
       <div style="position:relative; z-index:1;">
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:20px;">
