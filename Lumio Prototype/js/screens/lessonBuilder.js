@@ -107,7 +107,7 @@ function renderLessonBuilder(lessonId) {
 
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div style="height:100vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="app-shell" style="height:100vh; display:flex; flex-direction:column; overflow:hidden;">
       ${renderBuilderTopbar(course, lesson)}
       <div style="flex:1; display:flex; min-height:0;">
         ${renderBlockLibrary(lesson, course)}
@@ -3097,16 +3097,16 @@ function lessonInsights(blocks, course, lesson) {
   const courseObjs = course ? (course.objectives || []) : [];
 
   return `
-    <div class="card card-pad mt-16" style="background:color-mix(in srgb, var(--ws-primary) 8%, var(--ws-surface)); border:1px solid color-mix(in srgb, var(--ws-primary) 20%, transparent);">
+    <div class="inspector-card" style="margin-top:16px; background:color-mix(in srgb, var(--ws-primary) 8%, var(--ws-surface)); border-color:color-mix(in srgb, var(--ws-primary) 20%, transparent);">
       <div class="flex justify-between items-center"><span class="text-sm" style="font-weight:600;">Content Variety</span><span class="text-sm">${variety} types</span></div>
       <div style="height:6px; background:var(--ws-border); border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
     </div>
-    <div class="card card-pad mt-12">
+    <div class="inspector-card">
       <div class="flex justify-between items-center text-sm"><span>${platformIcon('target')} ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>
       <p class="text-sm mt-8">${objIndices.length > 0 ? `${objIndices.length} objective${objIndices.length > 1 ? 's' : ''} linked` : 'Not linked to an objective yet'}</p>
       <button class="btn btn-secondary btn-sm mt-8 w-full" id="link-objective">${objIndices.length > 0 ? 'Link objectives' : 'Link an objective'}</button>
     </div>
-    <div class="card card-pad mt-12">
+    <div class="inspector-card">
       <div class="text-sm flex justify-between"><span>${platformIcon('notes')} Estimated read time</span><span>~${Math.max(1,Math.round(wordEstimate/130))} min</span></div>
       <div class="text-sm flex justify-between mt-8"><span>${platformIcon('success')} Knowledge checks</span><span>${kcCount}</span></div>
       <div class="text-sm flex justify-between mt-8"><span>${platformIcon('image-placeholder')} Visual blocks</span><span>${imgCount}</span></div>

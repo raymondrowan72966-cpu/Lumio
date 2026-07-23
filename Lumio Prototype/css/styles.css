@@ -34,6 +34,11 @@
 
   /* Gradients */
   --gradient-primary: linear-gradient(90deg, #7C3AED 0%, #4F46E5 55%, #06B6D4 100%);
+  /* Workspace-aware gradient — derives from active --ws-* tokens so every Platform
+     control using var(--ws-gradient) automatically reflects the selected Workspace
+     Appearance with no JS involvement. applyWorkspaceIdentity() writes --ws-primary/
+     secondary/accent; CSS resolves this reference dynamically on every paint. */
+  --ws-gradient: linear-gradient(90deg, var(--ws-primary, #7C3AED) 0%, var(--ws-secondary, #4F46E5) 55%, var(--ws-accent, #06B6D4) 100%);
   --gradient-warm: linear-gradient(135deg, #F97316 0%, #D946EF 100%);
   --gradient-ai: linear-gradient(90deg, #06B6D4 0%, #7C3AED 100%);
 
@@ -626,6 +631,22 @@ button { font-family: var(--font-body); cursor: pointer; }
 
 .card-pad { padding: 24px; }
 
+/* Inspector cards — elevated above the inspector panel background.
+   Panel uses --ws-surface-alt; these cards use --ws-surface to create
+   one clear level of elevation without any new tokens or colours.
+   Color is declared explicitly because the builder panel sits outside
+   the .app-shell text cascade and would otherwise inherit the body
+   primitive instead of the Workspace text token. */
+.inspector-card {
+  background: var(--ws-surface);
+  border-radius: var(--ws-radius);
+  border: 1px solid var(--ws-border);
+  box-shadow: var(--ws-shadow);
+  color: var(--ws-text);
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
 /* ── Assessment Theme ───────────────────────────────────────────────────────
    Design token system for all KC visual design.
    All KC component rules below consume these tokens — nothing is hardcoded.
@@ -1172,7 +1193,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* App shell is pinned to the viewport so the sidebar (logo, nav, sign out,
    user profile) never shifts with page content/scroll — only .app-content
    scrolls. */
-.app-shell { display: flex; height: 100vh; overflow: hidden; color: var(--ws-text, var(--ink-700)); }
+.app-shell { display: flex; height: 100vh; overflow: hidden; color: var(--ws-text, var(--ink-700)); accent-color: var(--ws-primary); }
 
 /* Platform heading cascade — follows workspace appearance */
 .app-shell h1, .app-shell h2, .app-shell h3, .app-shell h4 { color: var(--ws-text, var(--ink-900)); }
@@ -1309,7 +1330,7 @@ button { font-family: var(--font-body); cursor: pointer; }
    ============================================================ */
 .avatar {
   width: 36px; height: 36px; border-radius: 50%;
-  background: var(--gradient-primary);
+  background: var(--ws-gradient);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-weight: 700; font-size: 14px;
   flex-shrink: 0;
@@ -1385,6 +1406,18 @@ button { font-family: var(--font-body); cursor: pointer; }
   from { opacity: 0; transform: translateY(16px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+/* Headings inside modals and overlays must follow the Workspace Theme.
+   The global h1–h4 rule uses an element selector that wins over inherited
+   colour, so modals outside .app-shell rendered dark headings under Midnight.
+   This class-level rule has higher specificity and fixes all Platform dialogs. */
+.modal h1, .modal h2, .modal h3, .modal h4,
+.overlay h1, .overlay h2, .overlay h3, .overlay h4 {
+  color: var(--ws-text, var(--ink-900));
+}
+.modal .text-muted,
+.overlay .text-muted {
+  color: var(--ws-text-muted, var(--ink-400));
+}
 
 /* Media Picker dropzone */
 .mp-dropzone {
@@ -1441,7 +1474,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .mb-16 { margin-bottom: 16px; }
 .mb-24 { margin-bottom: 24px; }
 .mb-32 { margin-bottom: 32px; }
-.text-muted { color: var(--ink-400); }
+.text-muted { color: var(--ws-text-muted, var(--ink-400)); }
 .text-xs { font-size: 11px; }
 .text-sm { font-size: 13px; }
 .font-semibold { font-weight: 600; }
@@ -1521,15 +1554,15 @@ button { font-family: var(--font-body); cursor: pointer; }
    ============================================================ */
 .card-premium {
   background: var(--ws-surface, var(--surface-0));
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-soft);
+  border-radius: var(--ws-radius);
+  border: 1px solid var(--ws-border);
+  box-shadow: var(--ws-shadow);
   transition: transform 0.22s cubic-bezier(.2,.8,.2,1), box-shadow 0.22s ease-out, border-color 0.22s ease-out;
 }
 .card-premium:hover {
   transform: translateY(-4px);
   box-shadow: 0 16px 40px var(--ws-shadow-color);
-  border-color: rgba(124,58,237,0.25);
+  border-color: color-mix(in srgb, var(--ws-primary) 25%, transparent);
 }
 .card-interactive {
   cursor: pointer;
@@ -1538,8 +1571,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* Big choice cards (Welcome screen, Create New, Help Me Decide) */
 .choice-card {
   position: relative;
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
+  border-radius: var(--ws-radius);
+  border: 1px solid var(--ws-border);
   background: var(--ws-surface, var(--surface-0));
   padding: 28px 24px;
   text-align: left;
@@ -1562,7 +1595,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* Welcome tour progress bars */
 .tour-progress {
   height: 4px; flex: 1; border-radius: var(--r-pill);
-  background: var(--border);
+  background: var(--ws-border);
 }
 .tour-progress--active {
   background: linear-gradient(90deg, var(--ws-primary) 0%, var(--ws-secondary) 55%, var(--ws-accent) 100%);
@@ -1577,7 +1610,7 @@ button { font-family: var(--font-body); cursor: pointer; }
   width: 56px; height: 56px; border-radius: var(--r-lg);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; margin-bottom: 16px; color: #fff;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--ws-shadow);
 }
 
 /* ============================================================
@@ -1779,13 +1812,13 @@ button { font-family: var(--font-body); cursor: pointer; }
 .seg-control button {
   display: flex; align-items: center; justify-content: center;
   flex: 1 1 auto; min-width: max-content; height: 34px; padding: 0 14px;
-  border: none; box-shadow: inset 0 0 0 1px var(--ws-border, var(--border)); border-radius: var(--r-md); background: var(--ws-surface, var(--surface-0));
-  font-size: 12px; font-weight: 600; color: var(--ws-text, var(--ink-700)); white-space: nowrap;
+  border: none; box-shadow: inset 0 0 0 1px var(--ws-border, var(--border)); border-radius: var(--plt-radius-btn); background: var(--ws-surface, var(--surface-0));
+  font-size: var(--plt-font-size-sm); font-weight: 600; color: var(--ws-text, var(--ink-700)); white-space: nowrap;
   cursor: pointer; transition: all .12s; outline: none;
 }
 .seg-control button:hover { box-shadow: inset 0 0 0 1px var(--ws-primary, var(--indigo)); color: var(--ws-primary, var(--indigo)); }
 .seg-control button.active {
-  background: var(--gradient-primary); color: #fff; box-shadow: none;
+  background: var(--ws-gradient); color: #fff; box-shadow: none;
 }
 .seg-control button.active:hover { color: #fff; }
 
@@ -1815,9 +1848,9 @@ button { font-family: var(--font-body); cursor: pointer; }
   gap: 10px;
   padding: 12px 14px;
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-md);
-  background: var(--surface-0);
-  border: 1px solid var(--border);
+  box-shadow: var(--ws-shadow, var(--shadow-md));
+  background: var(--ws-surface, var(--surface-0));
+  border: 1px solid var(--ws-border);
   border-left-width: 4px;
   pointer-events: all;
   animation: notifyIn 0.25s ease-out forwards;
@@ -1833,7 +1866,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .notify-ai      { border-left-color: var(--violet); }
 .notify-export  { border-left-color: var(--indigo); }
 .notify-publish { border-left-color: var(--indigo); }
-.notify-system  { border-left-color: var(--ink-400); }
+.notify-system  { border-left-color: var(--ws-text-muted, var(--ink-400)); }
 .notify-review  { border-left-color: var(--indigo); }
 .notify-progress { border-left-color: var(--indigo); }
 
@@ -1842,10 +1875,10 @@ button { font-family: var(--font-body); cursor: pointer; }
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; gap: 4px;
 }
-.notify-msg  { font-size: 13px; font-weight: 500; color: var(--ink-900); line-height: 1.4; }
-.notify-detail { font-size: 12px; color: var(--ink-400); line-height: 1.3; }
+.notify-msg  { font-size: 13px; font-weight: 500; color: var(--ws-text, var(--ink-900)); line-height: 1.4; }
+.notify-detail { font-size: 12px; color: var(--ws-text-muted, var(--ink-400)); line-height: 1.3; }
 .notify-progress-bar {
-  height: 4px; background: var(--border); border-radius: 2px;
+  height: 4px; background: var(--ws-border, var(--border)); border-radius: 2px;
   overflow: hidden; margin-top: 4px;
 }
 .notify-progress-fill {
@@ -1854,15 +1887,15 @@ button { font-family: var(--font-body); cursor: pointer; }
 }
 .notify-action {
   align-self: flex-start;
-  background: none; border: 1px solid var(--border);
+  background: none; border: 1px solid var(--ws-border);
   border-radius: var(--r-sm); font-size: 12px; font-weight: 500;
-  padding: 3px 10px; cursor: pointer; color: var(--ink-700);
+  padding: 3px 10px; cursor: pointer; color: var(--ws-text, var(--ink-700));
   margin-top: 2px; transition: background 0.1s;
 }
-.notify-action:hover { background: var(--surface-50); }
+.notify-action:hover { background: color-mix(in srgb, var(--ws-primary) 8%, transparent); }
 .notify-close {
   flex-shrink: 0; background: none; border: none;
-  cursor: pointer; font-size: 18px; color: var(--ink-400);
+  cursor: pointer; font-size: 18px; color: var(--ws-text-muted, var(--ink-400));
   padding: 0 2px; line-height: 1; margin-top: -1px;
   opacity: 0.6; transition: opacity 0.1s;
 }
@@ -1904,50 +1937,50 @@ button { font-family: var(--font-body); cursor: pointer; }
   padding: 18px 18px 0; flex-shrink: 0;
 }
 .notif-centre-header h2 {
-  font-size: 15px; font-weight: 700; color: var(--ink-900); margin: 0;
+  font-size: 15px; font-weight: 700; color: var(--ws-text, var(--ink-900)); margin: 0;
 }
 .notif-centre-header-actions { display: flex; gap: 4px; align-items: center; }
 .notif-centre-header-actions button {
   background: none; border: none; font-size: 12px;
-  color: var(--ink-400); cursor: pointer; padding: 4px 8px;
+  color: var(--ws-text-muted, var(--ink-400)); cursor: pointer; padding: 4px 8px;
   border-radius: var(--r-sm); transition: color 0.1s;
 }
-.notif-centre-header-actions button:hover { color: var(--ink-700); background: var(--surface-50); }
+.notif-centre-header-actions button:hover { color: var(--ws-text, var(--ink-700)); background: color-mix(in srgb, var(--ws-primary) 8%, transparent); }
 .notif-centre-tabs {
   display: flex; padding: 8px 18px 0;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  border-bottom: 1px solid var(--ws-border); flex-shrink: 0;
 }
 .notif-tab {
   background: none; border: none;
   border-bottom: 2px solid transparent;
   padding: 8px 12px; font-size: 13px; font-weight: 500;
-  color: var(--ink-400); cursor: pointer; margin-bottom: -1px;
+  color: var(--ws-text-muted, var(--ink-400)); cursor: pointer; margin-bottom: -1px;
   transition: color 0.1s;
 }
 .notif-tab.active {
-  color: var(--ink-900);
+  color: var(--ws-text, var(--ink-900));
   border-bottom-color: var(--ws-primary, var(--indigo));
 }
 .notif-centre-list { flex: 1; overflow-y: auto; }
 .notif-centre-empty {
   padding: 48px 24px; text-align: center;
-  color: var(--ink-400); font-size: 13px;
+  color: var(--ws-text-muted, var(--ink-400)); font-size: 13px;
 }
 .notif-centre-item {
   display: flex; align-items: flex-start; gap: 10px;
-  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  padding: 12px 18px; border-bottom: 1px solid var(--ws-border);
   transition: background 0.1s; position: relative;
 }
-.notif-centre-item.unread  { background: var(--pastel-lavender); }
+.notif-centre-item.unread  { background: color-mix(in srgb, var(--ws-primary) 8%, transparent); }
 .notif-centre-item.clickable { cursor: pointer; }
-.notif-centre-item:hover { background: var(--surface-50); }
-.notif-centre-item.unread:hover { background: #EDE9F7; }
+.notif-centre-item:hover { background: color-mix(in srgb, var(--ws-primary) 5%, transparent); }
+.notif-centre-item.unread:hover { background: color-mix(in srgb, var(--ws-primary) 12%, transparent); }
 .nc-icon  { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
 .nc-body  { flex: 1; min-width: 0; }
-.nc-msg   { font-size: 13px; color: var(--ink-900); font-weight: 500; line-height: 1.4; }
+.nc-msg   { font-size: 13px; color: var(--ws-text, var(--ink-900)); font-weight: 500; line-height: 1.4; }
 .notif-centre-item.unread .nc-msg { font-weight: 600; }
-.nc-detail { font-size: 12px; color: var(--ink-400); margin-top: 2px; line-height: 1.3; }
-.nc-time   { font-size: 11px; color: var(--ink-400); margin-top: 4px; }
+.nc-detail { font-size: 12px; color: var(--ws-text-muted, var(--ink-400)); margin-top: 2px; line-height: 1.3; }
+.nc-time   { font-size: 11px; color: var(--ws-text-muted, var(--ink-400)); margin-top: 4px; }
 .nc-dot {
   width: 7px; height: 7px; background: var(--indigo);
   border-radius: 50%; flex-shrink: 0; margin-top: 6px;
