@@ -42,7 +42,7 @@ function renderWizard() {
       <!-- Progress -->
       <div style="padding:0 32px; position:relative; z-index:1;">
         <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
-          <div style="height:100%; width:${((stepIdx+1)/WIZARD_STEPS.length)*100}%; background:var(--gradient-primary); transition:width .3s ease-out;"></div>
+          <div style="height:100%; width:${((stepIdx+1)/WIZARD_STEPS.length)*100}%; background:var(--ws-gradient); transition:width .3s ease-out;"></div>
         </div>
         <div class="flex justify-between mt-8 text-sm text-muted">
           <span>Step ${stepIdx+1} of ${WIZARD_STEPS.length}</span>
@@ -555,10 +555,10 @@ function renderBlueprintScreen() {
 
   app.innerHTML = `
     <div style="min-height:100vh; background:var(--surface-50); position:relative; overflow:hidden; padding:48px 24px;">
-      <div class="mesh-bg"></div>
+      <div class="ws-mesh-bg"></div>
       ${ambientBlobs([
-        ['var(--pastel-lavender)', '420px', '420px', '-140px', '-100px', null, null],
-        ['var(--pastel-cyan)', '320px', '320px', null, '-80px', '-100px', null],
+        ['color-mix(in srgb, var(--ws-primary) 12%, var(--surface-0))', '420px', '420px', '-140px', '-100px', null, null],
+        ['color-mix(in srgb, var(--ws-accent) 12%, var(--surface-0))', '320px', '320px', null, '-80px', '-100px', null],
       ])}
       <div style="max-width:760px; width:100%; margin:0 auto; position:relative; z-index:1;" class="fade-in">
         ${w.blueprintLoading ? `

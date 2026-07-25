@@ -2958,7 +2958,11 @@ function applyWorkspaceIdentity() {
 
   // Derive shadow colour from the full box-shadow shorthand for hover rules.
   const shadowColorMatch = (theme.shadow || '').match(/rgba?\([^)]+\)/i);
-  const shadowColorDecl  = shadowColorMatch ? `  --ws-shadow-color: ${shadowColorMatch[0]};` : '';
+  const shadowColorDecl  = shadowColorMatch
+    ? `  --ws-shadow-color: ${shadowColorMatch[0]};`
+    : theme.primary
+      ? `  --ws-shadow-color: color-mix(in srgb, ${theme.primary} 18%, transparent);`
+      : '';
 
   // Atomic: every token written in a single textContent assignment.
   // Platform Shell never exists in an intermediate visual state.

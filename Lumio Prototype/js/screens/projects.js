@@ -1020,7 +1020,7 @@ function openImportContentModal() {
   const scormFile = overlay.querySelector('#imp-scorm-file');
 
   scormBtn.addEventListener('mouseenter', () => {
-    scormBtn.style.borderColor = 'var(--violet-border)';
+    scormBtn.style.borderColor = 'color-mix(in srgb, var(--ws-primary) 25%, transparent)';
     scormBtn.style.boxShadow = 'var(--shadow-md)';
   });
   scormBtn.addEventListener('mouseleave', () => {

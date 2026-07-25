@@ -243,7 +243,7 @@ function canvasStyles() {
   return `
     <style>
       .cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-400); cursor:pointer; border-radius:var(--r-sm); }
-      .cat-header:hover { background:var(--pastel-lavender); }
+      .cat-header:hover { background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-0)); }
       .cat-body {
         display:grid; grid-template-columns:repeat(2,1fr); gap:0 8px; padding:0 4px;
         max-height:0; opacity:0; overflow:hidden;
@@ -251,7 +251,7 @@ function canvasStyles() {
       }
       .cat-body.expanded { max-height:600px; opacity:1; padding:6px 4px 14px; gap:8px; }
       .block-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 6px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); cursor:grab; font-size:11px; text-align:center; color:var(--ink-700); transition:all .12s; }
-      .block-tile:hover { border-color:var(--indigo); background:var(--pastel-lavender); transform:translateY(-1px); }
+      .block-tile:hover { border-color:var(--ws-primary, var(--indigo)); background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-0)); transform:translateY(-1px); }
       .block-tile .tile-icon { font-size:18px; }
       .editable-text { outline:none; border-radius:4px; transition:background-color .12s; }
       /* Hover/focus affordances are builder-only — scoped to .canvas-block so
@@ -286,7 +286,7 @@ function canvasStyles() {
       .drop-zone-add:focus-visible { opacity:1; }
       .drop-zone:hover .drop-zone-line { background:var(--border); }
       .drop-zone-add:hover, .drop-zone-add:focus-visible {
-        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
+        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-0));
       }
       /* While a block is being dragged, faintly reveal every insertion line so placement stays obvious */
       #lesson-canvas.dragging-block .drop-zone-line { background:var(--border); }
@@ -301,19 +301,19 @@ function canvasStyles() {
       }
       .drop-zone.drag-active .drop-zone-add {
         opacity:1; transform:scale(1.15);
-        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
+        border-color:var(--ws-primary, var(--indigo)); color:var(--ws-primary, var(--indigo)); background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-0));
       }
 
       /* Active insertion zone — lightweight placeholder shown after clicking "+" */
       .insertion-zone { height:auto; margin:8px 0; }
       .insertion-zone-box {
         width:100%; padding:14px 16px; border-radius:var(--r-md);
-        border:1.5px dashed var(--ws-primary, var(--indigo)); background:var(--pastel-lavender);
+        border:1.5px dashed var(--ws-primary, var(--indigo)); background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 8%, var(--surface-0));
         text-align:center; transition:border-color .12s, background-color .12s;
       }
       .insertion-zone.drag-active .insertion-zone-box {
         border-style:solid; border-width:2px;
-        background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 12%, var(--pastel-lavender));
+        background:color-mix(in srgb, var(--ws-primary, var(--indigo)) 12%, var(--surface-0));
       }
       .insertion-zone-title { font-size:13px; font-weight:600; color:var(--ws-primary, var(--indigo)); }
       .insertion-zone-title-drop { display:none; }
