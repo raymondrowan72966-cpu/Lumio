@@ -978,7 +978,7 @@ function openCreateNewModal() {
 function openImportContentModal() {
   const overlay = el(`
     <div class="overlay" role="dialog" aria-modal="true" aria-label="Import Existing Content">
-      <div class="modal" style="width:520px; padding:36px;" id="imp-modal-inner">
+      <div class="modal" style="width:520px; padding:36px;">
 
         <div class="flex items-center gap-12 mb-20">
           <button class="btn btn-ghost btn-sm" id="imp-back" aria-label="Back to Create New">← Back</button>
@@ -991,7 +991,7 @@ function openImportContentModal() {
 
           <!-- SCORM — enabled -->
           <input type="file" id="imp-scorm-file" accept=".zip" style="display:none;" aria-hidden="true" />
-          <button class="card card-pad imp-format-btn" id="imp-scorm" role="listitem"
+          <button class="card card-pad" id="imp-scorm" role="listitem"
             style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
             aria-label="Import SCORM Package (.zip)">
             <div class="flex items-center gap-16">
@@ -1004,54 +1004,9 @@ function openImportContentModal() {
             </div>
           </button>
 
-          <!-- Word Document — Document Intelligence -->
-          <input type="file" id="imp-docx-file" accept=".docx" style="display:none;" aria-hidden="true" />
-          <button class="card card-pad imp-format-btn" id="imp-docx" role="listitem"
-            style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
-            aria-label="Import Word Document (.docx)">
-            <div class="flex items-center gap-16">
-              <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon('notes')}</div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:15px;">Word Document</div>
-                <div class="text-sm text-muted mt-4">Import text, headings, and lists from a .docx file</div>
-              </div>
-              <span class="pill pill-cyan" style="flex-shrink:0;">Available</span>
-            </div>
-          </button>
-
-          <!-- PDF Document — Document Intelligence -->
-          <input type="file" id="imp-pdf-file" accept=".pdf" style="display:none;" aria-hidden="true" />
-          <button class="card card-pad imp-format-btn" id="imp-pdf" role="listitem"
-            style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
-            aria-label="Import PDF Document (.pdf)">
-            <div class="flex items-center gap-16">
-              <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon('file-document')}</div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:15px;">PDF Document</div>
-                <div class="text-sm text-muted mt-4">Extract content from a PDF file</div>
-              </div>
-              <span class="pill pill-cyan" style="flex-shrink:0;">Available</span>
-            </div>
-          </button>
-
-          <!-- PowerPoint — Document Intelligence -->
-          <input type="file" id="imp-pptx-file" accept=".pptx" style="display:none;" aria-hidden="true" />
-          <button class="card card-pad imp-format-btn" id="imp-pptx" role="listitem"
-            style="cursor:pointer; text-align:left; width:100%; border:2px solid transparent; transition:border-color .15s, box-shadow .15s;"
-            aria-label="Import PowerPoint (.pptx)">
-            <div class="flex items-center gap-16">
-              <div style="font-size:28px; line-height:1;" aria-hidden="true">${platformIcon('cat-charts')}</div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:15px;">PowerPoint</div>
-                <div class="text-sm text-muted mt-4">Convert slides into Lumio lessons (.pptx)</div>
-              </div>
-              <span class="pill pill-cyan" style="flex-shrink:0;">Available</span>
-            </div>
-          </button>
-
         </div>
 
-        <div class="flex justify-end mt-28">
+        <div class="flex justify-end mt-32">
           <button class="btn btn-ghost" id="imp-cancel">Cancel</button>
         </div>
 
@@ -1061,96 +1016,26 @@ function openImportContentModal() {
 
   document.body.appendChild(overlay);
 
-  // ── Shared hover styling for all format buttons ──────────────────────────
-  overlay.querySelectorAll('.imp-format-btn').forEach(btn => {
-    btn.addEventListener('mouseenter', () => {
-      btn.style.borderColor = 'var(--violet-border)';
-      btn.style.boxShadow   = 'var(--shadow-md)';
-    });
-    btn.addEventListener('mouseleave', () => {
-      btn.style.borderColor = 'transparent';
-      btn.style.boxShadow   = '';
-    });
+  const scormBtn = overlay.querySelector('#imp-scorm');
+  const scormFile = overlay.querySelector('#imp-scorm-file');
+
+  scormBtn.addEventListener('mouseenter', () => {
+    scormBtn.style.borderColor = 'var(--violet-border)';
+    scormBtn.style.boxShadow = 'var(--shadow-md)';
+  });
+  scormBtn.addEventListener('mouseleave', () => {
+    scormBtn.style.borderColor = 'transparent';
+    scormBtn.style.boxShadow = '';
   });
 
-  // ── SCORM (existing workflow — unchanged) ────────────────────────────────
-  const scormBtn  = overlay.querySelector('#imp-scorm');
-  const scormFile = overlay.querySelector('#imp-scorm-file');
   scormBtn.addEventListener('click', () => scormFile.click());
+
   scormFile.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
     overlay.remove();
     ScormInspector.inspect(file);
     e.target.value = '';
-  });
-
-  // ── Document Intelligence loading state ──────────────────────────────────
-  // Replaces the modal body with a progress indicator while the pipeline runs.
-  function _showDocIntelLoading(fileName) {
-    const inner = overlay.querySelector('#imp-modal-inner');
-    inner.innerHTML = `
-      <div style="text-align:center; padding:40px 24px;">
-        <div class="ai-spark" style="margin:0 auto 20px;">${platformIcon('ai')}</div>
-        <h3 style="font-size:18px; margin-bottom:8px;">Analysing Document</h3>
-        <p class="text-sm text-muted" style="margin-bottom:28px;">${fileName}</p>
-        <div style="height:4px; background:var(--ws-border); border-radius:99px; overflow:hidden; position:relative;">
-          <div style="position:absolute; inset:0; background:var(--gradient-primary); animation:_di-sweep 1.8s ease-in-out infinite;"></div>
-        </div>
-      </div>
-    `;
-    if (!document.getElementById('_di-progress-style')) {
-      const s = document.createElement('style');
-      s.id = '_di-progress-style';
-      s.textContent = '@keyframes _di-sweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}';
-      document.head.appendChild(s);
-    }
-  }
-
-  // ── Document Intelligence runner ─────────────────────────────────────────
-  async function _runDocIntel(file) {
-    _showDocIntelLoading(file.name);
-    try {
-      await DocIntel.run(file);
-      overlay.remove();
-      navigate('#/wizard');
-    } catch (err) {
-      overlay.remove();
-      toast('Could not analyse document: ' + (err.message || 'Unknown error'), platformIcon('warning'));
-    }
-  }
-
-  // ── Word Document ─────────────────────────────────────────────────────────
-  const docxBtn  = overlay.querySelector('#imp-docx');
-  const docxFile = overlay.querySelector('#imp-docx-file');
-  docxBtn.addEventListener('click', () => docxFile.click());
-  docxFile.addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    await _runDocIntel(file);
-  });
-
-  // ── PDF Document ──────────────────────────────────────────────────────────
-  const pdfBtn  = overlay.querySelector('#imp-pdf');
-  const pdfFile = overlay.querySelector('#imp-pdf-file');
-  pdfBtn.addEventListener('click', () => pdfFile.click());
-  pdfFile.addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    await _runDocIntel(file);
-  });
-
-  // ── PowerPoint ────────────────────────────────────────────────────────────
-  const pptxBtn  = overlay.querySelector('#imp-pptx');
-  const pptxFile = overlay.querySelector('#imp-pptx-file');
-  pptxBtn.addEventListener('click', () => pptxFile.click());
-  pptxFile.addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    await _runDocIntel(file);
   });
 
   overlay.querySelector('#imp-back').addEventListener('click', () => {
@@ -1160,6 +1045,7 @@ function openImportContentModal() {
   overlay.querySelector('#imp-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
+  // Focus the first actionable element on open
   requestAnimationFrame(() => scormBtn.focus());
 }
 

@@ -709,10 +709,6 @@ function createCourseFromWizard(blueprint) {
   // seed empty lesson content for created lessons
   course.lessons.forEach(l => { LumioState.lessons[l.id] = []; });
 
-  // Phase 9: DocIntel Content Seeder — populate blocks when source is document-intelligence
-  if (w.source === 'document-intelligence' && typeof DocIntelContentSeeder !== 'undefined') {
-    DocIntelContentSeeder.seed(course.lessons, blueprint.lessons, w.objectives);
-  }
 
   LumioState.currentCourseId = id;
   LumioState.wizard = null;
