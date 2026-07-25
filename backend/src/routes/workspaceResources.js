@@ -7,6 +7,7 @@ import { WorkspaceResourceRepository } from '../repositories/WorkspaceResourceRe
 // Each entry may carry a writeRole — callers must hold that role to PUT.
 // Types without writeRole are writable by any authenticated workspace member.
 const RESOURCE_CONFIG = {
+  folders:           {},
   labelPacks:        {},
   workspaceIdentity: { writeRole: 'workspace_owner', singleton: true },
 };

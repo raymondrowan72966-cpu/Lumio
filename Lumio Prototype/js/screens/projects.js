@@ -793,6 +793,7 @@ function confirmDeleteFolder(folderId) {
     LumioState.folders = LumioState.folders.filter(x => x.id !== folderId);
     if (LumioState.currentFolder === folderId) LumioState.currentFolder = null;
     scheduleLumioSave();
+    cloudSyncWorkspace('folders');
     affected.forEach(p => cloudPersistProject(p.id));
     overlay.remove();
     renderProjects();
@@ -856,6 +857,7 @@ function openNewFolderModal(existingFolder) {
     }
     overlay.remove();
     renderProjects();
+    cloudSyncWorkspace('folders');
   };
 
   overlay.querySelector('#folder-modal-save').addEventListener('click', save);

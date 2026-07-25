@@ -1866,6 +1866,14 @@ async function _loadCloudProjects() {
 const WORKSPACE_SINGLETON_KEY = 'default';
 
 const WORKSPACE_RESOURCES = {
+  // folders: LumioState.folders is an array; the generic pipeline expects a
+  // keyed map. toMap/fromMap convert on the way out and back without touching
+  // any other resource type or the existing folder array code.
+  folders: {
+    stateKey: 'folders',
+    toMap:   (arr) => Object.fromEntries((arr || []).map(f => [f.id, f])),
+    fromMap: (map) => Object.values(map || {}),
+  },
   labelPacks:        { stateKey: 'labelPacks' },
   workspaceIdentity: { stateKey: 'workspaceIdentity', singleton: true },
 };
@@ -2853,7 +2861,7 @@ async function cloudSyncWorkspace(resourceType) {
       return;
     }
   } else {
-    items = LumioState[def.stateKey] || {};
+    items = def.toMap ? def.toMap(LumioState[def.stateKey]) : (LumioState[def.stateKey] || {});
   }
 
   try {
@@ -2865,7 +2873,7 @@ async function cloudSyncWorkspace(resourceType) {
         const serverValue = serverItems[WORKSPACE_SINGLETON_KEY];
         if (serverValue) LumioState[def.stateKey] = serverValue;
       } else {
-        LumioState[def.stateKey] = serverItems;
+        LumioState[def.stateKey] = def.fromMap ? def.fromMap(serverItems) : serverItems;
       }
       saveLumioState();
     }
@@ -2890,7 +2898,7 @@ async function _loadCloudWorkspace() {
           const serverValue = serverItems[WORKSPACE_SINGLETON_KEY];
           if (serverValue) LumioState[def.stateKey] = serverValue;
         } else {
-          LumioState[def.stateKey] = serverItems;
+          LumioState[def.stateKey] = def.fromMap ? def.fromMap(serverItems) : serverItems;
         }
       }
     } catch (err) {
