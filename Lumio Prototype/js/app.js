@@ -3744,7 +3744,7 @@ function applyThemeVars(course) {
     ensureCourseDesign(course);
     const vars = themeVarStyle(course.themeDesign);
     sheet.textContent =
-      `#lesson-canvas, .lumio-learner-root, .course-landing-root { ${vars} }`;
+      `#lesson-canvas-wrap, #lesson-canvas, .lumio-learner-root, .course-landing-root { ${vars} }`;
   } else {
     sheet.textContent = '';
   }

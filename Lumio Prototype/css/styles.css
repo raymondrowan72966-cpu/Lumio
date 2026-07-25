@@ -373,6 +373,17 @@ button { font-family: var(--font-body); cursor: pointer; }
 .btn-kc-submit:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--theme-primary, var(--indigo)), var(--focus-ring);
 }
+/* Course context: match Submit button visual width to the Continue button so
+   both appear centred against the same horizontal span. The two buttons use
+   different base padding (btn-sm: 16px vs Continue: 28px), making Submit
+   narrower and — despite sharing the same geometric centre — appearing shifted
+   right when compared left-edge to left-edge. min-width:120px closes that gap
+   without changing the button's style, colour, shape, or behaviour. */
+#lesson-canvas .btn-kc-submit,
+.lumio-learner-root .btn-kc-submit,
+.course-landing-root .btn-kc-submit {
+  min-width: 120px;
+}
 
 .btn-ghost {
   background: transparent;
@@ -676,6 +687,25 @@ button { font-family: var(--font-body); cursor: pointer; }
   --kc-wrong-border: var(--color-destructive);
   /* Matching column tints */
   --kc-match-right-bg:     color-mix(in srgb, var(--theme-primary, var(--indigo)) 8%, var(--surface-1));
+  --kc-match-right-border: color-mix(in srgb, var(--theme-primary, var(--indigo)) 25%, transparent);
+}
+
+/* ── Course Theme KC token override ─────────────────────────────────────────
+   The --kc-* tokens above are computed on :root, which resolves
+   var(--theme-primary) against the Platform default (violet) at that time.
+   Redeclaring them here ensures KC components inside a course surface
+   compute color-mix() against the active Course Theme primary instead.
+   Selectors mirror those used by applyThemeVars() in app.js.
+   ──────────────────────────────────────────────────────────────────────── */
+#lesson-canvas-wrap,
+#lesson-canvas,
+.lumio-learner-root,
+.course-landing-root {
+  --kc-hover-bg:           color-mix(in srgb, var(--theme-primary, var(--indigo))  8%, var(--surface-1));
+  --kc-hover-border:       color-mix(in srgb, var(--theme-primary, var(--indigo)) 35%, transparent);
+  --kc-selected-bg:        color-mix(in srgb, var(--theme-primary, var(--indigo)) 12%, var(--surface-0));
+  --kc-selected-border:    color-mix(in srgb, var(--theme-primary, var(--indigo)) 55%, transparent);
+  --kc-match-right-bg:     color-mix(in srgb, var(--theme-primary, var(--indigo))  8%, var(--surface-1));
   --kc-match-right-border: color-mix(in srgb, var(--theme-primary, var(--indigo)) 25%, transparent);
 }
 
