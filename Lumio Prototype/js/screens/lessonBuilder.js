@@ -3099,7 +3099,7 @@ function lessonInsights(blocks, course, lesson) {
   return `
     <div class="inspector-card" style="margin-top:16px; background:color-mix(in srgb, var(--ws-primary) 8%, var(--ws-surface)); border-color:color-mix(in srgb, var(--ws-primary) 20%, transparent);">
       <div class="flex justify-between items-center"><span class="text-sm" style="font-weight:600;">Content Variety</span><span class="text-sm">${variety} types</span></div>
-      <div style="height:6px; background:var(--ws-border); border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--gradient-primary);"></div></div>
+      <div style="height:6px; background:var(--ws-border); border-radius:99px; margin-top:8px; overflow:hidden;"><div style="width:${Math.min(variety*20,100)}%; height:100%; background:var(--ws-primary, var(--indigo));"></div></div>
     </div>
     <div class="inspector-card">
       <div class="flex justify-between items-center text-sm"><span>${platformIcon('target')} ${objIndices.length === 1 ? 'Objective' : 'Objectives'}</span></div>
