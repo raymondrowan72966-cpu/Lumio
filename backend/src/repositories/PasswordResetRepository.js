@@ -18,7 +18,7 @@ export class PasswordResetRepository {
 
   async findByTokenHash(tokenHash) {
     try {
-      return await this.db.get(
+      return await this.db.first(
         'SELECT * FROM password_resets WHERE reset_token_hash = ?',
         [tokenHash],
       );
@@ -40,7 +40,7 @@ export class PasswordResetRepository {
 
   async countByUserSince(userId, since) {
     try {
-      const row = await this.db.get(
+      const row = await this.db.first(
         'SELECT COUNT(*) as n FROM password_resets WHERE user_id = ? AND created_at >= ?',
         [userId, since],
       );

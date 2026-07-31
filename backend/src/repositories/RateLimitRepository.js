@@ -7,7 +7,7 @@ export class RateLimitRepository {
 
   async countSince(key, since) {
     try {
-      const row = await this.db.get(
+      const row = await this.db.first(
         'SELECT COUNT(*) as n FROM rate_limit_events WHERE key = ? AND created_at >= ?',
         [key, since],
       );
