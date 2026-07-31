@@ -51,10 +51,6 @@ export function loadConfig(env) {
   if (!env.APP_BASE_URL || typeof env.APP_BASE_URL !== 'string' || env.APP_BASE_URL.trim().length === 0) {
     throw new ConfigurationError('APP_BASE_URL is required. Set it in wrangler.toml [vars] for each environment.');
   }
-  if (!env.RESEND_API_KEY || typeof env.RESEND_API_KEY !== 'string' || env.RESEND_API_KEY.trim().length === 0) {
-    throw new ConfigurationError('RESEND_API_KEY is required. Set it via: npx wrangler secret put RESEND_API_KEY');
-  }
-
   return {
     environment,
     isProduction: environment === 'production',
@@ -65,6 +61,11 @@ export function loadConfig(env) {
     sessionSecret: env.SESSION_SECRET, // secret — set via `wrangler secret put`
     corsAllowedOrigins: loadCorsOrigins(env),
     appBaseUrl: env.APP_BASE_URL.trim(),
-    resendApiKey: env.RESEND_API_KEY,
+    // Optional — validated lazily in EmailService so a missing key only breaks
+    // password-reset routes, not login/logout/session.
+    resendApiKey: env.RESEND_API_KEY || null,
+    // Configurable sender address. Switch to noreply@lumio.app once the domain
+    // has been verified in Resend; no further code changes required.
+    emailFromAddress: env.EMAIL_FROM_ADDRESS || 'Lumio <onboarding@resend.dev>',
   };
 }

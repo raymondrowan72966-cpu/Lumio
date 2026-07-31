@@ -1,5 +1,5 @@
 import { dataResponse } from '../utils/response.js';
-import { ValidationError, AuthenticationError } from '../errors/index.js';
+import { ValidationError, AuthenticationError, ConfigurationError, NetworkError } from '../errors/index.js';
 import {
   buildSessionCookie, clearSessionCookie,
   buildAccessTokenCookie, clearAccessTokenCookie,
@@ -27,7 +27,7 @@ function buildAuthService(ctx) {
   const workspaceRepository = new WorkspaceRepository(ctx.db);
   const passwordResetRepository = new PasswordResetRepository(ctx.db);
   const rateLimitRepository = new RateLimitRepository(ctx.db);
-  const emailService = new EmailService(ctx.config.resendApiKey, ctx.config.appBaseUrl);
+  const emailService = new EmailService(ctx.config.resendApiKey, ctx.config.appBaseUrl, ctx.config.emailFromAddress);
   return new AuthService({
     userRepository,
     workspaceRepository,
@@ -310,7 +310,19 @@ async function handlePasswordResetRequest(request, _params, ctx) {
 
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
   const authService = buildAuthService(ctx);
-  await authService.requestPasswordReset({ email: body.email, ip });
+  try {
+    await authService.requestPasswordReset({ email: body.email, ip });
+  } catch (err) {
+    if (err instanceof ConfigurationError || err instanceof NetworkError) {
+      ctx.logger.error('Password reset email delivery failed', {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+      });
+      throw new NetworkError('Password reset is temporarily unavailable. Please try again later or contact your administrator.');
+    }
+    throw err;
+  }
   return dataResponse({ ok: true });
 }
 

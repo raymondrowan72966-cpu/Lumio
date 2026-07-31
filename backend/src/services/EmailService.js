@@ -1,12 +1,16 @@
-import { NetworkError } from '../errors/index.js';
+import { ConfigurationError, NetworkError } from '../errors/index.js';
 
 export class EmailService {
-  constructor(apiKey, appBaseUrl) {
+  constructor(apiKey, appBaseUrl, fromAddress) {
     this.apiKey = apiKey;
     this.appBaseUrl = appBaseUrl;
+    this.fromAddress = fromAddress || 'Lumio <onboarding@resend.dev>';
   }
 
   async sendPasswordResetEmail({ to, firstName, resetLink }) {
+    if (!this.apiKey) {
+      throw new ConfigurationError('RESEND_API_KEY is not configured. Set it via: npx wrangler secret put RESEND_API_KEY');
+    }
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,7 +94,7 @@ export class EmailService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Lumio <noreply@lumio.app>',
+        from: this.fromAddress,
         to: [to],
         subject: 'Reset your Lumio password',
         html,
