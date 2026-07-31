@@ -254,6 +254,84 @@ export class AuthService {
     this.logger?.audit('user logged out', { sessionId });
   }
 
+  /**
+   * Changes the password for the currently authenticated user.
+   *
+   * Flow:
+   *   1. Verify current password against stored hash.
+   *   2. Validate new password ≠ confirm password mismatch.
+   *   3. Validate new password ≠ current password.
+   *   4. Hash new password (also enforces policy — throws ValidationError on failure).
+   *   5. Persist new hash via updatePasswordHash().
+   *   6. Revoke ALL sessions (every device logs out).
+   *   7. Create a fresh session for the current device, preserving Remember Me.
+   *   8. Emit audit log entry.
+   *   9. Return new session tokens.
+   *
+   * @param {{ userId, currentPassword, newPassword, confirmPassword, rememberMe }} params
+   * @returns {{ session: { sessionId, refreshToken, expiresAt } }}
+   */
+  async changePassword({ userId, currentPassword, newPassword, confirmPassword, rememberMe = false } = {}) {
+    if (!userId) throw new ValidationError('User ID is required.');
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      throw new ValidationError('Current password is required.');
+    }
+    if (!newPassword || typeof newPassword !== 'string') {
+      throw new ValidationError('New password is required.');
+    }
+    if (!confirmPassword || typeof confirmPassword !== 'string') {
+      throw new ValidationError('Password confirmation is required.');
+    }
+
+    // --- 1. Confirm passwords match before touching anything ---------------
+    if (newPassword !== confirmPassword) {
+      throw new ValidationError('New password and confirmation do not match.');
+    }
+
+    // --- 2. Load user row to get stored hash --------------------------------
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new ValidationError('User not found.');
+    if (!user.password_hash) {
+      throw new ValidationError('This account does not use a password. Sign in with your linked provider.');
+    }
+
+    // --- 3. Verify current password -----------------------------------------
+    const currentValid = await this.passwordService.verify(currentPassword, user.password_hash);
+    if (!currentValid) {
+      this.logger?.warning('password change rejected: current password incorrect', { userId });
+      throw new ValidationError('Current password is incorrect.');
+    }
+
+    // --- 4. Reject if new password is the same as current -------------------
+    const sameAsCurrent = await this.passwordService.verify(newPassword, user.password_hash);
+    if (sameAsCurrent) {
+      throw new ValidationError('New password must be different from the current password.');
+    }
+
+    // --- 5. Hash new password (enforces policy — throws ValidationError) ----
+    const newHash = await this.passwordService.hash(newPassword);
+
+    // --- 6. Persist new hash ------------------------------------------------
+    await this.userRepository.updatePasswordHash(userId, newHash);
+
+    // --- 7. Revoke all sessions (every device) ------------------------------
+    await this.sessionService.revokeAllSessionsForUser(userId);
+
+    // --- 8. Create fresh session for current device -------------------------
+    const { sessionId, refreshToken, expiresAt } = await this.sessionService.createSession({
+      userId,
+      rememberMe,
+      deviceId: null,
+    });
+
+    // --- 9. Audit log -------------------------------------------------------
+    this.logger?.audit('ACCOUNT_PASSWORD_CHANGED', { userId });
+
+    return {
+      session: { sessionId, refreshToken, expiresAt },
+    };
+  }
+
   async acceptInvitation(_token, _credentials) {
     throw new Error('AuthService.acceptInvitation is not implemented yet (Sprint 2C: registration only).');
   }

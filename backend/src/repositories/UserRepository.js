@@ -60,4 +60,21 @@ export class UserRepository {
   async update(id, patch) {
     throw new Error('UserRepository.update is not implemented yet (Sprint 2C: registration only).');
   }
+
+  /** Updates only the password_hash column for the given user. Also bumps
+   *  updated_at so the row reflects when the password was last changed.
+   *  Does NOT implement the generic update() — that remains a stub. */
+  async updatePasswordHash(userId, passwordHash) {
+    if (!userId) throw new Error('userId is required.');
+    if (!passwordHash) throw new Error('passwordHash is required.');
+    const now = Date.now();
+    try {
+      await this.db.run(
+        'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+        [passwordHash, now, userId],
+      );
+    } catch (err) {
+      throw new DatabaseError('Failed to update password hash.', { cause: String(err) });
+    }
+  }
 }
