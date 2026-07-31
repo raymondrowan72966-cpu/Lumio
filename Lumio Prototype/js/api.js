@@ -405,9 +405,10 @@ const LumioAPI = (function () {
   };
 
   var users = {
-    me:      notImplemented('users.me'),
-    update:  notImplemented('users.update'),
-    delete:  notImplemented('users.delete'),
+    me:             notImplemented('users.me'),
+    update:         notImplemented('users.update'),
+    delete:         notImplemented('users.delete'),
+    changePassword: function (body) { return request('PATCH', '/users/me/password', body); },
   };
 
   var invitations = {

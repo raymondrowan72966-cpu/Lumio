@@ -187,25 +187,24 @@ function bindProfileEvents() {
       showFeedback('Please fill in all three password fields.', false);
       return;
     }
-    if (LumioAuth._hashPassword(current) !== u.passwordHash) {
-      showFeedback('Current password is incorrect.', false);
-      return;
-    }
-    if (next.length < 6) {
-      showFeedback('New password must be at least 6 characters.', false);
-      return;
-    }
-    if (next !== confirm) {
-      showFeedback('New password and confirmation do not match.', false);
-      return;
-    }
 
-    u.passwordHash = LumioAuth._hashPassword(next);
-    app.querySelector('#profile-current-password').value = '';
-    app.querySelector('#profile-new-password').value = '';
-    app.querySelector('#profile-confirm-password').value = '';
-    showFeedback('Password updated successfully.', true);
-    toast('Password updated', '🔒');
-    scheduleLumioSave();
+    const btn = app.querySelector('#profile-change-password');
+    btn.disabled = true;
+
+    LumioAPI.users.changePassword({
+      currentPassword: current,
+      newPassword: next,
+      confirmPassword: confirm,
+    }).then(function () {
+      app.querySelector('#profile-current-password').value = '';
+      app.querySelector('#profile-new-password').value = '';
+      app.querySelector('#profile-confirm-password').value = '';
+      showFeedback('Password updated successfully.', true);
+      toast('Password updated', '🔒');
+    }).catch(function (err) {
+      showFeedback(err.message || 'Password could not be changed. Please try again.', false);
+    }).finally(function () {
+      btn.disabled = false;
+    });
   });
 }
