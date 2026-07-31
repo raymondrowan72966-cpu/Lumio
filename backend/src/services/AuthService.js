@@ -295,8 +295,26 @@ export class AuthService {
       throw new ValidationError('This account does not use a password. Sign in with your linked provider.');
     }
 
+    // --- TEMPORARY DIAGNOSTIC LOGGING (no passwords or hashes) --------------
+    const hashParts = user.password_hash.split('$');
+    this.logger?.info('[DIAG] changePassword: user loaded', {
+      diagUserId: user.id,
+      diagEmail: user.email,
+      diagPasswordHashExists: !!user.password_hash,
+      diagHashAlgorithmTag: hashParts[0] ?? null,
+      diagHashPartCount: hashParts.length,
+    });
+    // -------------------------------------------------------------------------
+
     // --- 3. Verify current password -----------------------------------------
-    const currentValid = await this.passwordService.verify(currentPassword, user.password_hash);
+    let currentValid;
+    try {
+      currentValid = await this.passwordService.verify(currentPassword, user.password_hash);
+    } catch (verifyErr) {
+      this.logger?.info('[DIAG] changePassword: verify() threw', { diagError: String(verifyErr) });
+      throw verifyErr;
+    }
+    this.logger?.info('[DIAG] changePassword: verify() result', { diagVerifyResult: currentValid });
     if (!currentValid) {
       this.logger?.warning('password change rejected: current password incorrect', { userId });
       throw new ValidationError('Current password is incorrect.');
