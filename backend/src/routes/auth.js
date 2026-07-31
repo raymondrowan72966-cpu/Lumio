@@ -1,4 +1,4 @@
-import { notImplemented, dataResponse } from '../utils/response.js';
+import { dataResponse } from '../utils/response.js';
 import { ValidationError, AuthenticationError } from '../errors/index.js';
 import {
   buildSessionCookie, clearSessionCookie,
@@ -11,6 +11,9 @@ import { PasswordService } from '../services/PasswordService.js';
 import { TokenService } from '../services/TokenService.js';
 import { SessionService } from '../services/SessionService.js';
 import { AuthService } from '../services/AuthService.js';
+import { PasswordResetRepository } from '../repositories/PasswordResetRepository.js';
+import { RateLimitRepository } from '../repositories/RateLimitRepository.js';
+import { EmailService } from '../services/EmailService.js';
 
 /**
  * Constructs a fully-wired AuthService from the request context.
@@ -22,11 +25,19 @@ function buildAuthService(ctx) {
   const sessionService = new SessionService({ db: ctx.db, tokenService, securityConfig: ctx.config.security });
   const userRepository = new UserRepository(ctx.db);
   const workspaceRepository = new WorkspaceRepository(ctx.db);
+  const passwordResetRepository = new PasswordResetRepository(ctx.db);
+  const rateLimitRepository = new RateLimitRepository(ctx.db);
+  const emailService = new EmailService(ctx.config.resendApiKey, ctx.config.appBaseUrl);
   return new AuthService({
     userRepository,
     workspaceRepository,
     passwordService,
     sessionService,
+    tokenService,
+    passwordResetRepository,
+    rateLimitRepository,
+    emailService,
+    appBaseUrl: ctx.config.appBaseUrl,
     db: ctx.db,
     logger: ctx.logger,
   });
@@ -283,13 +294,56 @@ async function handleRefresh(request, _params, ctx) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// POST /auth/password-reset/request
+// ---------------------------------------------------------------------------
+async function handlePasswordResetRequest(request, _params, ctx) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_err) {
+    throw new ValidationError('Request body must be valid JSON.');
+  }
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Request body must be a JSON object.');
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const authService = buildAuthService(ctx);
+  await authService.requestPasswordReset({ email: body.email, ip });
+  return dataResponse({ ok: true });
+}
+
+// ---------------------------------------------------------------------------
+// POST /auth/password-reset/confirm
+// ---------------------------------------------------------------------------
+async function handlePasswordResetConfirm(request, _params, ctx) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_err) {
+    throw new ValidationError('Request body must be valid JSON.');
+  }
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Request body must be a JSON object.');
+  }
+
+  const authService = buildAuthService(ctx);
+  await authService.confirmPasswordReset({
+    token: body.token,
+    newPassword: body.newPassword,
+    confirmPassword: body.confirmPassword,
+  });
+  return dataResponse({ ok: true });
+}
+
 export const authRoutes = [
   { method: 'POST', path: '/auth/register',                  handler: handleRegister },
   { method: 'POST', path: '/auth/login',                     handler: handleLogin },
   { method: 'POST', path: '/auth/logout',                    handler: handleLogout },
   { method: 'GET',  path: '/auth/session',                   handler: handleSession },
   { method: 'POST', path: '/auth/refresh',                   handler: handleRefresh },
-  { method: 'POST', path: '/auth/password-reset/request',    handler: () => notImplemented('auth.passwordResetRequest') },
-  { method: 'POST', path: '/auth/password-reset/confirm',    handler: () => notImplemented('auth.passwordResetConfirm') },
-  { method: 'GET',  path: '/auth/oauth/:provider/callback',  handler: () => notImplemented('auth.oauthCallback') },
+  { method: 'POST', path: '/auth/password-reset/request',    handler: handlePasswordResetRequest },
+  { method: 'POST', path: '/auth/password-reset/confirm',    handler: handlePasswordResetConfirm },
+  { method: 'GET',  path: '/auth/oauth/:provider/callback',  handler: (_req, _p, _ctx) => { throw new ValidationError('OAuth is not implemented yet.'); } },
 ];

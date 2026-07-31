@@ -15,6 +15,9 @@ LOG_LEVEL = "DEBUG"
 # Cloudflare Workers Web Crypto caps PBKDF2 at 100,000 iterations (see DECISIONS.md ADR-019).
 # Declared explicitly so the platform ceiling is visible here, not just in security.js.
 PASSWORD_PBKDF2_ITERATIONS = 100000
+# Public base URL of the Lumio frontend — used to construct password reset links.
+# Must match the actual deployment URL for each environment.
+APP_BASE_URL = "https://lumio-6kn.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
@@ -62,6 +65,7 @@ bucket_name = "lumio-assets-production"
 # ---------------------------------------------------------------------------
 # Secrets
 # Never declared here — set per-environment via:
-#   npx wrangler secret put SESSION_SECRET --env production
+#   npx wrangler secret put SESSION_SECRET
+#   npx wrangler secret put RESEND_API_KEY
 # See .dev.vars.example for the local-development equivalent.
 # ---------------------------------------------------------------------------

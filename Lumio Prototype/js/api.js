@@ -240,8 +240,8 @@ const LumioAPI = (function () {
      * @throws {ApiError} 401 if the refresh token is also expired / invalid
      */
     refresh: function () { return post('/auth/refresh'); },
-    requestPasswordReset: notImplemented('auth.requestPasswordReset'),
-    confirmPasswordReset: notImplemented('auth.confirmPasswordReset'),
+    requestPasswordReset: function (body) { return post('/auth/password-reset/request', body); },
+    confirmPasswordReset: function (body) { return post('/auth/password-reset/confirm', body); },
   };
 
   // -------------------------------------------------------------------------

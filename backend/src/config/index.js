@@ -48,6 +48,13 @@ export function loadConfig(env) {
     throw new ConfigurationError(`Unrecognized ENVIRONMENT value: "${environment}".`);
   }
 
+  if (!env.APP_BASE_URL || typeof env.APP_BASE_URL !== 'string' || env.APP_BASE_URL.trim().length === 0) {
+    throw new ConfigurationError('APP_BASE_URL is required. Set it in wrangler.toml [vars] for each environment.');
+  }
+  if (!env.RESEND_API_KEY || typeof env.RESEND_API_KEY !== 'string' || env.RESEND_API_KEY.trim().length === 0) {
+    throw new ConfigurationError('RESEND_API_KEY is required. Set it via: npx wrangler secret put RESEND_API_KEY');
+  }
+
   return {
     environment,
     isProduction: environment === 'production',
@@ -57,5 +64,7 @@ export function loadConfig(env) {
     assetsBucket: env.ASSETS_BUCKET,    // R2 binding — validated above
     sessionSecret: env.SESSION_SECRET, // secret — set via `wrangler secret put`
     corsAllowedOrigins: loadCorsOrigins(env),
+    appBaseUrl: env.APP_BASE_URL.trim(),
+    resendApiKey: env.RESEND_API_KEY,
   };
 }

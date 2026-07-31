@@ -6,3 +6,4 @@ export { PermissionError } from './PermissionError.js';
 export { DatabaseError } from './DatabaseError.js';
 export { ConfigurationError } from './ConfigurationError.js';
 export { NetworkError } from './NetworkError.js';
+export { RateLimitError } from './RateLimitError.js';

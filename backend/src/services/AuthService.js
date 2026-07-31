@@ -1,4 +1,5 @@
-import { ValidationError, DatabaseError, DuplicateEmailError, AuthenticationError } from '../errors/index.js';
+import { ValidationError, DatabaseError, DuplicateEmailError, AuthenticationError, RateLimitError } from '../errors/index.js';
+import { sha256Hex } from '../utils/crypto.js';
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -11,11 +12,16 @@ const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * `logout`, and `acceptInvitation` remain Sprint 1 placeholders, untouched.
  */
 export class AuthService {
-  constructor({ userRepository, workspaceRepository, passwordService, sessionService, db, logger } = {}) {
+  constructor({ userRepository, workspaceRepository, passwordService, sessionService, tokenService, passwordResetRepository, rateLimitRepository, emailService, appBaseUrl, db, logger } = {}) {
     this.userRepository = userRepository;
     this.workspaceRepository = workspaceRepository;
     this.passwordService = passwordService;
     this.sessionService = sessionService;
+    this.tokenService = tokenService;
+    this.passwordResetRepository = passwordResetRepository;
+    this.rateLimitRepository = rateLimitRepository;
+    this.emailService = emailService;
+    this.appBaseUrl = appBaseUrl;
     this.db = db;
     this.logger = logger;
   }
@@ -295,28 +301,8 @@ export class AuthService {
       throw new ValidationError('This account does not use a password. Sign in with your linked provider.');
     }
 
-    // --- TEMPORARY DIAGNOSTIC LOGGING (no passwords or hashes) --------------
-    const hashParts = user.password_hash.split('$');
-    this.logger?.info('[DIAG] changePassword: user loaded', {
-      diagUserId: user.id,
-      diagEmail: user.email,
-      diagPasswordHashExists: !!user.password_hash,
-      diagHashAlgorithmTag: hashParts[0] ?? null,
-      diagHashPartCount: hashParts.length,
-      diagAuthProvider: user.auth_provider,
-      diagUserDeleted: user.deleted_at !== null && user.deleted_at !== undefined,
-    });
-    // -------------------------------------------------------------------------
-
     // --- 3. Verify current password -----------------------------------------
-    let currentValid;
-    try {
-      currentValid = await this.passwordService.verify(currentPassword, user.password_hash);
-    } catch (verifyErr) {
-      this.logger?.info('[DIAG] changePassword: verify() threw', { diagError: String(verifyErr) });
-      throw verifyErr;
-    }
-    this.logger?.info('[DIAG] changePassword: verify() result', { diagVerifyResult: currentValid });
+    const currentValid = await this.passwordService.verify(currentPassword, user.password_hash);
     if (!currentValid) {
       this.logger?.warning('password change rejected: current password incorrect', { userId });
       throw new ValidationError('Current password is incorrect.');
@@ -350,6 +336,130 @@ export class AuthService {
     return {
       session: { sessionId, refreshToken, expiresAt },
     };
+  }
+
+  /**
+   * Initiates a password reset for the given email.
+   * Always responds with { ok: true } — never reveals whether an account exists.
+   *
+   * @param {{ email: string }} params
+   * @returns {{ ok: true }}
+   */
+  async requestPasswordReset({ email, ip = 'unknown' } = {}) {
+    if (!email || typeof email !== 'string') {
+      throw new ValidationError('Email is required.');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!EMAIL_FORMAT.test(normalizedEmail)) {
+      throw new ValidationError('Email address is not a valid format.');
+    }
+
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
+
+    // IP-based rate limit: 5 requests per IP per hour.
+    // Returns 429 — IP-based limiting does not reveal account existence.
+    const ipKey = `ip:${ip}`;
+    const ipCount = await this.rateLimitRepository.countSince(ipKey, oneHourAgo);
+    if (ipCount >= 5) {
+      this.logger?.warning('password reset rate limited by IP', { ip });
+      throw new RateLimitError('Too many password reset requests. Please try again later.');
+    }
+    await this.rateLimitRepository.record(ipKey, now);
+
+    const user = await this.userRepository.findByEmail(normalizedEmail);
+
+    if (!user || !user.password_hash) {
+      this.logger?.info('password reset requested: account not found or OAuth-only', { email: normalizedEmail });
+      return { ok: true };
+    }
+
+    // Email-based rate limit: 5 requests per account per hour.
+    // Silently succeeds — does not reveal whether an account exists.
+    const emailCount = await this.passwordResetRepository.countByUserSince(user.id, oneHourAgo);
+    if (emailCount >= 5) {
+      this.logger?.warning('password reset rate limited by email', { userId: user.id });
+      return { ok: true };
+    }
+
+    await this.passwordResetRepository.invalidatePreviousTokens(user.id, now);
+
+    const { token, tokenHash, expiresAt } = await this.tokenService.generateToken('passwordReset');
+    const id = crypto.randomUUID();
+    await this.passwordResetRepository.create({ id, userId: user.id, tokenHash, expiresAt, now });
+
+    const resetLink = `${this.appBaseUrl}/#/reset-password?token=${token}`;
+
+    await this.emailService.sendPasswordResetEmail({
+      to: user.email,
+      firstName: user.first_name,
+      resetLink,
+    });
+
+    this.logger?.audit('PASSWORD_RESET_REQUESTED', { userId: user.id });
+    return { ok: true };
+  }
+
+  /**
+   * Completes a password reset using a raw token from the reset link.
+   * No auto-login — the user must sign in with their new password.
+   *
+   * @param {{ token: string, newPassword: string, confirmPassword: string }} params
+   * @returns {{ ok: true }}
+   */
+  async confirmPasswordReset({ token, newPassword, confirmPassword } = {}) {
+    if (!token || typeof token !== 'string') {
+      throw new ValidationError('Reset token is required.');
+    }
+    if (!newPassword || typeof newPassword !== 'string') {
+      throw new ValidationError('New password is required.');
+    }
+    if (!confirmPassword || typeof confirmPassword !== 'string') {
+      throw new ValidationError('Password confirmation is required.');
+    }
+    if (newPassword !== confirmPassword) {
+      throw new ValidationError('Passwords do not match.');
+    }
+
+    const tokenHash = await sha256Hex(token);
+    const record = await this.passwordResetRepository.findByTokenHash(tokenHash);
+
+    // Verify token — map used_at to revokedAt per TokenService contract.
+    const verification = record
+      ? await this.tokenService.verifyToken(token, { tokenHash: record.reset_token_hash, expiresAt: record.expires_at, revokedAt: record.used_at })
+      : { valid: false, reason: 'mismatch' };
+
+    if (!verification.valid) {
+      if (verification.reason === 'expired') {
+        this.logger?.audit('PASSWORD_RESET_TOKEN_EXPIRED', { tokenHash });
+        throw new ValidationError(
+          'This password reset link has expired or has already been used.\nPlease request a new password reset.',
+        );
+      }
+      if (verification.reason === 'revoked') {
+        this.logger?.audit('PASSWORD_RESET_TOKEN_INVALID', { reason: 'revoked', tokenHash });
+        throw new ValidationError(
+          'This password reset link has expired or has already been used.\nPlease request a new password reset.',
+        );
+      }
+      this.logger?.audit('PASSWORD_RESET_TOKEN_INVALID', { reason: verification.reason, tokenHash });
+      throw new ValidationError(
+        'This password reset link has expired or has already been used.\nPlease request a new password reset.',
+      );
+    }
+
+    const user = await this.userRepository.findById(record.user_id);
+    if (!user) throw new ValidationError('User not found.');
+
+    const newHash = await this.passwordService.hash(newPassword);
+
+    const now = Date.now();
+    await this.passwordResetRepository.markUsed(record.id, now);
+    await this.userRepository.updatePasswordHash(user.id, newHash);
+    await this.sessionService.revokeAllSessionsForUser(user.id);
+
+    this.logger?.audit('PASSWORD_RESET_COMPLETED', { userId: user.id });
+    return { ok: true };
   }
 
   async acceptInvitation(_token, _credentials) {

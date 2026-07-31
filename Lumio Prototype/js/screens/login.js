@@ -253,7 +253,7 @@ function paintForgotPassword() {
 
   const inner = `
     <h2 style="font-size:24px; margin-bottom:8px;">Reset your password 🔑</h2>
-    <p class="text-muted mb-24" style="font-size:14px;">${step === 'request' ? "Enter the email on your account and we'll generate a reset link." : 'A reset link has been generated below.'}</p>
+    <p class="text-muted mb-24" style="font-size:14px;">${step === 'request' ? "Enter the email on your account and we'll send a reset link." : 'Check your inbox.'}</p>
     <div id="forgot-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
     ${step === 'request' ? `
       <div class="field">
@@ -265,11 +265,9 @@ function paintForgotPassword() {
       </div>
       <button class="btn btn-primary w-full btn-lg" id="forgot-send-btn">Send Reset Link →</button>
     ` : `
-      <div class="text-sm mb-16 text-success" style="padding:10px 12px; border-radius:8px; background:var(--color-success-tint); word-break:break-all;">
-        Email delivery isn't connected yet, so here's your reset link directly:<br/>
-        <a href="${LumioForgotState.link}" id="forgot-link-anchor">${LumioForgotState.link}</a>
+      <div class="text-sm mb-16 text-success" style="padding:10px 12px; border-radius:8px; background:var(--color-success-tint);">
+        If an account with that email exists, a password reset link is on its way.
       </div>
-      <button class="btn btn-secondary w-full" id="forgot-continue-btn">Continue to Reset Password →</button>
     `}
     <p class="text-sm text-muted mt-16" style="text-align:center;">
       <a href="#" id="forgot-back-to-login">Back to sign in</a>
@@ -291,22 +289,20 @@ function paintForgotPassword() {
   });
 
   if (step === 'request') {
-    app.querySelector('#forgot-send-btn').addEventListener('click', () => {
+    app.querySelector('#forgot-send-btn').addEventListener('click', async () => {
       const email = app.querySelector('#forgot-email').value.trim();
-      const result = LumioAuth.requestPasswordReset(email);
-      if (!result.ok) { showError(result.reason); return; }
-      LumioForgotState = { step: 'sent', link: result.link };
-      paintForgotPassword();
-      toast('Reset link generated', '🔑');
-    });
-  } else {
-    app.querySelector('#forgot-continue-btn').addEventListener('click', (e) => {
-      e.preventDefault();
-      navigate(LumioForgotState.link.split('#')[1] ? '#' + LumioForgotState.link.split('#')[1] : '#/login');
-    });
-    app.querySelector('#forgot-link-anchor').addEventListener('click', (e) => {
-      e.preventDefault();
-      navigate(LumioForgotState.link.split('#')[1] ? '#' + LumioForgotState.link.split('#')[1] : '#/login');
+      const btn = app.querySelector('#forgot-send-btn');
+      btn.disabled = true;
+      try {
+        await LumioAPI.auth.requestPasswordReset({ email });
+        LumioForgotState = { step: 'sent' };
+        paintForgotPassword();
+      } catch (err) {
+        const el = app.querySelector('#forgot-feedback');
+        el.textContent = err.message || 'Something went wrong. Please try again.';
+        el.style.display = 'block';
+        btn.disabled = false;
+      }
     });
   }
 }
@@ -314,15 +310,10 @@ function paintForgotPassword() {
 /* ---------------- SET NEW PASSWORD (from a reset link/token) ---------------- */
 function renderResetPassword(token) {
   const app = document.getElementById('app');
-  const check = LumioAuth.validateResetToken(token);
 
-  const inner = !check.ok ? `
-    <h2 style="font-size:24px; margin-bottom:8px;">Reset link invalid</h2>
-    <p class="text-muted mb-24" style="font-size:14px;">${escapeHtml(check.reason)}</p>
-    <a href="#/login" class="btn btn-secondary w-full" style="text-align:center; display:block;">Back to sign in</a>
-  ` : `
+  const inner = `
     <h2 style="font-size:24px; margin-bottom:8px;">Set a new password 🔒</h2>
-    <p class="text-muted mb-24" style="font-size:14px;">Choose a new password for ${escapeHtml(check.reset.email)}.</p>
+    <p class="text-muted mb-24" style="font-size:14px;">Choose a strong new password for your account.</p>
     <div id="reset-feedback" class="text-sm mb-16 text-destructive" style="display:none; padding:10px 12px; border-radius:8px; background:var(--color-destructive-tint);"></div>
     <div class="field">
       <label>New Password</label>
@@ -340,9 +331,7 @@ function renderResetPassword(token) {
   `;
 
   app.innerHTML = loginAuthCardShell(inner);
-  if (!check.ok) return;
 
-  // Attach password visibility + caps lock to both reset fields.
   ['#reset-new-password', '#reset-confirm-password'].forEach(function (sel) {
     const el = app.querySelector(sel);
     if (el) {
@@ -357,14 +346,58 @@ function renderResetPassword(token) {
     el.style.display = 'block';
   };
 
-  app.querySelector('#reset-submit-btn').addEventListener('click', () => {
-    const next = app.querySelector('#reset-new-password').value;
-    const confirm = app.querySelector('#reset-confirm-password').value;
-    if (next !== confirm) { showError('Passwords do not match.'); return; }
-    const result = LumioAuth.resetPassword(token, next);
-    if (!result.ok) { showError(result.reason); return; }
-    toast('Password reset — please sign in', '✅');
-    LumioLoginMode = 'signin';
-    navigate('#/login');
+  app.querySelector('#reset-submit-btn').addEventListener('click', async () => {
+    const newPassword = app.querySelector('#reset-new-password').value;
+    const confirmPassword = app.querySelector('#reset-confirm-password').value;
+    const btn = app.querySelector('#reset-submit-btn');
+    btn.disabled = true;
+    try {
+      await LumioAPI.auth.confirmPasswordReset({ token, newPassword, confirmPassword });
+      // Show spec-required success message before redirecting.
+      app.innerHTML = loginAuthCardShell(`
+        <h2 style="font-size:24px; margin-bottom:16px;">Password updated ✅</h2>
+        <div class="text-sm mb-24" style="padding:16px; border-radius:8px; background:var(--color-success-tint); line-height:1.6; color:var(--ink-900);">
+          <strong>Your password has been updated successfully.</strong><br/><br/>
+          For your security, you have been signed out on all devices.<br/><br/>
+          Please sign in again using your new password.
+        </div>
+        <a href="#/login" class="btn btn-primary w-full btn-lg" style="text-align:center; display:block;">Sign in →</a>
+      `);
+      app.querySelector('a[href="#/login"]').addEventListener('click', (e) => {
+        e.preventDefault();
+        LumioLoginMode = 'signin';
+        navigate('#/login');
+      });
+    } catch (err) {
+      const msg = err.message || 'Password reset failed. Please try again.';
+      // Surface invalid/expired link as a full-card message, not just an inline error.
+      if (msg.includes('expired or has already been used')) {
+        app.innerHTML = loginAuthCardShell(`
+          <h2 style="font-size:24px; margin-bottom:16px;">Reset link invalid 🔑</h2>
+          <div class="text-sm mb-24" style="padding:16px; border-radius:8px; background:var(--color-destructive-tint); line-height:1.6; color:var(--color-destructive);">
+            This password reset link has expired or has already been used.<br/><br/>
+            Please request a new password reset.
+          </div>
+          <a href="#/login" class="btn btn-secondary w-full" style="text-align:center; display:block;">Back to sign in</a>
+          <div style="margin-top:12px; text-align:center;">
+            <a href="#" id="reset-request-new" class="text-sm" style="color:var(--ws-primary);">Request a new reset link</a>
+          </div>
+        `);
+        app.querySelector('#reset-request-new').addEventListener('click', (e) => {
+          e.preventDefault();
+          LumioLoginMode = 'forgot';
+          LumioForgotState = { step: 'request' };
+          paintLogin();
+        });
+        app.querySelector('a[href="#/login"]').addEventListener('click', (e) => {
+          e.preventDefault();
+          LumioLoginMode = 'signin';
+          navigate('#/login');
+        });
+      } else {
+        showError(msg);
+        btn.disabled = false;
+      }
+    }
   });
 }
