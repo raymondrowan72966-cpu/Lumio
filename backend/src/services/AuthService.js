@@ -303,6 +303,8 @@ export class AuthService {
       diagPasswordHashExists: !!user.password_hash,
       diagHashAlgorithmTag: hashParts[0] ?? null,
       diagHashPartCount: hashParts.length,
+      diagAuthProvider: user.auth_provider,
+      diagUserDeleted: user.deleted_at !== null && user.deleted_at !== undefined,
     });
     // -------------------------------------------------------------------------
 
