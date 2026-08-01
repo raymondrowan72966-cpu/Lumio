@@ -412,10 +412,65 @@ const LumioAPI = (function () {
   };
 
   var invitations = {
-    send:    notImplemented('invitations.send'),
-    accept:  notImplemented('invitations.accept'),
-    revoke:  notImplemented('invitations.revoke'),
-    list:    notImplemented('invitations.list'),
+    /**
+     * Send a workspace invitation.
+     * Requires Workspace Owner session.
+     *
+     * @param {string} workspaceId
+     * @param {{ firstName, lastName, email, role, authProvider }} body
+     * @returns {Promise<{ ok: true, invitationId: string }>}
+     * @throws {ApiError} 400 validation · 403 not owner · 409 duplicate
+     */
+    send: function (workspaceId, body) {
+      return post('/workspaces/' + encodeURIComponent(workspaceId) + '/invitations', body);
+    },
+
+    /**
+     * List pending invitations for a workspace.
+     * Requires Workspace Owner session.
+     *
+     * @param {string} workspaceId
+     * @returns {Promise<{ invitations: Array }>}
+     */
+    list: function (workspaceId) {
+      return get('/workspaces/' + encodeURIComponent(workspaceId) + '/invitations');
+    },
+
+    /**
+     * Fetch display-safe invitation details by raw token.
+     * No authentication required — used by the accept-invite screen.
+     *
+     * @param {string} token
+     * @returns {Promise<{ invitation: object }>}
+     * @throws {ApiError} 400 if invalid/expired/used
+     */
+    get: function (token) {
+      return get('/invitations/' + encodeURIComponent(token));
+    },
+
+    /**
+     * Accept an invitation. No authentication required.
+     *
+     * @param {string} token  — raw invitation token from the URL
+     * @param {{ password?: string }} body
+     * @returns {Promise<{ ok: true }>}
+     * @throws {ApiError} 400 invalid/expired · 400 validation
+     */
+    accept: function (token, body) {
+      return post('/invitations/' + encodeURIComponent(token) + '/accept', body);
+    },
+
+    /**
+     * Revoke a pending invitation by invitation ID.
+     * Requires Workspace Owner session.
+     *
+     * @param {string} invitationId
+     * @returns {Promise<{ ok: true }>}
+     * @throws {ApiError} 400 not pending · 403 not owner
+     */
+    revoke: function (invitationId) {
+      return request('DELETE', '/invitations/' + encodeURIComponent(invitationId));
+    },
   };
 
   // -------------------------------------------------------------------------

@@ -44,10 +44,10 @@ export default {
         const jwtService = new JwtService(config.sessionSecret, { environment: config.environment });
         const auth = await loadAuthContext(request, { db, sessionService, jwtService });
 
-        // Pass jwtService and sessionService in ctx so route handlers (refresh,
-        // session) can issue and rotate tokens without re-constructing services.
+        // Pass jwtService, sessionService, and tokenService in ctx so route
+        // handlers can issue/rotate tokens without re-constructing services.
         response = await match.handler(request, match.params, {
-          config, db, logger, auth, jwtService, sessionService,
+          config, db, logger, auth, jwtService, sessionService, tokenService,
         });
 
         logRequest(logger, request, response, startedAt);
