@@ -71,8 +71,15 @@ async function handleChangePassword(request, _params, ctx) {
   }
 
   // Infer Remember Me from current session TTL — same threshold as handleRefresh.
+  // ctx.auth.session only carries { id } on the JWT fast path (Path 1 in authContext.js);
+  // load the authoritative record when expires_at is absent so the inference is correct
+  // regardless of which auth path was used.
   const TWENTY_FIVE_HOURS_MS = 25 * 60 * 60 * 1000;
-  const sessionExpiresAt = ctx.auth.session?.expires_at;
+  let sessionExpiresAt = ctx.auth.session?.expires_at;
+  if (!sessionExpiresAt && ctx.auth.session?.id) {
+    const fullSession = await ctx.sessionService.loadSession(ctx.auth.session.id);
+    sessionExpiresAt = fullSession?.expires_at;
+  }
   const rememberMe = sessionExpiresAt
     ? sessionExpiresAt - Date.now() > TWENTY_FIVE_HOURS_MS
     : false;
