@@ -45,7 +45,7 @@ const LumioPasswordField = (function () {
     btn.className = 'pw-toggle-btn';
     btn.setAttribute('aria-label', 'Show password');
     btn.setAttribute('tabindex', '0');
-    btn.innerHTML = _eyeIcon(false);
+    btn.innerHTML = _eyeIcon(true);
     btn.style.cssText = [
       'position:absolute',
       'right:10px',
