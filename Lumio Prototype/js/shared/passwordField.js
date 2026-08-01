@@ -46,10 +46,14 @@ const LumioPasswordField = (function () {
     btn.setAttribute('aria-label', 'Show password');
     btn.setAttribute('tabindex', '0');
     btn.innerHTML = _eyeIcon(true);
+    // Centre relative to the input itself, not the parent.
+    // input.offsetTop is 0 when the parent wraps only the input (login page),
+    // and equals the label height when the parent also contains a label (profile page).
+    const inputCentreTop = input.offsetTop + input.offsetHeight / 2;
     btn.style.cssText = [
       'position:absolute',
       'right:10px',
-      'top:50%',
+      'top:' + inputCentreTop + 'px',
       'transform:translateY(-50%)',
       'background:none',
       'border:none',
