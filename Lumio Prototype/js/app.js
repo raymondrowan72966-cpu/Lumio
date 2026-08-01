@@ -3444,7 +3444,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (!LearnerUI.publishedMode) {
     if (sessionValid && restoredHash) location.hash = restoredHash;
     else if (sessionValid && !location.hash) location.hash = '#/projects';
-    else location.hash = '#/login'; // no valid session
+    else {
+      // Only redirect to login if the current hash is not already a public route.
+      // Without this check, navigating to #/reset-password/<token> while logged
+      // out would be silently overwritten with #/login before render() runs.
+      const currentPath = (location.hash || '').replace('#/', '').split('/')[0];
+      if (!PUBLIC_ROUTES.includes(currentPath)) location.hash = '#/login';
+    }
   }
   render();
   BlockMigration.validateAllLessons();

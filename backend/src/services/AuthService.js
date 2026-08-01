@@ -388,7 +388,7 @@ export class AuthService {
     const id = crypto.randomUUID();
     await this.passwordResetRepository.create({ id, userId: user.id, tokenHash, expiresAt, now });
 
-    const resetLink = `${this.appBaseUrl}/#/reset-password?token=${token}`;
+    const resetLink = `${this.appBaseUrl}/#/reset-password/${token}`;
 
     await this.emailService.sendPasswordResetEmail({
       to: user.email,
