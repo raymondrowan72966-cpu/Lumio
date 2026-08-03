@@ -131,6 +131,8 @@ const LumioAPI = (function () {
 
   function get(path) { return request('GET', path); }
   function post(path, body) { return request('POST', path, body); }
+  function patch(path, body) { return request('PATCH', path, body); }
+  function del(path) { return request('DELETE', path); }
 
   // Non-JSON request (e.g. multipart/form-data). Browser sets Content-Type
   // automatically with the correct boundary when body is FormData.
@@ -275,8 +277,15 @@ const LumioAPI = (function () {
       return post('/workspaces/' + encodeURIComponent(workspaceId) + '/members', body);
     },
 
-    updateMember:  notImplemented('workspaces.updateMember'),
-    removeMember:  notImplemented('workspaces.removeMember'),
+    updateMember: function (workspaceId, userId, body) {
+      return patch('/workspaces/' + encodeURIComponent(workspaceId) + '/members/' + encodeURIComponent(userId), body);
+    },
+    resetMemberPassword: function (workspaceId, userId, body) {
+      return post('/workspaces/' + encodeURIComponent(workspaceId) + '/members/' + encodeURIComponent(userId) + '/reset-password', body);
+    },
+    removeMember: function (workspaceId, userId) {
+      return del('/workspaces/' + encodeURIComponent(workspaceId) + '/members/' + encodeURIComponent(userId));
+    },
     getSettings:   notImplemented('workspaces.getSettings'),
     updateSettings: notImplemented('workspaces.updateSettings'),
   };

@@ -1526,7 +1526,12 @@ function workspaceUsersTab() {
         </div>
         <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
           <label>Temporary Password</label>
-          <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" />
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div style="flex:1; position:relative;">
+              <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" style="width:100%;" />
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="ws-member-generate" title="Generate password" style="white-space:nowrap; flex-shrink:0;">Generate</button>
+          </div>
         </div>
         <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
           <label>Confirm Password</label>
@@ -1564,7 +1569,7 @@ function userRow(user) {
 }
 
 // Renders a member row from backend data (userId, firstName, lastName, email,
-// role, status, joinedAt). Actions are scaffolded for future sprints.
+// role, status, joinedAt). Non-self rows include a three-dot overflow menu.
 function memberRow(member) {
   const currentUserId = getCurrentUser()?.id;
   const id    = member.userId || member.id;
@@ -1572,6 +1577,32 @@ function memberRow(member) {
   const name   = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.displayName || member.email;
   const isOwner = member.role === 'workspace_owner' || member.role === ROLE_WORKSPACE_OWNER;
   const isActive = member.status === 'active';
+
+  const menuHtml = isSelf ? '' : `
+    <div class="member-menu-wrap" style="position:relative;">
+      <button type="button" class="btn btn-ghost btn-sm member-menu-btn" data-member-id="${escapeHtml(id)}"
+              aria-label="Member actions" style="padding:4px 8px; font-size:16px; line-height:1;">⋯</button>
+      <div class="member-menu-dropdown" data-menu-for="${escapeHtml(id)}"
+           style="display:none; position:absolute; right:0; top:100%; z-index:200; min-width:160px;
+                  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                  box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:4px 0;">
+        <button type="button" class="member-menu-item" data-action="change-role" data-member-id="${escapeHtml(id)}"
+                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
+                       background:none; border:none; cursor:pointer; color:var(--ink-900);">Change Role</button>
+        <button type="button" class="member-menu-item" data-action="reset-password" data-member-id="${escapeHtml(id)}"
+                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
+                       background:none; border:none; cursor:pointer; color:var(--ink-900);">Reset Password</button>
+        <button type="button" class="member-menu-item" data-action="toggle-status" data-member-id="${escapeHtml(id)}"
+                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
+                       background:none; border:none; cursor:pointer; color:var(--ink-900);">
+          ${isActive ? 'Deactivate' : 'Reactivate'}</button>
+        <hr style="margin:4px 0; border:none; border-top:1px solid var(--border);" />
+        <button type="button" class="member-menu-item" data-action="remove" data-member-id="${escapeHtml(id)}"
+                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
+                       background:none; border:none; cursor:pointer; color:var(--color-destructive);">Remove Member</button>
+      </div>
+    </div>
+  `;
 
   return `
     <div class="flex items-center gap-12" style="padding:10px 0; border-bottom:1px solid var(--border);" data-member-row="${escapeHtml(id)}">
@@ -1585,6 +1616,7 @@ function memberRow(member) {
         ${isOwner ? 'Workspace Owner' : 'Administrator'}
       </span>
       <span class="pill ${isActive ? 'pill-teal' : 'pill-grey'}">${isActive ? 'Active' : 'Disabled'}</span>
+      ${menuHtml}
     </div>
   `;
 }
@@ -1743,8 +1775,28 @@ function bindWorkspaceUsersTab() {
       .then(data => {
         _workspaceMembers = data.members || [];
         _renderMembersList(app);
+        _bindMemberListActions(app, _workspaceId);
       })
       .catch(() => { /* keep showing local-state fallback on API failure */ });
+  }
+
+  // Password toggles on the Add Member form.
+  const pwInput  = app.querySelector('#ws-member-password');
+  const pwConfirm = app.querySelector('#ws-member-password-confirm');
+  if (pwInput)   LumioPasswordField.attachToggle(pwInput);
+  if (pwConfirm) LumioPasswordField.attachToggle(pwConfirm);
+
+  // Generate Password button.
+  const generateBtn = app.querySelector('#ws-member-generate');
+  if (generateBtn && pwInput && pwConfirm) {
+    generateBtn.addEventListener('click', () => {
+      const pwd = _generatePassword();
+      pwInput.value   = pwd;
+      pwConfirm.value = pwd;
+      // Show the generated password briefly so the owner can note it.
+      pwInput.type   = 'text';
+      pwConfirm.type = 'text';
+    });
   }
 
   // Wire Create Member button.
@@ -1810,6 +1862,7 @@ function bindWorkspaceUsersTab() {
         .then(data => {
           _workspaceMembers = data.members || [];
           _renderMembersList(app);
+          _bindMemberListActions(app, _workspaceId);
         })
         .catch(err => {
           showFeedback(err.message || 'Failed to create member.', false);
@@ -1822,6 +1875,307 @@ function bindWorkspaceUsersTab() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Password generator — 16-char mix of upper, lower, digits, symbols.
+// ---------------------------------------------------------------------------
+function _generatePassword() {
+  const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower   = 'abcdefghjkmnpqrstuvwxyz';
+  const digits  = '23456789';
+  const symbols = '!@#$%^&*';
+  const all = upper + lower + digits + symbols;
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  // Guarantee at least one of each character class.
+  const chars = [
+    upper[arr[0]  % upper.length],
+    lower[arr[1]  % lower.length],
+    digits[arr[2] % digits.length],
+    symbols[arr[3] % symbols.length],
+    ...Array.from(arr.slice(4), b => all[b % all.length]),
+  ];
+  // Fisher-Yates shuffle.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = arr[i] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+// ---------------------------------------------------------------------------
+// Wire three-dot overflow menus and re-bind after list re-renders.
+// ---------------------------------------------------------------------------
+function _bindMemberListActions(app, workspaceId) {
+  // Close all open menus when clicking outside.
+  const closeAllMenus = () => {
+    app.querySelectorAll('.member-menu-dropdown').forEach(d => { d.style.display = 'none'; });
+  };
+
+  // Toggle button — open/close this menu, close others.
+  app.querySelectorAll('.member-menu-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const memberId = btn.dataset.memberId;
+      const dropdown = app.querySelector(`.member-menu-dropdown[data-menu-for="${memberId}"]`);
+      if (!dropdown) return;
+      const isOpen = dropdown.style.display !== 'none';
+      closeAllMenus();
+      if (!isOpen) dropdown.style.display = 'block';
+    });
+  });
+
+  // Close menus on outside click.
+  document.addEventListener('click', closeAllMenus, { once: false });
+
+  // Dispatch menu item actions.
+  app.querySelectorAll('.member-menu-item').forEach(item => {
+    item.addEventListener('click', e => {
+      e.stopPropagation();
+      closeAllMenus();
+      const action   = item.dataset.action;
+      const memberId = item.dataset.memberId;
+      const member   = (_workspaceMembers || []).find(m => (m.userId || m.id) === memberId);
+      if (!member) return;
+
+      if (action === 'change-role')    _showChangeRoleDialog(app, workspaceId, member);
+      if (action === 'reset-password') _showResetPasswordDialog(app, workspaceId, member);
+      if (action === 'toggle-status')  _toggleMemberStatus(app, workspaceId, member);
+      if (action === 'remove')         _showRemoveMemberDialog(app, workspaceId, member);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Change Role dialog
+// ---------------------------------------------------------------------------
+function _showChangeRoleDialog(app, workspaceId, member) {
+  const memberId   = member.userId || member.id;
+  const name       = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+  const currentRole = member.role;
+  const isOwner    = currentRole === 'workspace_owner';
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Change Role</div>
+      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;">
+        Change role for <strong>${escapeHtml(name)}</strong>
+      </div>
+      <div class="field" style="margin-bottom:20px;">
+        <label>New Role</label>
+        <select class="input" id="dlg-role-select">
+          <option value="administrator" ${!isOwner ? 'selected' : ''}>Administrator</option>
+          <option value="workspace_owner" ${isOwner ? 'selected' : ''}>Workspace Owner</option>
+        </select>
+      </div>
+      <div id="dlg-role-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
+      <div class="flex gap-12" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost btn-sm" id="dlg-role-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="dlg-role-save">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#dlg-role-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#dlg-role-save').addEventListener('click', () => {
+    const newRole   = overlay.querySelector('#dlg-role-select').value;
+    const errEl     = overlay.querySelector('#dlg-role-error');
+    const saveBtn   = overlay.querySelector('#dlg-role-save');
+    errEl.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
+    LumioAPI.workspaces.updateMember(workspaceId, memberId, { role: newRole })
+      .then(() => {
+        overlay.remove();
+        toast('Role updated', platformIcon('success'));
+        return LumioAPI.workspaces.listMembers(workspaceId);
+      })
+      .then(data => {
+        _workspaceMembers = data.members || [];
+        _renderMembersList(app);
+        _bindMemberListActions(app, workspaceId);
+      })
+      .catch(err => {
+        errEl.textContent = err.message || 'Failed to change role.';
+        errEl.style.display = 'block';
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+      });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reset Password dialog
+// ---------------------------------------------------------------------------
+function _showResetPasswordDialog(app, workspaceId, member) {
+  const memberId = member.userId || member.id;
+  const name     = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Reset Password</div>
+      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;">
+        Set a new password for <strong>${escapeHtml(name)}</strong>. The new password is active immediately.
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>New Password</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;position:relative;">
+            <input class="input" id="dlg-reset-pw" type="password" placeholder="New password" autocomplete="new-password" style="width:100%;" />
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="dlg-reset-generate" style="white-space:nowrap;flex-shrink:0;">Generate</button>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:20px;">
+        <label>Confirm Password</label>
+        <input class="input" id="dlg-reset-pw-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password" />
+      </div>
+      <div id="dlg-reset-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
+      <div class="flex gap-12" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost btn-sm" id="dlg-reset-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="dlg-reset-save">Reset Password</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const pwInput   = overlay.querySelector('#dlg-reset-pw');
+  const pwConfirm = overlay.querySelector('#dlg-reset-pw-confirm');
+  LumioPasswordField.attachToggle(pwInput);
+  LumioPasswordField.attachToggle(pwConfirm);
+
+  overlay.querySelector('#dlg-reset-generate').addEventListener('click', () => {
+    const pwd = _generatePassword();
+    pwInput.value   = pwd;
+    pwConfirm.value = pwd;
+    pwInput.type   = 'text';
+    pwConfirm.type = 'text';
+  });
+
+  overlay.querySelector('#dlg-reset-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#dlg-reset-save').addEventListener('click', () => {
+    const newPassword = pwInput.value;
+    const confirm     = pwConfirm.value;
+    const errEl       = overlay.querySelector('#dlg-reset-error');
+    const saveBtn     = overlay.querySelector('#dlg-reset-save');
+
+    errEl.style.display = 'none';
+    if (!newPassword || newPassword.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (newPassword !== confirm) {
+      errEl.textContent = 'Passwords do not match.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Resetting…';
+
+    LumioAPI.workspaces.resetMemberPassword(workspaceId, memberId, { newPassword })
+      .then(() => {
+        overlay.remove();
+        toast('Password reset', platformIcon('success'));
+      })
+      .catch(err => {
+        errEl.textContent = err.message || 'Failed to reset password.';
+        errEl.style.display = 'block';
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Reset Password';
+      });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Toggle member status (Deactivate / Reactivate) — inline, no dialog.
+// ---------------------------------------------------------------------------
+function _toggleMemberStatus(app, workspaceId, member) {
+  const memberId  = member.userId || member.id;
+  const newStatus = member.status === 'active' ? 'disabled' : 'active';
+  const name      = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+
+  LumioAPI.workspaces.updateMember(workspaceId, memberId, { status: newStatus })
+    .then(() => {
+      toast(newStatus === 'active' ? `${name} reactivated` : `${name} deactivated`, platformIcon('success'));
+      return LumioAPI.workspaces.listMembers(workspaceId);
+    })
+    .then(data => {
+      _workspaceMembers = data.members || [];
+      _renderMembersList(app);
+      _bindMemberListActions(app, workspaceId);
+    })
+    .catch(err => {
+      toast(err.message || 'Failed to update status.', platformIcon('warning'));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Remove Member dialog
+// ---------------------------------------------------------------------------
+function _showRemoveMemberDialog(app, workspaceId, member) {
+  const memberId = member.userId || member.id;
+  const name     = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--color-destructive);">Remove Member</div>
+      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;line-height:1.6;">
+        Remove <strong>${escapeHtml(name)}</strong> from this workspace?<br/>
+        Their projects and history will remain. This only removes their workspace access.
+      </div>
+      <div id="dlg-remove-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
+      <div class="flex gap-12" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost btn-sm" id="dlg-remove-cancel">Cancel</button>
+        <button type="button" class="btn btn-sm" id="dlg-remove-confirm"
+                style="background:var(--color-destructive);color:#fff;border:none;">Remove Member</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#dlg-remove-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#dlg-remove-confirm').addEventListener('click', () => {
+    const errEl     = overlay.querySelector('#dlg-remove-error');
+    const confirmBtn = overlay.querySelector('#dlg-remove-confirm');
+    errEl.style.display = 'none';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Removing…';
+
+    LumioAPI.workspaces.removeMember(workspaceId, memberId)
+      .then(() => {
+        overlay.remove();
+        toast(`${name} removed from workspace`, platformIcon('success'));
+        return LumioAPI.workspaces.listMembers(workspaceId);
+      })
+      .then(data => {
+        _workspaceMembers = data.members || [];
+        _renderMembersList(app);
+        _bindMemberListActions(app, workspaceId);
+      })
+      .catch(err => {
+        errEl.textContent = err.message || 'Failed to remove member.';
+        errEl.style.display = 'block';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Remove Member';
+      });
+  });
+}
+
 // Re-renders only the member rows inside the already-mounted
 // #ws-members-rows container without re-painting the whole tab.
 function _renderMembersList(app) {
@@ -1831,6 +2185,7 @@ function _renderMembersList(app) {
     ? _workspaceMembers.map(m => memberRow(m)).join('')
     : '<p class="text-sm text-muted" style="padding:8px 0;">No members yet.</p>';
 }
+
 
 /* ---------------- ACCEPT INVITATION ---------------- */
 // Standalone screen reached via an invitation link (#/accept-invite/:token).

@@ -82,8 +82,37 @@ export class WorkspaceRepository {
     }
   }
 
-  async removeMember(_workspaceId, _userId) {
-    throw new Error('WorkspaceRepository.removeMember is not implemented yet (Sprint 2C: registration only).');
+  async removeMember(workspaceId, userId) {
+    try {
+      await this.db.run(
+        'DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?',
+        [workspaceId, userId],
+      );
+    } catch (err) {
+      throw new DatabaseError('Failed to remove workspace member.', { cause: String(err) });
+    }
+  }
+
+  async updateMemberRole(workspaceId, userId, role) {
+    try {
+      await this.db.run(
+        'UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?',
+        [role, workspaceId, userId],
+      );
+    } catch (err) {
+      throw new DatabaseError('Failed to update member role.', { cause: String(err) });
+    }
+  }
+
+  async updateMemberStatus(workspaceId, userId, status) {
+    try {
+      await this.db.run(
+        'UPDATE workspace_members SET status = ? WHERE workspace_id = ? AND user_id = ?',
+        [status, workspaceId, userId],
+      );
+    } catch (err) {
+      throw new DatabaseError('Failed to update member status.', { cause: String(err) });
+    }
   }
 
   /** Returns all active members of a workspace with their user details.

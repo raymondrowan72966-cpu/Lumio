@@ -250,6 +250,115 @@ export class MemberService {
   }
 
   // ---------------------------------------------------------------------------
+  // changeRole
+  // ---------------------------------------------------------------------------
+
+  async changeRole({ workspaceId, requestingUserId, targetUserId, newRole }) {
+    const canonicalRole = ROLE_CANONICAL[newRole];
+    if (!canonicalRole) {
+      throw new ValidationError(`Role must be "administrator" or "workspace_owner". Received: "${newRole}".`);
+    }
+    if (requestingUserId === targetUserId) {
+      throw new ValidationError('You cannot change your own role.');
+    }
+    const membership = await this.workspaceRepository.findMembership(workspaceId, targetUserId);
+    if (!membership) {
+      throw new ValidationError('Member not found in this workspace.');
+    }
+    if (canonicalRole === 'workspace_owner') {
+      const ownerCount = await this.workspaceRepository.countWorkspaceOwners(workspaceId);
+      if (ownerCount >= MAX_WORKSPACE_OWNERS) {
+        throw new ValidationError(
+          `A workspace may have at most ${MAX_WORKSPACE_OWNERS} Workspace Owners. ` +
+          'Change an existing owner to Administrator before promoting another.',
+        );
+      }
+    }
+    if (membership.role === 'workspace_owner' && canonicalRole !== 'workspace_owner') {
+      const ownerCount = await this.workspaceRepository.countWorkspaceOwners(workspaceId);
+      if (ownerCount <= 1) {
+        throw new ValidationError(
+          'Cannot demote the only Workspace Owner. Promote another member first.',
+        );
+      }
+    }
+    await this.workspaceRepository.updateMemberRole(workspaceId, targetUserId, canonicalRole);
+    this.logger?.audit('MEMBER_ROLE_CHANGED', { workspaceId, targetUserId, newRole: canonicalRole, requestingUserId });
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // resetPassword
+  // ---------------------------------------------------------------------------
+
+  async resetPassword({ workspaceId, requestingUserId, targetUserId, newPassword }) {
+    if (requestingUserId === targetUserId) {
+      throw new ValidationError('Use your profile settings to change your own password.');
+    }
+    const membership = await this.workspaceRepository.findMembership(workspaceId, targetUserId);
+    if (!membership) {
+      throw new ValidationError('Member not found in this workspace.');
+    }
+    const passwordHash = await this.passwordService.hash(newPassword);
+    await this.userRepository.updatePasswordHash(targetUserId, passwordHash);
+    this.logger?.audit('MEMBER_PASSWORD_RESET', { workspaceId, targetUserId, requestingUserId });
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // setMemberStatus
+  // ---------------------------------------------------------------------------
+
+  async setMemberStatus({ workspaceId, requestingUserId, targetUserId, status }) {
+    if (!['active', 'disabled'].includes(status)) {
+      throw new ValidationError('Status must be "active" or "disabled".');
+    }
+    if (requestingUserId === targetUserId) {
+      throw new ValidationError('You cannot change your own status.');
+    }
+    const membership = await this.workspaceRepository.findMembership(workspaceId, targetUserId);
+    if (!membership) {
+      throw new ValidationError('Member not found in this workspace.');
+    }
+    if (status === 'disabled' && membership.role === 'workspace_owner') {
+      const ownerCount = await this.workspaceRepository.countWorkspaceOwners(workspaceId);
+      if (ownerCount <= 1) {
+        throw new ValidationError(
+          'Cannot deactivate the only Workspace Owner. Promote another member first.',
+        );
+      }
+    }
+    await this.workspaceRepository.updateMemberStatus(workspaceId, targetUserId, status);
+    this.logger?.audit('MEMBER_STATUS_CHANGED', { workspaceId, targetUserId, status, requestingUserId });
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // removeMember
+  // ---------------------------------------------------------------------------
+
+  async removeMember({ workspaceId, requestingUserId, targetUserId }) {
+    if (requestingUserId === targetUserId) {
+      throw new ValidationError('You cannot remove yourself from the workspace.');
+    }
+    const membership = await this.workspaceRepository.findMembership(workspaceId, targetUserId);
+    if (!membership) {
+      throw new ValidationError('Member not found in this workspace.');
+    }
+    if (membership.role === 'workspace_owner') {
+      const ownerCount = await this.workspaceRepository.countWorkspaceOwners(workspaceId);
+      if (ownerCount <= 1) {
+        throw new ValidationError(
+          'Cannot remove the only Workspace Owner. Promote another member first.',
+        );
+      }
+    }
+    await this.workspaceRepository.removeMember(workspaceId, targetUserId);
+    this.logger?.audit('MEMBER_REMOVED', { workspaceId, targetUserId, requestingUserId });
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 

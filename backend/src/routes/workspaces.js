@@ -120,6 +120,105 @@ async function handleCreateMember(request, params, ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// PATCH /workspaces/:id/members/:userId  — change role or status
+// ---------------------------------------------------------------------------
+
+async function handleUpdateMember(request, params, ctx) {
+  if (!ctx.auth.isAuthenticated) {
+    throw new AuthenticationError('Authentication required.');
+  }
+  requireWorkspaceOwner(ctx.auth);
+
+  const { id: workspaceId, userId: targetUserId } = params;
+  if (!ctx.auth.currentWorkspace || ctx.auth.currentWorkspace.id !== workspaceId) {
+    throw new PermissionError('You may only manage members of your own workspace.');
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_err) {
+    throw new ValidationError('Request body must be valid JSON.');
+  }
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Request body must be a JSON object.');
+  }
+
+  const svc = buildMemberService(ctx);
+  const requestingUserId = ctx.auth.currentUser.id;
+
+  if (body.role !== undefined) {
+    const result = await svc.changeRole({ workspaceId, requestingUserId, targetUserId, newRole: body.role });
+    return dataResponse(result);
+  }
+  if (body.status !== undefined) {
+    const result = await svc.setMemberStatus({ workspaceId, requestingUserId, targetUserId, status: body.status });
+    return dataResponse(result);
+  }
+
+  throw new ValidationError('Request body must include "role" or "status".');
+}
+
+// ---------------------------------------------------------------------------
+// POST /workspaces/:id/members/:userId/reset-password
+// ---------------------------------------------------------------------------
+
+async function handleResetMemberPassword(request, params, ctx) {
+  if (!ctx.auth.isAuthenticated) {
+    throw new AuthenticationError('Authentication required.');
+  }
+  requireWorkspaceOwner(ctx.auth);
+
+  const { id: workspaceId, userId: targetUserId } = params;
+  if (!ctx.auth.currentWorkspace || ctx.auth.currentWorkspace.id !== workspaceId) {
+    throw new PermissionError('You may only manage members of your own workspace.');
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_err) {
+    throw new ValidationError('Request body must be valid JSON.');
+  }
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Request body must be a JSON object.');
+  }
+
+  const svc = buildMemberService(ctx);
+  const result = await svc.resetPassword({
+    workspaceId,
+    requestingUserId: ctx.auth.currentUser.id,
+    targetUserId,
+    newPassword: body.newPassword,
+  });
+  return dataResponse(result);
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /workspaces/:id/members/:userId
+// ---------------------------------------------------------------------------
+
+async function handleRemoveMember(request, params, ctx) {
+  if (!ctx.auth.isAuthenticated) {
+    throw new AuthenticationError('Authentication required.');
+  }
+  requireWorkspaceOwner(ctx.auth);
+
+  const { id: workspaceId, userId: targetUserId } = params;
+  if (!ctx.auth.currentWorkspace || ctx.auth.currentWorkspace.id !== workspaceId) {
+    throw new PermissionError('You may only manage members of your own workspace.');
+  }
+
+  const svc = buildMemberService(ctx);
+  const result = await svc.removeMember({
+    workspaceId,
+    requestingUserId: ctx.auth.currentUser.id,
+    targetUserId,
+  });
+  return dataResponse(result);
+}
+
+// ---------------------------------------------------------------------------
 // POST /workspaces/:id/invitations
 // ---------------------------------------------------------------------------
 
@@ -245,8 +344,9 @@ export const workspaceRoutes = [
   { method: 'DELETE', path: '/workspaces/:id',                   handler: () => notImplemented('workspaces.delete') },
   { method: 'GET',    path: '/workspaces/:id/members',           handler: handleListMembers },
   { method: 'POST',   path: '/workspaces/:id/members',           handler: handleCreateMember },
-  { method: 'PATCH',  path: '/workspaces/:id/members/:userId',   handler: () => notImplemented('workspaces.updateMember') },
-  { method: 'DELETE', path: '/workspaces/:id/members/:userId',   handler: () => notImplemented('workspaces.removeMember') },
+  { method: 'PATCH',  path: '/workspaces/:id/members/:userId',              handler: handleUpdateMember },
+  { method: 'POST',   path: '/workspaces/:id/members/:userId/reset-password', handler: handleResetMemberPassword },
+  { method: 'DELETE', path: '/workspaces/:id/members/:userId',              handler: handleRemoveMember },
   { method: 'POST',   path: '/workspaces/:id/invitations',       handler: handleInvite },
   { method: 'GET',    path: '/workspaces/:id/invitations',       handler: handleListInvitations },
   { method: 'GET',    path: '/invitations/:token',               handler: handleGetInvitation },
