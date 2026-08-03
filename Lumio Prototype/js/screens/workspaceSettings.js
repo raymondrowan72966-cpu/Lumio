@@ -1516,21 +1516,21 @@ function workspaceUsersTab() {
           <input class="input" id="ws-member-email" type="email" placeholder="name@company.com" autocomplete="off" />
         </div>
       </div>
-      <div class="flex gap-12 mt-12" style="flex-wrap:wrap; align-items:flex-end;">
-        <div class="field" style="margin-bottom:0;">
+      <div class="flex gap-12 mt-12" style="flex-wrap:nowrap; align-items:flex-start;">
+        <div class="field" style="flex-shrink:0; margin-bottom:0;">
           <label>Role</label>
-          <select class="input" id="ws-member-role" style="width:180px;">
+          <select class="input" id="ws-member-role" style="width:140px;">
             <option value="administrator">Administrator</option>
             <option value="workspace_owner">Workspace Owner</option>
           </select>
         </div>
-        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+        <div class="field" style="flex:1; margin-bottom:0;">
           <label>Temporary Password</label>
           <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" />
-          <button type="button" id="ws-member-generate"
-                  style="background:none; border:none; padding:0; margin-top:4px; font-size:12px; color:var(--ink-400); cursor:pointer; text-decoration:underline; text-underline-offset:2px;">Generate Password</button>
+          <button type="button" id="ws-member-generate" class="btn btn-ghost btn-sm"
+                  style="margin-top:5px; padding:2px 8px; font-size:11px; height:auto; line-height:1.4;">Generate Password</button>
         </div>
-        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+        <div class="field" style="flex:1; margin-bottom:0;">
           <label>Confirm Password</label>
           <input class="input" id="ws-member-password-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password" />
         </div>
