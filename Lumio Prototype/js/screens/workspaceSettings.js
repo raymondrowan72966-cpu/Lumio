@@ -1576,27 +1576,15 @@ function memberRow(member) {
   const isActive = member.status === 'active';
 
   const menuHtml = isSelf ? '' : `
-    <div class="member-menu-wrap" style="position:relative;">
-      <button type="button" class="btn btn-ghost btn-sm member-menu-btn" data-member-id="${escapeHtml(id)}"
-              aria-label="Member actions" style="padding:4px 8px; font-size:16px; line-height:1;">⋯</button>
-      <div class="member-menu-dropdown" data-menu-for="${escapeHtml(id)}"
-           style="display:none; position:absolute; right:0; top:100%; z-index:200; min-width:160px;
-                  background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                  box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:4px 0;">
-        <button type="button" class="member-menu-item" data-action="change-role" data-member-id="${escapeHtml(id)}"
-                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
-                       background:none; border:none; cursor:pointer; color:var(--ink-900);">Change Role</button>
-        <button type="button" class="member-menu-item" data-action="reset-password" data-member-id="${escapeHtml(id)}"
-                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
-                       background:none; border:none; cursor:pointer; color:var(--ink-900);">Reset Password</button>
-        <button type="button" class="member-menu-item" data-action="toggle-status" data-member-id="${escapeHtml(id)}"
-                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
-                       background:none; border:none; cursor:pointer; color:var(--ink-900);">
-          ${isActive ? 'Deactivate' : 'Reactivate'}</button>
-        <hr style="margin:4px 0; border:none; border-top:1px solid var(--border);" />
-        <button type="button" class="member-menu-item" data-action="remove" data-member-id="${escapeHtml(id)}"
-                style="display:block; width:100%; text-align:left; padding:8px 16px; font-size:13px;
-                       background:none; border:none; cursor:pointer; color:var(--color-destructive);">Remove Member</button>
+    <div class="ws-ap-overflow-wrap">
+      <button type="button" class="ws-ap-overflow-btn member-menu-btn" data-member-id="${escapeHtml(id)}"
+              aria-label="Member actions">⋯</button>
+      <div class="ws-ap-menu member-menu-dropdown" data-menu-for="${escapeHtml(id)}" hidden>
+        <button type="button" class="ws-ap-menu-item member-menu-item" data-action="change-role" data-member-id="${escapeHtml(id)}">Change Role</button>
+        <button type="button" class="ws-ap-menu-item member-menu-item" data-action="reset-password" data-member-id="${escapeHtml(id)}">Reset Password</button>
+        <button type="button" class="ws-ap-menu-item member-menu-item" data-action="toggle-status" data-member-id="${escapeHtml(id)}">${isActive ? 'Deactivate' : 'Reactivate'}</button>
+        <div class="ws-ap-menu-divider"></div>
+        <button type="button" class="ws-ap-menu-item ws-ap-menu-item--danger member-menu-item" data-action="remove" data-member-id="${escapeHtml(id)}">Remove Member</button>
       </div>
     </div>
   `;
@@ -1905,7 +1893,7 @@ function _generatePassword() {
 function _bindMemberListActions(app, workspaceId) {
   // Close all open menus when clicking outside.
   const closeAllMenus = () => {
-    app.querySelectorAll('.member-menu-dropdown').forEach(d => { d.style.display = 'none'; });
+    app.querySelectorAll('.member-menu-dropdown').forEach(d => { d.hidden = true; });
   };
 
   // Toggle button — open/close this menu, close others.
@@ -1915,9 +1903,9 @@ function _bindMemberListActions(app, workspaceId) {
       const memberId = btn.dataset.memberId;
       const dropdown = app.querySelector(`.member-menu-dropdown[data-menu-for="${memberId}"]`);
       if (!dropdown) return;
-      const isOpen = dropdown.style.display !== 'none';
+      const isOpen = !dropdown.hidden;
       closeAllMenus();
-      if (!isOpen) dropdown.style.display = 'block';
+      if (!isOpen) dropdown.hidden = false;
     });
   });
 
