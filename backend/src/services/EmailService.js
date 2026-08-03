@@ -218,7 +218,7 @@ export class EmailService {
     }
   }
 
-  async sendWelcomeMemberEmail({ to, firstName, workspaceName, role, temporaryPassword }) {
+  async sendWelcomeMemberEmail({ to, firstName, workspaceName, role }) {
     if (!this.apiKey) {
       throw new ConfigurationError('RESEND_API_KEY is not configured. Set it via: npx wrangler secret put RESEND_API_KEY');
     }
@@ -253,22 +253,18 @@ export class EmailService {
               <p style="margin:0 0 24px;font-size:15px;color:#5a5a7a;line-height:1.5;">Hello ${firstName},</p>
 
               <p style="margin:0 0 24px;font-size:15px;color:#3a3a5c;line-height:1.6;">
-                Your account has been created and you can sign in immediately
-                using the credentials below.
+                Your account has been created on <strong>${workspaceName}</strong>.
+                Your Workspace Owner will provide your temporary password directly.
               </p>
 
-              <!-- Credentials block -->
+              <!-- Account details block -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
                      style="margin:0 0 24px;background:#f8f8fc;border-radius:8px;border:1px solid #eeeef4;">
                 <tr>
                   <td style="padding:20px 24px;">
-                    <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#5a5a7a;text-transform:uppercase;letter-spacing:0.05em;">Your login details</p>
+                    <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#5a5a7a;text-transform:uppercase;letter-spacing:0.05em;">Your account details</p>
                     <p style="margin:0 0 8px;font-size:14px;color:#3a3a5c;">
                       <strong>Email:</strong> ${to}
-                    </p>
-                    <p style="margin:0 0 8px;font-size:14px;color:#3a3a5c;">
-                      <strong>Temporary password:</strong>
-                      <span style="font-family:monospace;background:#eeeef8;padding:2px 6px;border-radius:4px;">${temporaryPassword}</span>
                     </p>
                     <p style="margin:0;font-size:14px;color:#3a3a5c;">
                       <strong>Role:</strong> ${role}
@@ -278,7 +274,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0 0 24px;font-size:13px;color:#7a7a9a;line-height:1.5;">
-                For security, please change your password after your first login via
+                Once you have your temporary password, sign in and change it via
                 <strong>My Profile → Change Password</strong>.
               </p>
 

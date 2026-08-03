@@ -130,7 +130,15 @@ export class MemberService {
         );
       }
 
-      // Existing user, not yet a member — add membership only
+      // Enforce one-user-one-workspace: reject if the user belongs to any workspace.
+      const alreadyMember = await this.workspaceRepository.userHasAnyMembership(existingUser.id);
+      if (alreadyMember) {
+        throw new ValidationError(
+          'This user already belongs to another workspace and cannot be added to this workspace.',
+        );
+      }
+
+      // Existing user, no membership anywhere — add to this workspace only
       const now = Date.now();
       await this.workspaceRepository.addMember({
         workspaceId,
@@ -153,7 +161,6 @@ export class MemberService {
         firstName: normalizedFirstName,
         workspaceName: workspace.name,
         role: ROLE_LABEL[canonicalRole],
-        temporaryPassword,
       });
 
       return { ok: true, userId: existingUser.id };
@@ -213,7 +220,6 @@ export class MemberService {
       firstName: normalizedFirstName,
       workspaceName: workspace.name,
       role: ROLE_LABEL[canonicalRole],
-      temporaryPassword,
     });
 
     return { ok: true, userId };
@@ -249,10 +255,10 @@ export class MemberService {
 
   /** Fire-and-forget welcome email. Email failure is logged but never re-thrown
    *  so member creation is never blocked or rolled back by email problems. */
-  _sendWelcomeEmailSilently({ to, firstName, workspaceName, role, temporaryPassword }) {
+  _sendWelcomeEmailSilently({ to, firstName, workspaceName, role }) {
     if (!this.emailService) return;
     this.emailService
-      .sendWelcomeMemberEmail({ to, firstName, workspaceName, role, temporaryPassword })
+      .sendWelcomeMemberEmail({ to, firstName, workspaceName, role })
       .catch(err => {
         this.logger?.warn('Welcome email failed (non-fatal)', {
           to,

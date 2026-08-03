@@ -110,6 +110,17 @@ export class WorkspaceRepository {
     return rows || [];
   }
 
+  /** Returns true if the user already belongs to any workspace.
+   *  Used to enforce the one-user-one-workspace invariant. */
+  async userHasAnyMembership(userId) {
+    if (!userId) return false;
+    const row = await this.db.first(
+      'SELECT 1 AS found FROM workspace_members WHERE user_id = ? LIMIT 1',
+      [userId],
+    );
+    return !!row;
+  }
+
   /** Returns the number of active workspace_owner rows for a workspace.
    *  Used to enforce the maximum-two-owners limit before any new member insert. */
   async countWorkspaceOwners(workspaceId) {
