@@ -1477,67 +1477,65 @@ function getWorkspaceUser(id) {
 
 // Cache for pending invitations loaded from the backend. Populated
 // asynchronously by bindWorkspaceUsersTab() after the tab renders.
+// Invitation UI is hidden in the current sprint but the data and code
+// remain intact so the invitation system can be restored at any time.
 let _pendingInvitations = null;
 
+// Cache for workspace members loaded from the backend. Populated
+// asynchronously by bindWorkspaceUsersTab() after the tab renders.
+// Falls back to allWorkspaceUsers() (local state) until the API responds.
+let _workspaceMembers = null;
+
 function workspaceUsersTab() {
-  const users = allWorkspaceUsers();
-  // Render from backend cache when available; fall back to local state
-  // (e.g. first render before async load completes).
-  const invitations = _pendingInvitations !== null
-    ? _pendingInvitations
-    : LumioState.invitations.filter(i => i.status === 'pending');
+  // Use backend cache when available; fall back to local state on first render.
+  const members = _workspaceMembers !== null ? _workspaceMembers : allWorkspaceUsers();
 
   return `
-    <div class="card card-pad mb-24">
-      <div class="prop-section-title">Users</div>
-      <div class="flex-col gap-8">
-        ${users.map(u => userRow(u)).join('')}
+    <div class="card card-pad mb-24" id="ws-members-list">
+      <div class="prop-section-title">Team Members</div>
+      <div class="flex-col gap-8" id="ws-members-rows">
+        ${members.length
+          ? members.map(u => memberRow(u)).join('')
+          : '<p class="text-sm text-muted" style="padding:8px 0;">No members yet.</p>'}
       </div>
     </div>
 
     <div class="card card-pad mb-24">
-      <div class="prop-section-title">Invite User</div>
-      <div class="flex gap-12" style="flex-wrap:wrap; align-items:flex-end;">
+      <div class="prop-section-title">Add Team Member</div>
+      <div class="flex gap-12 mt-12" style="flex-wrap:wrap; align-items:flex-end;">
         <div class="field" style="flex:1; min-width:160px; margin-bottom:0;">
           <label>First Name</label>
-          <input class="input" id="ws-invite-first-name" type="text" placeholder="First name" />
+          <input class="input" id="ws-member-first-name" type="text" placeholder="First name" autocomplete="off" />
         </div>
         <div class="field" style="flex:1; min-width:160px; margin-bottom:0;">
           <label>Last Name</label>
-          <input class="input" id="ws-invite-last-name" type="text" placeholder="Last name" />
+          <input class="input" id="ws-member-last-name" type="text" placeholder="Last name" autocomplete="off" />
         </div>
         <div class="field" style="flex:2; min-width:220px; margin-bottom:0;">
           <label>Email Address</label>
-          <input class="input" id="ws-invite-email" type="email" placeholder="name@company.com" />
+          <input class="input" id="ws-member-email" type="email" placeholder="name@company.com" autocomplete="off" />
         </div>
       </div>
       <div class="flex gap-12 mt-12" style="flex-wrap:wrap; align-items:flex-end;">
         <div class="field" style="margin-bottom:0;">
           <label>Role</label>
-          <select class="input" id="ws-invite-role-select" style="width:180px;">
-            <option value="admin">Administrator</option>
-            <option value="owner">Workspace Owner</option>
+          <select class="input" id="ws-member-role" style="width:180px;">
+            <option value="administrator">Administrator</option>
+            <option value="workspace_owner">Workspace Owner</option>
           </select>
         </div>
-        <div class="field" style="margin-bottom:0;">
-          <label>Authentication Method</label>
-          <select class="input" id="ws-invite-auth" style="width:180px;">
-            <option value="local">Lumio Account</option>
-            <option value="microsoft">Microsoft SSO</option>
-            <option value="google">Google SSO</option>
-          </select>
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Temporary Password</label>
+          <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" />
         </div>
-        <button class="btn btn-primary btn-sm" id="ws-invite-send">Send Invitation</button>
+        <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label>Confirm Password</label>
+          <input class="input" id="ws-member-password-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password" />
+        </div>
       </div>
-      <div id="ws-invite-feedback" class="text-sm mt-12" style="display:none;"></div>
-      <div id="ws-pending-invitations">
-        ${invitations.length ? `
-        <div class="mt-16">
-          <div class="text-sm text-muted mb-8">Pending Invitations</div>
-          <div class="flex-col gap-8">
-            ${invitations.map(inv => invitationRow(inv)).join('')}
-          </div>
-        </div>` : ''}
+      <div class="flex gap-12 mt-16" style="align-items:center;">
+        <button class="btn btn-primary btn-sm" id="ws-member-create">Create Member</button>
+        <div id="ws-member-feedback" class="text-sm" style="display:none;"></div>
       </div>
     </div>
   `;
@@ -1561,6 +1559,32 @@ function userRow(user) {
         <button class="btn btn-ghost btn-sm" data-user-toggle="${user.id}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
         <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">🗑️ Remove</button>
       </div>
+    </div>
+  `;
+}
+
+// Renders a member row from backend data (userId, firstName, lastName, email,
+// role, status, joinedAt). Actions are scaffolded for future sprints.
+function memberRow(member) {
+  const currentUserId = getCurrentUser()?.id;
+  const id    = member.userId || member.id;
+  const isSelf = id === currentUserId;
+  const name   = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.displayName || member.email;
+  const isOwner = member.role === 'workspace_owner' || member.role === ROLE_WORKSPACE_OWNER;
+  const isActive = member.status === 'active';
+
+  return `
+    <div class="flex items-center gap-12" style="padding:10px 0; border-bottom:1px solid var(--border);" data-member-row="${escapeHtml(id)}">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:13px; color:var(--ink-900);">
+          ${escapeHtml(name)}${isSelf ? ' <span class="text-muted" style="font-weight:400;">(You)</span>' : ''}
+        </div>
+        <div class="text-muted" style="font-size:12px;">${escapeHtml(member.email)}</div>
+      </div>
+      <span class="pill ${isOwner ? 'pill-indigo' : 'pill-cyan'}" style="white-space:nowrap;">
+        ${isOwner ? 'Workspace Owner' : 'Administrator'}
+      </span>
+      <span class="pill ${isActive ? 'pill-teal' : 'pill-grey'}">${isActive ? 'Active' : 'Disabled'}</span>
     </div>
   `;
 }
@@ -1713,173 +1737,99 @@ function bindWorkspaceUsersTab() {
   const _ws = getCurrentWorkspace();
   const _workspaceId = _ws?.id || LumioState.session?.currentWorkspaceId;
 
-  // Load pending invitations from backend and refresh the list container.
+  // Load members from backend and re-render the list when data arrives.
   if (_workspaceId) {
-    LumioAPI.invitations.list(_workspaceId)
+    LumioAPI.workspaces.listMembers(_workspaceId)
       .then(data => {
-        _pendingInvitations = data.invitations || [];
-        _renderPendingInvitations(app, _workspaceId);
+        _workspaceMembers = data.members || [];
+        _renderMembersList(app);
       })
       .catch(() => { /* keep showing local-state fallback on API failure */ });
   }
 
-  app.querySelectorAll('[data-user-role]').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const id = sel.dataset.userRole;
-      const user = getWorkspaceUser(id);
-      if (!user) return;
-      const newRole = sel.value;
-      if (newRole === user.role) return;
+  // Wire Create Member button.
+  const createBtn = app.querySelector('#ws-member-create');
+  if (createBtn) {
+    createBtn.addEventListener('click', () => {
+      const firstName = (app.querySelector('#ws-member-first-name')?.value || '').trim();
+      const lastName  = (app.querySelector('#ws-member-last-name')?.value  || '').trim();
+      const email     = (app.querySelector('#ws-member-email')?.value       || '').trim();
+      const role      = app.querySelector('#ws-member-role')?.value         || 'administrator';
+      const password  = app.querySelector('#ws-member-password')?.value     || '';
+      const confirm   = app.querySelector('#ws-member-password-confirm')?.value || '';
+      const feedback  = app.querySelector('#ws-member-feedback');
 
-      if (user.role === ROLE_WORKSPACE_OWNER && newRole === ROLE_ADMINISTRATOR && workspaceOwnerCount() <= 1) {
-        sel.value = user.role;
-        toast('At least one Workspace Owner is required. Promote another user before changing this role.', platformIcon('warning'));
-        return;
+      const showFeedback = (msg, ok) => {
+        if (!feedback) return;
+        feedback.textContent = msg;
+        feedback.style.display = 'block';
+        feedback.style.color = ok ? 'var(--color-success)' : 'var(--color-destructive)';
+      };
+      const clearFeedback = () => { if (feedback) feedback.style.display = 'none'; };
+
+      // Client-side validation
+      if (!firstName)  { showFeedback('Please enter a first name.', false); return; }
+      if (!email)      { showFeedback('Please enter an email address.', false); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showFeedback('Please enter a valid email address.', false); return;
       }
-
-      user.role = newRole;
-      // Also keep this workspace's membership row (the actual source of
-      // truth for "what role does this user hold in THIS workspace") in
-      // sync — the canonical users[].role field above is a convenience
-      // default, but workspaceMemberships is what allWorkspaceUsers()/
-      // getWorkspaceMembership() actually consult.
-      const ws = getCurrentWorkspace();
-      const membership = ws && getWorkspaceMembership(user.id, ws.id);
-      if (membership) membership.role = newRole;
-      toast(`${user.firstName} ${user.lastName} is now ${CANONICAL_ROLE_LABELS[newRole]}`, '🔄');
-      renderWorkspaceSettings();
-      scheduleLumioSave();
-    });
-  });
-
-  app.querySelectorAll('[data-user-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.userToggle;
-      const user = getWorkspaceUser(id);
-      if (!user) return;
-      const isSelf = id === getCurrentUser()?.id;
-
-      if (user.status === 'active') {
-        if (isSelf) {
-          toast('You cannot disable your own account.', platformIcon('warning'));
-          return;
-        }
-        if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-          toast('At least one Workspace Owner is required. You cannot disable the only remaining Workspace Owner.', platformIcon('warning'));
-          return;
-        }
+      if (!password)   { showFeedback('Please enter a temporary password.', false); return; }
+      if (password.length < 8) {
+        showFeedback('Password must be at least 8 characters.', false); return;
       }
-
-      user.status = user.status === 'active' ? 'disabled' : 'active';
-      renderWorkspaceSettings();
-      scheduleLumioSave();
-    });
-  });
-
-  app.querySelectorAll('[data-user-remove]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.userRemove;
-      const user = getWorkspaceUser(id);
-      if (!user) return;
-      const isSelf = id === getCurrentUser()?.id;
-
-      if (isSelf) {
-        if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-          toast('You are the only Workspace Owner — at least one Workspace Owner is required.', platformIcon('warning'));
-        } else {
-          toast('You cannot remove your own account.', platformIcon('warning'));
-        }
-        return;
+      if (password !== confirm) {
+        showFeedback('Passwords do not match.', false); return;
       }
-      if (user.role === ROLE_WORKSPACE_OWNER && workspaceOwnerCount() <= 1) {
-        toast('At least one Workspace Owner is required. You cannot remove the only remaining Workspace Owner.', platformIcon('warning'));
-        return;
-      }
+      if (!_workspaceId) { showFeedback('No active workspace.', false); return; }
 
-      // Removes this user's MEMBERSHIP in the current workspace only — their
-      // users[] account (and any other workspace they belong to) is
-      // untouched. This is the correct semantics now that users[] is the
-      // sole user repository: "Remove" here always meant "remove from this
-      // workspace," never "delete the account."
-      const ws = getCurrentWorkspace();
-      if (ws) LumioState.workspaceMemberships = LumioState.workspaceMemberships.filter(m => !(m.userId === id && m.workspaceId === ws.id));
-      toast(`Removed ${user.firstName} ${user.lastName}`, platformIcon('delete'));
-      renderWorkspaceSettings();
-      scheduleLumioSave();
-    });
-  });
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating…';
+      clearFeedback();
 
-  app.querySelectorAll('[data-invite-copy]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const inv = LumioState.invitations.find(i => i.id === btn.dataset.inviteCopy);
-      if (!inv) return;
-      navigator.clipboard?.writeText(inv.link).catch(() => {});
-      toast('Invitation link copied', '🔗');
-    });
-  });
-
-  // Revoke buttons for local-state invitations (legacy path — backend invitations
-  // use the delegation in _renderPendingInvitations).
-  app.querySelectorAll('[data-invite-revoke]').forEach(btn => {
-    if (btn.closest('#ws-pending-invitations')) return; // managed by backend path
-    btn.addEventListener('click', () => {
-      const inv = LumioState.invitations.find(i => i.id === btn.dataset.inviteRevoke);
-      if (!inv) return;
-      inv.status = 'revoked';
-      renderWorkspaceSettings();
-      scheduleLumioSave();
-    });
-  });
-
-  const sendBtn = app.querySelector('#ws-invite-send');
-  sendBtn.addEventListener('click', () => {
-    const firstName = app.querySelector('#ws-invite-first-name').value.trim();
-    const lastName = app.querySelector('#ws-invite-last-name').value.trim();
-    const emailInput = app.querySelector('#ws-invite-email');
-    const email = emailInput.value.trim();
-    const role = app.querySelector('#ws-invite-role-select').value;
-    const authProvider = app.querySelector('#ws-invite-auth').value;
-    const feedback = app.querySelector('#ws-invite-feedback');
-
-    const showFeedback = (msg, ok) => {
-      feedback.textContent = msg;
-      feedback.style.display = 'block';
-      feedback.style.color = ok ? 'var(--color-success)' : 'var(--color-destructive)';
-    };
-
-    if (!firstName) { showFeedback('Please enter a first name.', false); return; }
-    if (!email) { showFeedback('Please enter an email address.', false); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showFeedback('Please enter a valid email address.', false);
-      return;
-    }
-    if (!_workspaceId) { showFeedback('No active workspace.', false); return; }
-
-    sendBtn.disabled = true;
-    sendBtn.textContent = 'Sending…';
-    feedback.style.display = 'none';
-
-    LumioAPI.invitations.send(_workspaceId, { firstName, lastName, email, role, authProvider })
-      .then(() => {
-        app.querySelector('#ws-invite-first-name').value = '';
-        app.querySelector('#ws-invite-last-name').value = '';
-        emailInput.value = '';
-        showFeedback(`Invitation sent to ${email}.`, true);
-        toast('Invitation sent', '✉️');
-        return LumioAPI.invitations.list(_workspaceId);
+      LumioAPI.workspaces.createMember(_workspaceId, {
+        firstName,
+        lastName,
+        email,
+        role,
+        temporaryPassword: password,
       })
-      .then(data => {
-        _pendingInvitations = data.invitations || [];
-        _renderPendingInvitations(app, _workspaceId);
-      })
-      .catch(err => {
-        showFeedback(err.message || 'Failed to send invitation.', false);
-      })
-      .finally(() => {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send Invitation';
-      });
-  });
+        .then(() => {
+          // Clear the form
+          ['#ws-member-first-name', '#ws-member-last-name', '#ws-member-email',
+           '#ws-member-password', '#ws-member-password-confirm'].forEach(sel => {
+            const el = app.querySelector(sel);
+            if (el) el.value = '';
+          });
+          const displayName = [firstName, lastName].filter(Boolean).join(' ');
+          showFeedback(displayName + ' was added to the workspace.', true);
+          toast('Team member created', platformIcon('success'));
+
+          // Reload the member list from the backend
+          return LumioAPI.workspaces.listMembers(_workspaceId);
+        })
+        .then(data => {
+          _workspaceMembers = data.members || [];
+          _renderMembersList(app);
+        })
+        .catch(err => {
+          showFeedback(err.message || 'Failed to create member.', false);
+        })
+        .finally(() => {
+          createBtn.disabled = false;
+          createBtn.textContent = 'Create Member';
+        });
+    });
+  }
+}
+
+// Re-renders only the member rows inside the already-mounted
+// #ws-members-rows container without re-painting the whole tab.
+function _renderMembersList(app) {
+  const rows = app.querySelector('#ws-members-rows');
+  if (!rows || _workspaceMembers === null) return;
+  rows.innerHTML = _workspaceMembers.length
+    ? _workspaceMembers.map(m => memberRow(m)).join('')
+    : '<p class="text-sm text-muted" style="padding:8px 0;">No members yet.</p>';
 }
 
 /* ---------------- ACCEPT INVITATION ---------------- */

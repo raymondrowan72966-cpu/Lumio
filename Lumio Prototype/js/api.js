@@ -250,8 +250,32 @@ const LumioAPI = (function () {
   var workspaces = {
     get:           notImplemented('workspaces.get'),
     update:        notImplemented('workspaces.update'),
-    listMembers:   notImplemented('workspaces.listMembers'),
-    addMember:     notImplemented('workspaces.addMember'),
+
+    /**
+     * List all members of a workspace.
+     * Requires Workspace Owner session.
+     *
+     * @param {string} workspaceId
+     * @returns {Promise<{ members: Array }>}
+     */
+    listMembers: function (workspaceId) {
+      return get('/workspaces/' + encodeURIComponent(workspaceId) + '/members');
+    },
+
+    /**
+     * Create a new workspace member directly (no invitation).
+     * Requires Workspace Owner session.
+     *
+     * @param {string} workspaceId
+     * @param {{ firstName, lastName, email, role, temporaryPassword }} body
+     * @returns {Promise<{ ok: true, userId: string }>}
+     * @throws {ApiError} 400 validation · 403 not owner · 409 duplicate
+     */
+    createMember: function (workspaceId, body) {
+      return post('/workspaces/' + encodeURIComponent(workspaceId) + '/members', body);
+    },
+
+    updateMember:  notImplemented('workspaces.updateMember'),
     removeMember:  notImplemented('workspaces.removeMember'),
     getSettings:   notImplemented('workspaces.getSettings'),
     updateSettings: notImplemented('workspaces.updateSettings'),

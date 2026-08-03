@@ -85,4 +85,41 @@ export class WorkspaceRepository {
   async removeMember(_workspaceId, _userId) {
     throw new Error('WorkspaceRepository.removeMember is not implemented yet (Sprint 2C: registration only).');
   }
+
+  /** Returns all active members of a workspace with their user details.
+   *  Joins workspace_members → users, excluding soft-deleted user records. */
+  async listMembers(workspaceId) {
+    if (!workspaceId) return [];
+    const rows = await this.db.all(
+      `SELECT
+         wm.user_id     AS userId,
+         wm.role,
+         wm.status,
+         wm.joined_at   AS joinedAt,
+         u.email,
+         u.first_name   AS firstName,
+         u.last_name    AS lastName,
+         u.display_name AS displayName,
+         u.avatar_url   AS avatarUrl
+       FROM workspace_members wm
+       JOIN users u ON u.id = wm.user_id AND u.deleted_at IS NULL
+       WHERE wm.workspace_id = ?
+       ORDER BY wm.joined_at ASC`,
+      [workspaceId],
+    );
+    return rows || [];
+  }
+
+  /** Returns the number of active workspace_owner rows for a workspace.
+   *  Used to enforce the maximum-two-owners limit before any new member insert. */
+  async countWorkspaceOwners(workspaceId) {
+    if (!workspaceId) return 0;
+    const row = await this.db.first(
+      `SELECT COUNT(*) AS count
+       FROM workspace_members
+       WHERE workspace_id = ? AND role = 'workspace_owner' AND status = 'active'`,
+      [workspaceId],
+    );
+    return row?.count ?? 0;
+  }
 }

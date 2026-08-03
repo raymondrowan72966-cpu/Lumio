@@ -6,6 +6,7 @@ import { WorkspaceRepository } from '../repositories/WorkspaceRepository.js';
 import { InvitationRepository } from '../repositories/InvitationRepository.js';
 import { PasswordService } from '../services/PasswordService.js';
 import { InvitationService } from '../services/InvitationService.js';
+import { MemberService } from '../services/MemberService.js';
 import { EmailService } from '../services/EmailService.js';
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,89 @@ function buildInvitationService(ctx) {
     db: ctx.db,
     logger: ctx.logger,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Service factory for direct member management — parallel to buildInvitationService,
+// following the same per-request stateless pattern used throughout this file.
+// ---------------------------------------------------------------------------
+
+function buildMemberService(ctx) {
+  const userRepository = new UserRepository(ctx.db);
+  const workspaceRepository = new WorkspaceRepository(ctx.db);
+  const passwordService = new PasswordService(ctx.config.security);
+  const emailService = new EmailService(
+    ctx.config.resendApiKey,
+    ctx.config.appBaseUrl,
+    ctx.config.emailFromAddress,
+  );
+  return new MemberService({
+    userRepository,
+    workspaceRepository,
+    passwordService,
+    emailService,
+    db: ctx.db,
+    logger: ctx.logger,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GET /workspaces/:id/members
+// ---------------------------------------------------------------------------
+
+async function handleListMembers(request, params, ctx) {
+  if (!ctx.auth.isAuthenticated) {
+    throw new AuthenticationError('Authentication required.');
+  }
+  requireWorkspaceOwner(ctx.auth);
+
+  const workspaceId = params.id;
+  if (!ctx.auth.currentWorkspace || ctx.auth.currentWorkspace.id !== workspaceId) {
+    throw new PermissionError('You may only list members of your own workspace.');
+  }
+
+  const svc = buildMemberService(ctx);
+  const members = await svc.listMembers(workspaceId);
+  return dataResponse({ members });
+}
+
+// ---------------------------------------------------------------------------
+// POST /workspaces/:id/members
+// ---------------------------------------------------------------------------
+
+async function handleCreateMember(request, params, ctx) {
+  if (!ctx.auth.isAuthenticated) {
+    throw new AuthenticationError('Authentication required.');
+  }
+  requireWorkspaceOwner(ctx.auth);
+
+  const workspaceId = params.id;
+  if (!ctx.auth.currentWorkspace || ctx.auth.currentWorkspace.id !== workspaceId) {
+    throw new PermissionError('You may only add members to your own workspace.');
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_err) {
+    throw new ValidationError('Request body must be valid JSON.');
+  }
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Request body must be a JSON object.');
+  }
+
+  const svc = buildMemberService(ctx);
+  const result = await svc.createMember({
+    workspaceId,
+    creatorUserId: ctx.auth.currentUser.id,
+    firstName:         body.firstName,
+    lastName:          body.lastName,
+    email:             body.email,
+    role:              body.role,
+    temporaryPassword: body.temporaryPassword,
+  });
+
+  return dataResponse(result, { status: 201 });
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +243,9 @@ export const workspaceRoutes = [
   { method: 'GET',    path: '/workspaces/:id',                   handler: () => notImplemented('workspaces.get') },
   { method: 'PATCH',  path: '/workspaces/:id',                   handler: () => notImplemented('workspaces.update') },
   { method: 'DELETE', path: '/workspaces/:id',                   handler: () => notImplemented('workspaces.delete') },
-  { method: 'GET',    path: '/workspaces/:id/members',           handler: () => notImplemented('workspaces.listMembers') },
+  { method: 'GET',    path: '/workspaces/:id/members',           handler: handleListMembers },
+  { method: 'POST',   path: '/workspaces/:id/members',           handler: handleCreateMember },
+  { method: 'PATCH',  path: '/workspaces/:id/members/:userId',   handler: () => notImplemented('workspaces.updateMember') },
   { method: 'DELETE', path: '/workspaces/:id/members/:userId',   handler: () => notImplemented('workspaces.removeMember') },
   { method: 'POST',   path: '/workspaces/:id/invitations',       handler: handleInvite },
   { method: 'GET',    path: '/workspaces/:id/invitations',       handler: handleListInvitations },
