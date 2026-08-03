@@ -1528,7 +1528,7 @@ function workspaceUsersTab() {
           <label>Temporary Password</label>
           <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" />
           <button type="button" id="ws-member-generate" class="btn btn-ghost btn-sm"
-                  style="margin-top:5px; padding:2px 8px; font-size:11px; height:auto; line-height:1.4;">Generate Password</button>
+                  style="margin-top:5px; padding:2px 8px; font-size:11px; height:auto; line-height:1.4; align-self:flex-start;">Generate Password</button>
         </div>
         <div class="field" style="flex:1; margin-bottom:0;">
           <label>Confirm Password</label>
@@ -1936,40 +1936,37 @@ function _bindMemberListActions(app, workspaceId) {
 function _showChangeRoleDialog(app, workspaceId, member) {
   const memberId   = member.userId || member.id;
   const name       = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
-  const currentRole = member.role;
-  const isOwner    = currentRole === 'workspace_owner';
+  const isOwner    = member.role === 'workspace_owner';
 
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-      <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Change Role</div>
-      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;">
-        Change role for <strong>${escapeHtml(name)}</strong>
-      </div>
-      <div class="field" style="margin-bottom:20px;">
-        <label>New Role</label>
-        <select class="input" id="dlg-role-select">
-          <option value="administrator" ${!isOwner ? 'selected' : ''}>Administrator</option>
-          <option value="workspace_owner" ${isOwner ? 'selected' : ''}>Workspace Owner</option>
-        </select>
-      </div>
-      <div id="dlg-role-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
-      <div class="flex gap-12" style="justify-content:flex-end;">
-        <button type="button" class="btn btn-ghost btn-sm" id="dlg-role-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" id="dlg-role-save">Save</button>
+  const overlay = el(`
+    <div class="overlay">
+      <div class="modal" style="width:400px; padding:28px;">
+        <h3 style="margin:0 0 4px; font-size:16px;">Change Role</h3>
+        <p class="text-sm text-muted" style="margin:0 0 20px;">Change role for <strong>${escapeHtml(name)}</strong></p>
+        <div class="field">
+          <label>New Role</label>
+          <select class="input" id="dlg-role-select">
+            <option value="administrator" ${!isOwner ? 'selected' : ''}>Administrator</option>
+            <option value="workspace_owner" ${isOwner ? 'selected' : ''}>Workspace Owner</option>
+          </select>
+        </div>
+        <p id="dlg-role-error" class="text-sm" style="display:none; color:var(--color-destructive); margin:0 0 12px;"></p>
+        <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary btn-sm" id="dlg-role-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="dlg-role-save">Save</button>
+        </div>
       </div>
     </div>
-  `;
+  `);
   document.body.appendChild(overlay);
 
   overlay.querySelector('#dlg-role-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   overlay.querySelector('#dlg-role-save').addEventListener('click', () => {
-    const newRole   = overlay.querySelector('#dlg-role-select').value;
-    const errEl     = overlay.querySelector('#dlg-role-error');
-    const saveBtn   = overlay.querySelector('#dlg-role-save');
+    const newRole = overlay.querySelector('#dlg-role-select').value;
+    const errEl   = overlay.querySelector('#dlg-role-error');
+    const saveBtn = overlay.querySelector('#dlg-role-save');
     errEl.style.display = 'none';
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
@@ -2001,34 +1998,31 @@ function _showResetPasswordDialog(app, workspaceId, member) {
   const memberId = member.userId || member.id;
   const name     = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
 
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-      <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Reset Password</div>
-      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;">
-        Set a new password for <strong>${escapeHtml(name)}</strong>. The new password is active immediately.
-      </div>
-      <div class="field" style="margin-bottom:12px;">
-        <label>New Password</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <div style="flex:1;position:relative;">
-            <input class="input" id="dlg-reset-pw" type="password" placeholder="New password" autocomplete="new-password" style="width:100%;" />
-          </div>
-          <button type="button" class="btn btn-ghost btn-sm" id="dlg-reset-generate" style="white-space:nowrap;flex-shrink:0;">Generate</button>
+  const overlay = el(`
+    <div class="overlay">
+      <div class="modal" style="width:420px; padding:28px;">
+        <h3 style="margin:0 0 4px; font-size:16px;">Reset Password</h3>
+        <p class="text-sm text-muted" style="margin:0 0 20px;">
+          Set a new password for <strong>${escapeHtml(name)}</strong>. Active immediately.
+        </p>
+        <div class="field">
+          <label>New Password</label>
+          <input class="input" id="dlg-reset-pw" type="password" placeholder="New password" autocomplete="new-password" />
+          <button type="button" class="btn btn-ghost btn-sm" id="dlg-reset-generate"
+                  style="margin-top:5px; padding:2px 8px; font-size:11px; height:auto; line-height:1.4; align-self:flex-start;">Generate Password</button>
+        </div>
+        <div class="field">
+          <label>Confirm Password</label>
+          <input class="input" id="dlg-reset-pw-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password" />
+        </div>
+        <p id="dlg-reset-error" class="text-sm" style="display:none; color:var(--color-destructive); margin:0 0 12px;"></p>
+        <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary btn-sm" id="dlg-reset-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="dlg-reset-save">Reset Password</button>
         </div>
       </div>
-      <div class="field" style="margin-bottom:20px;">
-        <label>Confirm Password</label>
-        <input class="input" id="dlg-reset-pw-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password" />
-      </div>
-      <div id="dlg-reset-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
-      <div class="flex gap-12" style="justify-content:flex-end;">
-        <button type="button" class="btn btn-ghost btn-sm" id="dlg-reset-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" id="dlg-reset-save">Reset Password</button>
-      </div>
     </div>
-  `;
+  `);
   document.body.appendChild(overlay);
 
   const pwInput   = overlay.querySelector('#dlg-reset-pw');
@@ -2112,30 +2106,30 @@ function _showRemoveMemberDialog(app, workspaceId, member) {
   const memberId = member.userId || member.id;
   const name     = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
 
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:12px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-      <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--color-destructive);">Remove Member</div>
-      <div style="font-size:13px;color:var(--ink-600);margin-bottom:20px;line-height:1.6;">
-        Remove <strong>${escapeHtml(name)}</strong> from this workspace?<br/>
-        Their projects and history will remain. This only removes their workspace access.
-      </div>
-      <div id="dlg-remove-error" style="display:none;font-size:13px;color:var(--color-destructive);margin-bottom:12px;"></div>
-      <div class="flex gap-12" style="justify-content:flex-end;">
-        <button type="button" class="btn btn-ghost btn-sm" id="dlg-remove-cancel">Cancel</button>
-        <button type="button" class="btn btn-sm" id="dlg-remove-confirm"
-                style="background:var(--color-destructive);color:#fff;border:none;">Remove Member</button>
+  const overlay = el(`
+    <div class="overlay">
+      <div class="modal" style="width:400px; padding:28px;">
+        <h3 style="margin:0 0 4px; font-size:16px; color:var(--color-destructive);">Remove Member</h3>
+        <p class="text-sm text-muted" style="margin:0 0 20px; line-height:1.6;">
+          Remove <strong>${escapeHtml(name)}</strong> from this workspace?<br/>
+          Their projects and history will remain. This only removes their workspace access.
+        </p>
+        <p id="dlg-remove-error" class="text-sm" style="display:none; color:var(--color-destructive); margin:0 0 12px;"></p>
+        <div class="flex gap-12 mt-24" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary btn-sm" id="dlg-remove-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="dlg-remove-confirm"
+                  style="background:var(--color-destructive); border-color:var(--color-destructive);">Remove Member</button>
+        </div>
       </div>
     </div>
-  `;
+  `);
   document.body.appendChild(overlay);
 
   overlay.querySelector('#dlg-remove-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   overlay.querySelector('#dlg-remove-confirm').addEventListener('click', () => {
-    const errEl     = overlay.querySelector('#dlg-remove-error');
+    const errEl      = overlay.querySelector('#dlg-remove-error');
     const confirmBtn = overlay.querySelector('#dlg-remove-confirm');
     errEl.style.display = 'none';
     confirmBtn.disabled = true;
