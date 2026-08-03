@@ -1526,12 +1526,9 @@ function workspaceUsersTab() {
         </div>
         <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
           <label>Temporary Password</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <div style="flex:1; position:relative;">
-              <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" style="width:100%;" />
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" id="ws-member-generate" title="Generate password" style="white-space:nowrap; flex-shrink:0;">Generate</button>
-          </div>
+          <input class="input" id="ws-member-password" type="password" placeholder="Temporary password" autocomplete="new-password" />
+          <button type="button" id="ws-member-generate"
+                  style="background:none; border:none; padding:0; margin-top:4px; font-size:12px; color:var(--ink-400); cursor:pointer; text-decoration:underline; text-underline-offset:2px;">Generate Password</button>
         </div>
         <div class="field" style="flex:1; min-width:180px; margin-bottom:0;">
           <label>Confirm Password</label>
