@@ -1,3 +1,8 @@
+// Maps DB permission values to frontend permission values.
+const DB_TO_FRONTEND_PERM = { viewer: 'view', reviewer: 'comment', editor: 'edit' };
+// Maps frontend permission values to DB permission values.
+const FRONTEND_TO_DB_PERM = { view: 'viewer', comment: 'reviewer', edit: 'editor' };
+
 /**
  * ProjectRepository — all D1 queries for the projects, courses, and lessons
  * tables. Route handlers build one of these per request; there is no shared
@@ -10,14 +15,67 @@ export class ProjectRepository {
 
   // ── Projects ─────────────────────────────────────────────────────────────
 
-  async listByWorkspace(workspaceId) {
+  async listByWorkspace(workspaceId, currentUserId = null) {
     const rows = await this._db.all(
       `SELECT * FROM projects
        WHERE workspace_id = ? AND deleted_at IS NULL
        ORDER BY last_accessed_at DESC`,
       [workspaceId],
     );
-    return rows.map(rowToProject);
+    if (rows.length === 0) return [];
+
+    // Fetch all individual shares for these projects in one query.
+    const projectIds = rows.map(r => r.id);
+    const placeholders = projectIds.map(() => '?').join(',');
+    const shareRows = await this._db.all(
+      `SELECT project_id, user_id, permission FROM project_shares WHERE project_id IN (${placeholders})`,
+      projectIds,
+    );
+
+    // Group shares by project_id.
+    const sharesByProject = {};
+    for (const s of shareRows) {
+      if (!sharesByProject[s.project_id]) sharesByProject[s.project_id] = [];
+      sharesByProject[s.project_id].push(s);
+    }
+
+    return rows.map(row => {
+      const shares = sharesByProject[row.id] || [];
+      const sharedWith = shares.map(s => s.user_id);
+
+      // Effective sharedPermission for the current user: if team share, use
+      // the project-level permission; if individual share, look up their row.
+      let effectivePerm = row.shared_permission || 'view';
+      if (row.shared_scope !== 'team' && currentUserId) {
+        const myShare = shares.find(s => s.user_id === currentUserId);
+        if (myShare) effectivePerm = DB_TO_FRONTEND_PERM[myShare.permission] || 'view';
+      }
+
+      return rowToProject(row, sharedWith, effectivePerm);
+    });
+  }
+
+  // ── Project Shares ────────────────────────────────────────────────────────
+
+  async upsertShare(projectId, userId, frontendPermission, grantedBy) {
+    const dbPerm = FRONTEND_TO_DB_PERM[frontendPermission] || 'viewer';
+    const now = Date.now();
+    await this._db.run(
+      `INSERT INTO project_shares (project_id, user_id, permission, granted_by, granted_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(project_id, user_id) DO UPDATE SET
+         permission = excluded.permission,
+         granted_by = excluded.granted_by,
+         granted_at = excluded.granted_at`,
+      [projectId, userId, dbPerm, grantedBy, now],
+    );
+  }
+
+  async deleteShare(projectId, userId) {
+    await this._db.run(
+      'DELETE FROM project_shares WHERE project_id = ? AND user_id = ?',
+      [projectId, userId],
+    );
   }
 
   async getById(id) {
@@ -200,7 +258,7 @@ export class ProjectRepository {
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
-function rowToProject(row) {
+function rowToProject(row, sharedWith = [], effectiveSharedPermission = null) {
   return {
     id:               row.id,
     workspaceId:      row.workspace_id,
@@ -211,7 +269,8 @@ function rowToProject(row) {
     health:           row.health,
     folderId:         row.folder_id,
     sharedScope:      row.shared_scope,
-    sharedPermission: row.shared_permission,
+    sharedWith,
+    sharedPermission: effectiveSharedPermission || row.shared_permission || 'view',
     labelSet:         row.label_set || null,
     lastAccessedAt:   row.last_accessed_at,
     createdAt:        row.created_at,

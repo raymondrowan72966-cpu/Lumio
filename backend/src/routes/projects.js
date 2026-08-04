@@ -19,7 +19,7 @@ async function handleList(_request, _params, ctx) {
   requireAuth(ctx.auth);
   requireWorkspace(ctx.auth);
   const repo = new ProjectRepository(ctx.db);
-  const projects = await repo.listByWorkspace(ctx.auth.currentWorkspace.id);
+  const projects = await repo.listByWorkspace(ctx.auth.currentWorkspace.id, ctx.auth.currentUser.id);
   return dataResponse(projects);
 }
 
@@ -154,6 +154,43 @@ async function handleUpdate(request, params, ctx) {
   return dataResponse(updated);
 }
 
+// ── POST /projects/:id/shares ─────────────────────────────────────────────────
+async function handleShareUpsert(request, params, ctx) {
+  requireAuth(ctx.auth);
+  requireWorkspace(ctx.auth);
+
+  const repo     = new ProjectRepository(ctx.db);
+  const existing = await repo.getById(params.id);
+  if (!existing || existing.workspaceId !== ctx.auth.currentWorkspace.id) notFound(params.id);
+  if (existing.ownerId !== ctx.auth.currentUser.id) throw new PermissionError('Not the project owner.');
+
+  let body;
+  try { body = await request.json(); } catch { body = {}; }
+
+  const { userId, permission } = body;
+  if (!userId || typeof userId !== 'string') throw new ValidationError('userId is required.');
+  if (userId === ctx.auth.currentUser.id) throw new ValidationError('Cannot share with yourself.');
+  const validPerms = ['view', 'comment', 'edit'];
+  const perm = validPerms.includes(permission) ? permission : 'view';
+
+  await repo.upsertShare(params.id, userId, perm, ctx.auth.currentUser.id);
+  return dataResponse({ ok: true });
+}
+
+// ── DELETE /projects/:id/shares/:userId ───────────────────────────────────────
+async function handleShareDelete(_request, params, ctx) {
+  requireAuth(ctx.auth);
+  requireWorkspace(ctx.auth);
+
+  const repo     = new ProjectRepository(ctx.db);
+  const existing = await repo.getById(params.id);
+  if (!existing || existing.workspaceId !== ctx.auth.currentWorkspace.id) notFound(params.id);
+  if (existing.ownerId !== ctx.auth.currentUser.id) throw new PermissionError('Not the project owner.');
+
+  await repo.deleteShare(params.id, params.userId);
+  return dataResponse({ ok: true });
+}
+
 // ── DELETE /projects/:id ──────────────────────────────────────────────────────
 async function handleDelete(_request, params, ctx) {
   requireAuth(ctx.auth);
@@ -192,9 +229,11 @@ function _parseJson(raw, fallback) {
 }
 
 export const projectRoutes = [
-  { method: 'GET',    path: '/projects',     handler: handleList   },
-  { method: 'POST',   path: '/projects',     handler: handleCreate },
-  { method: 'GET',    path: '/projects/:id', handler: handleGet    },
-  { method: 'PUT',    path: '/projects/:id', handler: handleUpdate },
-  { method: 'DELETE', path: '/projects/:id', handler: handleDelete },
+  { method: 'GET',    path: '/projects',                          handler: handleList        },
+  { method: 'POST',   path: '/projects',                          handler: handleCreate      },
+  { method: 'GET',    path: '/projects/:id',                      handler: handleGet         },
+  { method: 'PUT',    path: '/projects/:id',                      handler: handleUpdate      },
+  { method: 'DELETE', path: '/projects/:id',                      handler: handleDelete      },
+  { method: 'POST',   path: '/projects/:id/shares',               handler: handleShareUpsert },
+  { method: 'DELETE', path: '/projects/:id/shares/:userId',       handler: handleShareDelete },
 ];

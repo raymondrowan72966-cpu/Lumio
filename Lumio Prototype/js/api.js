@@ -366,6 +366,28 @@ const LumioAPI = (function () {
      * @returns {Promise<{ deleted: true }>}
      */
     delete: function (id) { return request('DELETE', '/projects/' + id); },
+
+    shares: {
+      /**
+       * Create or update an individual project share.
+       * @param {string} projectId
+       * @param {{ userId: string, permission: 'view'|'comment'|'edit' }} data
+       * @returns {Promise<{ ok: true }>}
+       */
+      upsert: function (projectId, data) {
+        return post('/projects/' + projectId + '/shares', data);
+      },
+
+      /**
+       * Remove an individual project share.
+       * @param {string} projectId
+       * @param {string} userId
+       * @returns {Promise<{ ok: true }>}
+       */
+      delete: function (projectId, userId) {
+        return request('DELETE', '/projects/' + projectId + '/shares/' + encodeURIComponent(userId));
+      },
+    },
   };
 
   var courses = {

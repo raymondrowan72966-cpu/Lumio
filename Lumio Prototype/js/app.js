@@ -1818,7 +1818,7 @@ function _cloudProjectToState(p) {
     deletedAt:        p.deletedAt || null,
     ownerId:          p.ownerId,
     workspaceId:      p.workspaceId,
-    sharedWith:       [],
+    sharedWith:       Array.isArray(p.sharedWith) ? p.sharedWith : [],
     sharedScope:      p.sharedScope || null,
     sharedPermission: p.sharedPermission || 'view',
     labelSet:         p.labelSet || null,

@@ -1264,6 +1264,8 @@ async function openShareModal(id) {
 
   overlay.querySelector('#share-cancel').addEventListener('click', () => overlay.remove());
   overlay.querySelector('#share-remove').addEventListener('click', () => {
+    const prevSharedWith = [...currentSharedWith];
+    const prevScope = currentScope;
     p.sharedScope = null;
     p.sharedWith = [];
     p.sharedPermission = 'view';
@@ -1272,33 +1274,55 @@ async function openShareModal(id) {
     toast('Sharing removed', '🔒');
     LumioAPI.projects.update(p.id, { project: { sharedScope: null, sharedPermission: 'view' } })
       .catch(err => console.error('[share-remove] persist failed:', err));
+    // Delete any individual shares from project_shares.
+    if (prevScope !== 'team' && prevSharedWith.length > 0) {
+      prevSharedWith.forEach(uid => {
+        LumioAPI.projects.shares.delete(p.id, uid)
+          .catch(err => console.error('[share-remove] individual delete failed:', err));
+      });
+    }
   });
   overlay.querySelector('#share-save').addEventListener('click', () => {
     const scope = overlay.querySelector('[name="share-scope"]:checked')?.value || null;
     const perm = overlay.querySelector('[name="share-perm"]:checked')?.value || 'view';
     const userSel = overlay.querySelector('#share-user-select');
+    const prevSharedWith = [...currentSharedWith];
+    const prevScope = currentScope;
 
     if (scope === 'team') {
       p.sharedScope = 'team';
       p.sharedWith = [];
+      p.sharedPermission = perm;
+      overlay.remove();
+      renderProjects();
+      toast(`"${projectDisplayTitle(p)}" shared with team`, '🔗');
+      LumioAPI.projects.update(p.id, { project: { sharedScope: 'team', sharedPermission: perm } })
+        .catch(err => console.error('[share-save] team persist failed:', err));
+      // Clean up any individual shares that are being replaced by team share.
+      if (prevScope !== 'team' && prevSharedWith.length > 0) {
+        prevSharedWith.forEach(uid => {
+          LumioAPI.projects.shares.delete(p.id, uid)
+            .catch(err => console.error('[share-save] cleanup individual failed:', err));
+        });
+      }
     } else if (scope === 'individual') {
       const uid = userSel ? userSel.value : '';
       if (!uid) { toast('Please select a person to share with', platformIcon('warning')); return; }
       p.sharedScope = 'individual';
       p.sharedWith = [uid];
+      p.sharedPermission = perm;
+      overlay.remove();
+      renderProjects();
+      toast(`"${projectDisplayTitle(p)}" shared`, '🔗');
+      LumioAPI.projects.shares.upsert(p.id, { userId: uid, permission: perm })
+        .catch(err => console.error('[share-save] individual persist failed:', err));
+      // Remove any previous individual shares that are no longer selected.
+      prevSharedWith.filter(id => id !== uid).forEach(oldUid => {
+        LumioAPI.projects.shares.delete(p.id, oldUid)
+          .catch(err => console.error('[share-save] cleanup old individual failed:', err));
+      });
     } else {
       toast('Please select a sharing option', platformIcon('warning')); return;
-    }
-    p.sharedPermission = perm;
-    overlay.remove();
-    renderProjects();
-    toast(`"${projectDisplayTitle(p)}" shared`, '🔗');
-    // Individual sharing is stored in local state only until the project_shares
-    // sprint is complete. Only team sharing is persisted to the backend because
-    // 'individual' is not a valid shared_scope value in the current DB schema.
-    if (scope === 'team') {
-      LumioAPI.projects.update(p.id, { project: { sharedScope: 'team', sharedPermission: perm } })
-        .catch(err => console.error('[share-save] persist failed:', err));
     }
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
