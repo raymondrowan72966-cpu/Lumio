@@ -92,9 +92,11 @@ export async function loadAuthContext(request, { db, sessionService, jwtService 
   if (!currentUser) return ANONYMOUS_CONTEXT;
 
   const memberships = await db.all(
-    'SELECT * FROM workspace_members WHERE user_id = ?',
+    "SELECT * FROM workspace_members WHERE user_id = ? AND status = 'active'",
     [currentUser.id],
   );
+
+  if (memberships.length === 0) return ANONYMOUS_CONTEXT;
 
   let currentWorkspace = null;
   let currentMembership = null;

@@ -132,12 +132,14 @@ async function handleUpdate(request, params, ctx) {
   }
 
   await repo.updateProject(params.id, {
-    title:          project.title          != null ? project.title          : existing.title,
-    status:         project.status         != null ? project.status         : existing.status,
-    health:         project.health         != null ? project.health         : existing.health,
-    folderId:       project.folderId       !== undefined ? project.folderId : existing.folderId,
-    labelSet:       project.labelSet       !== undefined ? project.labelSet : existing.labelSet,
-    lastAccessedAt: project.lastAccessedAt != null ? project.lastAccessedAt : Date.now(),
+    title:            project.title            != null    ? project.title            : existing.title,
+    status:           project.status           != null    ? project.status           : existing.status,
+    health:           project.health           != null    ? project.health           : existing.health,
+    folderId:         project.folderId         !== undefined ? project.folderId      : existing.folderId,
+    sharedScope:      project.sharedScope      !== undefined ? project.sharedScope   : existing.sharedScope,
+    sharedPermission: project.sharedPermission !== undefined ? project.sharedPermission : existing.sharedPermission,
+    labelSet:         project.labelSet         !== undefined ? project.labelSet      : existing.labelSet,
+    lastAccessedAt:   project.lastAccessedAt   != null    ? project.lastAccessedAt   : Date.now(),
   });
 
   if (course) {

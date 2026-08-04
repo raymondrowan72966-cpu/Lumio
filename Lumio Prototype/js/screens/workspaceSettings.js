@@ -1519,7 +1519,7 @@ function workspaceUsersTab() {
       <div class="flex gap-12 mt-12" style="flex-wrap:nowrap; align-items:flex-start;">
         <div class="field" style="flex-shrink:0; margin-bottom:0;">
           <label>Role</label>
-          <select class="input" id="ws-member-role" style="width:140px;">
+          <select class="input" id="ws-member-role" style="width:170px;">
             <option value="administrator">Administrator</option>
             <option value="workspace_owner">Workspace Owner</option>
           </select>

@@ -221,9 +221,13 @@ function bindLoginEvents() {
       LumioSession.set(data);
       navigate('#/welcome');
     } catch (e) {
-      const msg = (e.status === 401 || e.status === 400)
-        ? 'Invalid email or password.'
-        : (e.message || 'Sign in failed. Please try again.');
+      const isDeactivated = e.status === 401 && e.message &&
+        (e.message.includes('deactivated') || e.message.includes('removed from this workspace'));
+      const msg = isDeactivated
+        ? e.message
+        : (e.status === 401 || e.status === 400)
+          ? 'Invalid email or password.'
+          : (e.message || 'Sign in failed. Please try again.');
       showError(msg);
       btn.disabled = false;
     }

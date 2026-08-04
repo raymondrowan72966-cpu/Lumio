@@ -55,6 +55,7 @@ function buildMemberService(ctx) {
     workspaceRepository,
     passwordService,
     emailService,
+    sessionService: ctx.sessionService,
     db: ctx.db,
     logger: ctx.logger,
   });

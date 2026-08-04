@@ -41,6 +41,7 @@ export class MemberService {
     workspaceRepository,
     passwordService,
     emailService,
+    sessionService,
     db,
     logger,
   } = {}) {
@@ -48,6 +49,7 @@ export class MemberService {
     this.workspaceRepository = workspaceRepository;
     this.passwordService = passwordService;
     this.emailService = emailService;
+    this.sessionService = sessionService;
     this.db = db;
     this.logger = logger;
   }
@@ -330,6 +332,12 @@ export class MemberService {
     }
     await this.workspaceRepository.updateMemberStatus(workspaceId, targetUserId, status);
     this.logger?.audit('MEMBER_STATUS_CHANGED', { workspaceId, targetUserId, status, requestingUserId });
+    // Revoke all active sessions so the member cannot continue using an
+    // existing JWT beyond its remaining 15-min window on the refresh path.
+    // Reuses the existing SessionService infrastructure — no new architecture.
+    if (status === 'disabled') {
+      await this.sessionService?.revokeAllSessionsForUser(targetUserId);
+    }
     return { ok: true };
   }
 
@@ -355,6 +363,9 @@ export class MemberService {
     }
     await this.workspaceRepository.removeMember(workspaceId, targetUserId);
     this.logger?.audit('MEMBER_REMOVED', { workspaceId, targetUserId, requestingUserId });
+    // Revoke all active sessions so the removed member's refresh token is
+    // immediately invalidated. Same infrastructure as deactivation above.
+    await this.sessionService?.revokeAllSessionsForUser(targetUserId);
     return { ok: true };
   }
 

@@ -1148,19 +1148,36 @@ function openImportModal() {
 }
 
 /* ---------------- SHARE MODAL (Item 5) ---------------- */
-function openShareModal(id) {
+async function openShareModal(id) {
   const p = LumioState.projects.find(x => x.id === id);
   if (!p) return;
 
   const currentScope = p.sharedScope || null;
   const currentPermission = p.sharedPermission || 'view';
   const currentSharedWith = Array.isArray(p.sharedWith) ? p.sharedWith : [];
+  const currentUserId = getCurrentUser()?.id;
+  const wsId = getCurrentWorkspace()?.id;
 
-  const otherUsers = allWorkspaceUsers().filter(u => u.id !== getCurrentUser()?.id);
+  // Fetch members fresh from the API so the picker is never empty due to
+  // unvisited workspace settings page (Bug 3 fix).
+  let fetchedMembers = [];
+  if (wsId) {
+    try {
+      const res = await LumioAPI.workspaces.listMembers(wsId);
+      fetchedMembers = (res.members || []).filter(m => m.status !== 'disabled' && (m.userId || m.id) !== currentUserId);
+    } catch (_) {
+      fetchedMembers = allWorkspaceUsers()
+        .filter(u => u.id !== currentUserId)
+        .map(u => ({ userId: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email }));
+    }
+  }
 
-  const userOptions = otherUsers.map(u =>
-    `<option value="${u.id}" ${currentSharedWith.includes(u.id) ? 'selected' : ''}>${u.firstName} ${u.lastName} (${u.email})</option>`
-  ).join('');
+  const otherUsers = fetchedMembers;
+
+  const userOptions = otherUsers.map(u => {
+    const uid = u.userId || u.id;
+    return `<option value="${uid}" ${currentSharedWith.includes(uid) ? 'selected' : ''}>${u.firstName} ${u.lastName} (${u.email})</option>`;
+  }).join('');
 
   const scopeTeam = currentScope === 'team';
   const scopeIndividual = currentScope === 'individual' || (currentSharedWith.length > 0 && currentScope !== 'team');
@@ -1253,6 +1270,8 @@ function openShareModal(id) {
     overlay.remove();
     renderProjects();
     toast('Sharing removed', '🔒');
+    LumioAPI.projects.update(p.id, { project: { sharedScope: null, sharedPermission: 'view' } })
+      .catch(err => console.error('[share-remove] persist failed:', err));
   });
   overlay.querySelector('#share-save').addEventListener('click', () => {
     const scope = overlay.querySelector('[name="share-scope"]:checked')?.value || null;
@@ -1274,6 +1293,13 @@ function openShareModal(id) {
     overlay.remove();
     renderProjects();
     toast(`"${projectDisplayTitle(p)}" shared`, '🔗');
+    // Individual sharing is stored in local state only until the project_shares
+    // sprint is complete. Only team sharing is persisted to the backend because
+    // 'individual' is not a valid shared_scope value in the current DB schema.
+    if (scope === 'team') {
+      LumioAPI.projects.update(p.id, { project: { sharedScope: 'team', sharedPermission: perm } })
+        .catch(err => console.error('[share-save] persist failed:', err));
+    }
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }

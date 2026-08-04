@@ -216,10 +216,14 @@ export class AuthService {
     });
 
     const memberships = await this.db.all(
-      'SELECT * FROM workspace_members WHERE user_id = ?',
+      "SELECT * FROM workspace_members WHERE user_id = ? AND status = 'active'",
       [user.id],
     );
     const membership = memberships[0] || null;
+    if (!membership) {
+      this.logger?.warning('login rejected: no active workspace membership', { userId: user.id });
+      throw new AuthenticationError('Your account has been deactivated or removed from this workspace.');
+    }
     let workspace = null;
     if (membership) {
       workspace = await this.workspaceRepository.findById(membership.workspace_id);

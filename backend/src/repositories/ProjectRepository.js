@@ -56,6 +56,7 @@ export class ProjectRepository {
     await this._db.run(
       `UPDATE projects
        SET title = ?, status = ?, health = ?, folder_id = ?,
+           shared_scope = ?, shared_permission = ?,
            label_set = ?, last_accessed_at = ?, updated_at = ?
        WHERE id = ?`,
       [
@@ -63,6 +64,8 @@ export class ProjectRepository {
         data.status,
         data.health != null ? data.health : 0,
         data.folderId != null ? data.folderId : null,
+        data.sharedScope !== undefined ? data.sharedScope : null,
+        data.sharedPermission || 'view',
         data.labelSet !== undefined ? data.labelSet : null,
         data.lastAccessedAt || now,
         now,
