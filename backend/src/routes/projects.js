@@ -205,6 +205,42 @@ async function handleDelete(_request, params, ctx) {
   return dataResponse({ deleted: true });
 }
 
+// ── PATCH /projects/:id/status ────────────────────────────────────────────────
+// Governance-only route: lets the Workspace Owner persist a status transition on
+// any project in their workspace without passing the project-owner check on PUT.
+async function handleStatusUpdate(request, params, ctx) {
+  requireAuth(ctx.auth);
+  requireWorkspace(ctx.auth);
+
+  const wsOwnerId = ctx.auth.currentWorkspace.owner_id;
+  if (ctx.auth.currentUser.id !== wsOwnerId) {
+    throw new PermissionError('Only the Workspace Owner may use this route.');
+  }
+
+  let body;
+  try { body = await request.json(); } catch { body = {}; }
+  const { status } = body;
+  if (!status) throw new ValidationError('status is required');
+
+  const repo = new ProjectRepository(ctx.db);
+  const existing = await repo.getById(params.id);
+  if (!existing || existing.workspaceId !== ctx.auth.currentWorkspace.id) notFound(params.id);
+
+  await repo.updateProject(params.id, {
+    title:            existing.title,
+    status,
+    health:           existing.health,
+    folderId:         existing.folderId,
+    sharedScope:      existing.sharedScope,
+    sharedPermission: existing.sharedPermission,
+    labelSet:         existing.labelSet,
+    lastAccessedAt:   existing.lastAccessedAt,
+  });
+
+  const updated = await repo.getById(params.id);
+  return dataResponse(updated);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function _persistLessons(repo, projectId, workspaceId, course, lessonsMap) {
@@ -234,6 +270,7 @@ export const projectRoutes = [
   { method: 'GET',    path: '/projects/:id',                      handler: handleGet         },
   { method: 'PUT',    path: '/projects/:id',                      handler: handleUpdate      },
   { method: 'DELETE', path: '/projects/:id',                      handler: handleDelete      },
+  { method: 'PATCH',  path: '/projects/:id/status',               handler: handleStatusUpdate },
   { method: 'POST',   path: '/projects/:id/shares',               handler: handleShareUpsert },
   { method: 'DELETE', path: '/projects/:id/shares/:userId',       handler: handleShareDelete },
 ];

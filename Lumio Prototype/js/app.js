@@ -731,6 +731,10 @@ function transitionProjectStatus(project, action, comment) {
 // workspace that project's owner is a member of. Used by notification
 // targeting instead of ever hardcoding a user id (Issue 3 fix).
 function getWorkspaceOwnerIdForProject(project) {
+  // For cloud users the session workspace always carries the correct owner_id from the JWT.
+  const ws = getCurrentWorkspace();
+  if (ws && ws.owner_id) return ws.owner_id;
+  // Legacy fallback: derive from in-memory membership/workspace arrays.
   const membership = (LumioState.workspaceMemberships || []).find(m => m.userId === project.ownerId);
   const workspace = membership ? (LumioState.workspaces || []).find(w => w.id === membership.workspaceId) : null;
   return workspace ? workspace.ownerId : project.ownerId;

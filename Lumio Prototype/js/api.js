@@ -367,6 +367,17 @@ const LumioAPI = (function () {
      */
     delete: function (id) { return request('DELETE', '/projects/' + id); },
 
+    /**
+     * Workspace-Owner-only: persist a governance status transition on any
+     * workspace project without requiring project ownership.
+     * @param {string} id
+     * @param {string} status
+     * @returns {Promise<object>} the updated project row
+     */
+    updateStatus: function (id, status) {
+      return request('PATCH', '/projects/' + id + '/status', { status });
+    },
+
     shares: {
       /**
        * Create or update an individual project share.

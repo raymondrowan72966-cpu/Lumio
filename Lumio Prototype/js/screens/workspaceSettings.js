@@ -146,7 +146,7 @@ function bindWorkspaceReviewsTab() {
     const result = transitionProjectStatus(p, 'approve', comment);
     if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
     toast(`"${projectDisplayTitle(p)}" approved`, platformIcon('success'));
-    cloudPersistProject(p.id);
+    LumioAPI.projects.updateStatus(p.id, p.status).catch(err => toast('Could not save approval — ' + err.message, platformIcon('warning')));
     renderWorkspaceSettingsTab();
   }));
   host.querySelectorAll('[data-review-reject]').forEach(btn => btn.addEventListener('click', async () => {
@@ -160,7 +160,7 @@ function bindWorkspaceReviewsTab() {
     const result = transitionProjectStatus(p, 'reject', comment);
     if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
     toast(`"${projectDisplayTitle(p)}" rejected`, platformIcon('restore'));
-    cloudPersistProject(p.id);
+    LumioAPI.projects.updateStatus(p.id, p.status).catch(err => toast('Could not save rejection — ' + err.message, platformIcon('warning')));
     renderWorkspaceSettingsTab();
   }));
 }
