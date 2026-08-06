@@ -540,6 +540,7 @@ function isProjectOwner(project) {
 function isProjectVisible(project) {
   if (!project || project.deleted) return false;
   if (isProjectOwner(project)) return true;
+  if (isWorkspaceOwner()) return true;
   const uid = getCurrentUser()?.id;
   return project.sharedScope === 'team' || (Array.isArray(project.sharedWith) && project.sharedWith.includes(uid));
 }

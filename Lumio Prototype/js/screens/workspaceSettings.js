@@ -146,6 +146,7 @@ function bindWorkspaceReviewsTab() {
     const result = transitionProjectStatus(p, 'approve', comment);
     if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
     toast(`"${projectDisplayTitle(p)}" approved`, platformIcon('success'));
+    cloudPersistProject(p.id);
     renderWorkspaceSettingsTab();
   }));
   host.querySelectorAll('[data-review-reject]').forEach(btn => btn.addEventListener('click', async () => {
@@ -159,6 +160,7 @@ function bindWorkspaceReviewsTab() {
     const result = transitionProjectStatus(p, 'reject', comment);
     if (!result.ok) { toast(result.reason, platformIcon('warning')); return; }
     toast(`"${projectDisplayTitle(p)}" rejected`, platformIcon('restore'));
+    cloudPersistProject(p.id);
     renderWorkspaceSettingsTab();
   }));
 }

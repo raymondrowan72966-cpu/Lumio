@@ -617,6 +617,7 @@ function openProjectMenu(btn, id) {
       if (!result.ok) { if (result.modal) { await alertModal(result.reason); } else { toast(result.reason, platformIcon('warning')); } return; }
       renderProjects();
       toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, platformIcon('success'));
+      cloudPersistProject(p.id);
     });
   });
 
