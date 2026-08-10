@@ -129,18 +129,6 @@ function paintLogin() {
             : `New to Lumio? <a href="#" id="login-toggle-mode">Create an account</a>`}
         </p>
 
-        <div class="flex items-center gap-12 mt-24 mb-16" style="color:var(--ink-400); font-size:12px;">
-          <div style="flex:1; height:1px; background:var(--border);"></div>
-          OR
-          <div style="flex:1; height:1px; background:var(--border);"></div>
-        </div>
-
-        <div class="flex-col gap-8">
-          <button class="btn btn-secondary w-full social-login-btn" id="google-signin-btn">${SOCIAL_ICONS.google} Continue with Google</button>
-          <button class="btn btn-secondary w-full social-login-btn" id="microsoft-signin-btn">${SOCIAL_ICONS.microsoft} Continue with Microsoft</button>
-          <button class="btn btn-secondary w-full social-login-btn" id="apple-signin-btn">${SOCIAL_ICONS.apple} Continue with Apple</button>
-        </div>
-
         ${typeof IS_LOCALHOST !== 'undefined' && IS_LOCALHOST ? `
         <div style="margin-top:24px; padding-top:16px; border-top:1px dashed var(--border);">
           <button class="btn w-full" id="dev-bypass-btn"
@@ -235,10 +223,6 @@ function bindLoginEvents() {
 
   const rememberCheckbox = app.querySelector('#login-remember-me');
   const syncRememberMe = () => { LumioUI.rememberMe = rememberCheckbox ? rememberCheckbox.checked : true; };
-
-  app.querySelector('#microsoft-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateMicrosoft(); });
-  app.querySelector('#google-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateGoogle(); });
-  app.querySelector('#apple-signin-btn').addEventListener('click', () => { syncRememberMe(); authenticateApple(); });
 
   const devBtn = app.querySelector('#dev-bypass-btn');
   if (devBtn) devBtn.addEventListener('click', () => { navigate('#/devlogin'); });
