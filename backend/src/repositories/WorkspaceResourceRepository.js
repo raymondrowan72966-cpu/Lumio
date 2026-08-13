@@ -42,7 +42,7 @@ export class WorkspaceResourceRepository {
          (id, workspace_id, resource_type, name, payload,
           created_by, updated_by, version, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
+       ON CONFLICT(id, workspace_id) DO UPDATE SET
          name       = excluded.name,
          payload    = excluded.payload,
          updated_by = excluded.updated_by,
