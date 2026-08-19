@@ -461,10 +461,10 @@ function contentCard(item, index, kind, course) {
           : `<div style="font-weight:600; font-size:14px; color:var(--ink-900);">${item.title}</div>`}
         <div class="text-sm text-muted mt-8">
           ${isLesson ? `Lesson · ~${item.duration}` : `${item.type || 'Quiz'} · Assessment`}
-          ${obj ? ` · Aligned to: "${obj.verb} ${obj.text}"` : (isLesson ? '' : ' · ⚠️ Not yet aligned to an objective')}
+          ${obj ? ` · Aligned to: "${obj.verb} ${obj.text}"` : (isLesson ? '' : ` · ${platformIcon('warning')} Not yet aligned to an objective`)}
         </div>
       </div>
-      <span class="content-menu-btn" data-kind="${kind}" data-id="${item.id}" title="More options" style="flex-shrink:0; color:var(--ink-400); padding:4px 8px; font-size:18px; line-height:1; cursor:pointer; border-radius:var(--r-sm);">⋮</span>
+      <span class="content-menu-btn" data-kind="${kind}" data-id="${item.id}" title="More options" style="flex-shrink:0; color:var(--ink-400); padding:4px 8px; font-size:18px; line-height:1; cursor:pointer; border-radius:var(--r-sm);">${platformIcon('more-options')}</span>
       <span class="text-muted">→</span>
     </div>
   `;
@@ -1036,7 +1036,7 @@ function openTranslationModal(course) {
             <span style="font-size:20px;">🌐</span>
             <strong style="font-size:16px;">Translate Course</strong>
           </div>
-          <button class="btn-icon" id="tm-close">✕</button>
+          <button class="btn-icon" id="tm-close">${platformIcon('close')}</button>
         </div>
 
         <div style="padding:20px; display:flex; flex-direction:column; gap:24px;">
@@ -1375,7 +1375,7 @@ function openPublishModal(course) {
   function buildModalHtml() {
     const readinessBanner = !isReady ? `
       <div style="background:var(--pastel-warning, #fff8e1); border:1px solid var(--orange); border-radius:var(--r-md); padding:14px 16px; margin-bottom:20px;">
-        <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">⚠️ Course is not ready for publishing</div>
+        <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">${platformIcon('warning')} Course is not ready for publishing</div>
         <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
           ${issues.map(i => `<li class="text-sm" style="color:var(--ink-700);">${i}</li>`).join('')}
         </ul>
@@ -1453,10 +1453,10 @@ function openPublishModal(course) {
         <div class="modal" style="width:600px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; padding:0;">
           <div class="flex items-center justify-between" style="padding:22px 28px 0; flex-shrink:0;">
             <div>
-              <h3 style="font-size:18px;">🚀 Publish Course</h3>
+              <h3 style="font-size:18px;">${platformIcon('rocket')} Publish Course</h3>
               <p class="text-sm text-muted mt-4">Choose a delivery format. Publishing is separate from project backups (.lumio).</p>
             </div>
-            <button class="btn-icon" id="publish-close" style="font-size:18px; color:var(--ink-400); align-self:flex-start;">✕</button>
+            <button class="btn-icon" id="publish-close" style="font-size:18px; color:var(--ink-400); align-self:flex-start;">${platformIcon('close')}</button>
           </div>
           <div class="tabs" style="padding:0 28px; margin-top:16px; flex-shrink:0;">
             <div class="tab ${activeTab === 'publish' ? 'active' : ''}" data-tab="publish">Publish</div>
@@ -1492,7 +1492,7 @@ function openPublishModal(course) {
     };
     const warningsHtml = analysis.warnings.length ? `
       <div style="margin-top:10px; padding:10px 12px; background:rgba(229,72,77,0.06); border:1px solid rgba(229,72,77,0.18); border-radius:var(--r-sm);">
-        <div class="text-destructive" style="font-size:12px; font-weight:700; margin-bottom:4px;">⚠️ Large Asset Warnings</div>
+        <div class="text-destructive" style="font-size:12px; font-weight:700; margin-bottom:4px;">${platformIcon('warning')} Large Asset Warnings</div>
         ${analysis.warnings.map(w => `<div class="text-sm" style="color:var(--ink-700); margin-top:3px;">${w}</div>`).join('')}
       </div>` : '';
     panel.innerHTML = `
@@ -1540,7 +1540,7 @@ function openPublishModal(course) {
       if (activeTab === 'publish') {
         const readinessBannerInner = !isReady ? `
           <div style="background:var(--pastel-warning, #fff8e1); border:1px solid var(--orange); border-radius:var(--r-md); padding:14px 16px; margin-bottom:20px;">
-            <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">⚠️ Course is not ready for publishing</div>
+            <div style="font-size:13px; font-weight:600; color:var(--orange); margin-bottom:6px;">${platformIcon('warning')} Course is not ready for publishing</div>
             <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
               ${issues.map(i => `<li class="text-sm" style="color:var(--ink-700);">${i}</li>`).join('')}
             </ul>
@@ -1599,7 +1599,7 @@ function openPdfOptionsPanel(course, triggerBtn, publishOverlay) {
             <div style="font-size:18px; font-weight:700; color:var(--ink-900);">PDF Export Options</div>
             <div class="text-sm text-muted" style="margin-top:2px;">Configure your PDF document before downloading.</div>
           </div>
-          <button class="btn-icon" id="pdf-options-close" aria-label="Close">✕</button>
+          <button class="btn-icon" id="pdf-options-close" aria-label="Close">${platformIcon('close')}</button>
         </div>
         <div style="padding:22px 28px 28px; overflow-y:auto; display:flex; flex-direction:column; gap:18px;">
 
@@ -1712,17 +1712,17 @@ function openCourseSettings(course, initialTab) {
       <div class="modal" style="width:780px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; padding:0;">
         <div class="flex items-center justify-between" style="padding:24px 28px; border-bottom:1px solid var(--border);">
           <div>
-            <h3 style="font-size:18px;">⚙️ Course Settings</h3>
+            <h3 style="font-size:18px;">${platformIcon('settings')} Course Settings</h3>
             <p class="text-sm text-muted mt-8">Theme, hero image and layout — editable any time.</p>
           </div>
-          <button class="btn btn-ghost btn-sm" id="cs-close">✕</button>
+          <button class="btn btn-ghost btn-sm" id="cs-close">${platformIcon('close')}</button>
         </div>
         <div class="tabs" id="cs-tabs" style="padding:0 28px;">
-          <div class="tab ${SettingsUI.tab==='details'?'active':''}" data-tab="details">📝 Course Details</div>
-          <div class="tab ${SettingsUI.tab==='theme'?'active':''}" data-tab="theme">🎨 Theme</div>
-          <div class="tab ${SettingsUI.tab==='layout'?'active':''}" data-tab="layout">📐 Layout</div>
-          <div class="tab ${SettingsUI.tab==='hero'?'active':''}" data-tab="hero">🖼️ Hero Image</div>
-          <div class="tab ${SettingsUI.tab==='landing'?'active':''}" data-tab="landing">🧩 Landing Sections</div>
+          <div class="tab ${SettingsUI.tab==='details'?'active':''}" data-tab="details">${platformIcon('edit')} Course Details</div>
+          <div class="tab ${SettingsUI.tab==='theme'?'active':''}" data-tab="theme">${platformIcon('color-palette')} Theme</div>
+          <div class="tab ${SettingsUI.tab==='layout'?'active':''}" data-tab="layout">${platformIcon('layout')} Layout</div>
+          <div class="tab ${SettingsUI.tab==='hero'?'active':''}" data-tab="hero">${platformIcon('image')} Hero Image</div>
+          <div class="tab ${SettingsUI.tab==='landing'?'active':''}" data-tab="landing">${platformIcon('block-hotspot')} Landing Sections</div>
         </div>
         <div id="cs-body" style="padding:24px 28px; overflow-y:auto; flex:1;"></div>
         <div class="flex gap-12" style="padding:18px 28px; border-top:1px solid var(--border); justify-content:flex-end;">
@@ -1772,9 +1772,9 @@ function openCourseSettings(course, initialTab) {
             ${(course.learnerOutcomes || []).map((o, i) => `
               <div class="flex gap-8 items-start cs-objective-row" data-i="${i}">
                 <textarea class="input cs-objective-text" data-i="${i}" rows="1" style="flex:1; resize:vertical;">${(o || '').replace(/</g, '&lt;')}</textarea>
-                <button class="btn-icon cs-objective-up" data-i="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
-                <button class="btn-icon cs-objective-down" data-i="${i}" title="Move down" ${i === (course.learnerOutcomes.length - 1) ? 'disabled' : ''}>↓</button>
-                <button class="btn-icon cs-objective-remove text-destructive" data-i="${i}" title="Remove">✕</button>
+                <button class="btn-icon cs-objective-up" data-i="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>${platformIcon('arrow-up')}</button>
+                <button class="btn-icon cs-objective-down" data-i="${i}" title="Move down" ${i === (course.learnerOutcomes.length - 1) ? 'disabled' : ''}>${platformIcon('arrow-down')}</button>
+                <button class="btn-icon cs-objective-remove text-destructive" data-i="${i}" title="Remove">${platformIcon('remove')}</button>
               </div>
             `).join('') || '<p class="text-sm text-muted">No objectives yet — add one below.</p>'}
           </div>
@@ -1799,8 +1799,8 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-thumb-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-thumb-upload">${course.thumbnailImage.src ? '🔄 Replace Thumbnail' : '📤 Upload Thumbnail'}</button>
-            ${course.thumbnailImage.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-thumb-remove">🗑️ Remove Thumbnail</button>` : ''}
-            <button class="btn btn-ghost btn-sm" id="cs-thumb-reset">↩️ Restore Default Thumbnail</button>
+            ${course.thumbnailImage.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-thumb-remove">${platformIcon('delete')} Remove Thumbnail</button>` : ''}
+            <button class="btn btn-ghost btn-sm" id="cs-thumb-reset">${platformIcon('restore')} Restore Default Thumbnail</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
           <div id="cs-thumb-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>
@@ -2074,8 +2074,8 @@ function openCourseSettings(course, initialTab) {
           <input type="file" id="cs-hero-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" id="cs-hero-upload">${hasImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-            ${hasImage ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-hero-remove">🗑️ Remove Image</button>` : ''}
-            <button class="btn btn-ghost btn-sm" id="cs-hero-reset">↩️ Restore Default Image</button>
+            ${hasImage ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-hero-remove">${platformIcon('delete')} Remove Image</button>` : ''}
+            <button class="btn btn-ghost btn-sm" id="cs-hero-reset">${platformIcon('restore')} Restore Default Image</button>
           </div>
           <div class="text-sm text-muted mt-8">Supported formats: PNG, JPG, JPEG, WEBP · Max size 2MB.</div>
           <div id="cs-hero-error" class="text-sm mt-8 text-destructive" style="display:none;"></div>

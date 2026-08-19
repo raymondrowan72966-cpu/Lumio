@@ -241,7 +241,7 @@ button { font-family: var(--font-body); cursor: pointer; }
    (lighter tint on light surfaces, richer tint on dark ones), so one rule
    now gives a visible highlight across the full light-to-dark range this
    platform supports, including arbitrary photo backgrounds. */
-::selection { background: rgba(79, 70, 229, 0.35); }
+::selection { background: color-mix(in srgb, var(--ws-primary) 35%, transparent); }
 
 /* ============================================================
    GRADIENT TEXT
