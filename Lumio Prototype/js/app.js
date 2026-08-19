@@ -1776,6 +1776,31 @@ function scheduleLumioSave() {
   lumioSaveTimer = setTimeout(saveLumioState, 400);
 }
 
+// Debounced cloud auto-save for course/lesson editing.
+// Fires 2 s after the last edit; no-ops on non-course screens.
+let _cloudSaveTimer = null;
+let _cloudSaveGen   = 0; // generation counter — prevents stale responses updating UI
+function scheduleCloudSave() {
+  if (typeof isCloudUser === 'function' && !isCloudUser()) return;
+  const parts = (location.hash || '').replace('#/', '').split('/');
+  let courseId = null;
+  if (parts[0] === 'course' && parts[1]) courseId = parts[1];
+  else if (parts[0] === 'lesson' && LumioState.currentCourseId) courseId = LumioState.currentCourseId;
+  if (!courseId) return;
+
+  if (_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
+  const gen = ++_cloudSaveGen;
+  _cloudSaveTimer = setTimeout(async () => {
+    const status = document.getElementById('save-status');
+    try {
+      await cloudPersistProject(courseId);
+      if (gen === _cloudSaveGen && status) status.innerHTML = `Saved ${platformIcon('check')}`;
+    } catch (_) {
+      // cloudPersistProject already fires a toast on failure; leave status as-is
+    }
+  }, 2000);
+}
+
 /**
  * PUBLIC PERSISTENCE API — Golden Rule #14
  *
@@ -3463,13 +3488,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Re-render mutates #app's contents; treat that as a signal that state may
   // have changed and persist it (covers project/lesson/theme/assessment edits
   // made via any screen, without needing per-action save calls).
-  new MutationObserver(scheduleLumioSave)
+  new MutationObserver(() => { scheduleLumioSave(); scheduleCloudSave(); })
     .observe(document.getElementById('app'), { childList: true, subtree: false });
 
   // Catches edits to inputs/textareas/selects that update state without
   // triggering a re-render (e.g. lesson content fields, title inputs).
-  document.addEventListener('input', scheduleLumioSave, true);
-  document.addEventListener('change', scheduleLumioSave, true);
+  // scheduleCloudSave() is a no-op on non-course/lesson screens.
+  document.addEventListener('input',  () => { scheduleLumioSave(); scheduleCloudSave(); }, true);
+  document.addEventListener('change', () => { scheduleLumioSave(); scheduleCloudSave(); }, true);
 });
 
 window.addEventListener('beforeunload', saveLumioState);

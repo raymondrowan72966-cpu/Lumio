@@ -8161,9 +8161,15 @@ function focusFirstEditable(index) {
 function flashSaveStatus() {
   const status = document.getElementById('save-status');
   if (!status) return;
-  status.textContent = 'Saving...';
+  status.innerHTML = `Saving…`;
   clearTimeout(window._saveTimeout);
-  window._saveTimeout = setTimeout(() => { if (status) status.innerHTML = `Saved ${platformIcon('check')}`; }, 600);
+  if (typeof scheduleCloudSave === 'function') scheduleCloudSave();
+  // For cloud users, scheduleCloudSave() updates status to "Saved ✓" on completion (~2–3 s).
+  // For non-cloud/localhost users it is a no-op, so fall back to a short cosmetic update.
+  const delay = (typeof isCloudUser === 'function' && isCloudUser()) ? 3500 : 600;
+  window._saveTimeout = setTimeout(() => {
+    if (status && status.innerHTML === 'Saving…') status.innerHTML = `Saved ${platformIcon('check')}`;
+  }, delay);
 }
 
 function aiDraftLesson(lesson, blocks) {
