@@ -399,9 +399,9 @@ function objectiveRow(o, i) {
       <div class="flex gap-8 mt-12">
         <select class="input obj-verb" data-i="${i}" style="width:160px;">${verbOptions}</select>
         <input class="input obj-text" data-i="${i}" placeholder="...identify the five steps of our return process" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1;" />
-        <button class="btn-icon danger obj-remove" data-i="${i}" title="Remove">✕</button>
+        <button class="btn-icon danger obj-remove" data-i="${i}" title="Remove">${platformIcon('close')}</button>
       </div>
-      ${isVague ? `<div class="text-sm mt-8" style="color:var(--orange);">⚠️ Consider a more measurable verb than "${LumioData.vagueVerbs.find(v=>(o.text||'').toLowerCase().includes(v))}" — try one from the dropdown.</div>` : ''}
+      ${isVague ? `<div class="text-sm mt-8" style="color:var(--orange);">${platformIcon('warning')} Consider a more measurable verb than "${LumioData.vagueVerbs.find(v=>(o.text||'').toLowerCase().includes(v))}" — try one from the dropdown.</div>` : ''}
     </div>
   `;
 }
@@ -599,7 +599,7 @@ function renderBlueprintScreen() {
                     <div style="flex:1;">
                       <div style="font-weight:600; font-size:14px; color:var(--ink-900);">${b.title}</div>
                       <div class="text-sm text-muted mt-8">
-                        Addresses Objective ${b.objectiveIndex+1} · ~${b.duration} · 🧩 ${bp.interactions[i] ? bp.interactions[i].type : 'Interaction'}
+                        Addresses Objective ${b.objectiveIndex+1} · ~${b.duration} · ${platformIcon('cat-interactive')} ${bp.interactions[i] ? bp.interactions[i].type : 'Interaction'}
                       </div>
                     </div>
                   </div>
@@ -633,7 +633,7 @@ function renderBlueprintScreen() {
                 <span class="text-muted">→</span>
                 <span class="pill pill-cyan">${platformIcon('hub')} Lesson ${i+1}</span>
                 <span class="text-muted">→</span>
-                <span class="pill pill-magenta">🧩 ${bp.interactions[i] ? bp.interactions[i].type : 'Activity'}</span>
+                <span class="pill pill-magenta">${platformIcon('cat-interactive')} ${bp.interactions[i] ? bp.interactions[i].type : 'Activity'}</span>
                 <span class="text-muted">→</span>
                 <span class="pill pill-teal">${platformIcon('success')} Check ${i+1}</span>
                 ${i < bp.lessons.length - 1 ? '<span class="text-muted" style="margin:0 8px;">|</span>' : ''}

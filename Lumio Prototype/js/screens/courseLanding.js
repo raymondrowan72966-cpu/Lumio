@@ -342,7 +342,7 @@ function renderHeroSection(course, opts = {}) {
   const radius = hs.roundedCorners ? 'var(--theme-radius, var(--r-xl))' : '0px';
   const layout = course.landingLayout || 'A';
   const editable = opts.editable !== undefined ? opts.editable : course.mode === 'edit';
-  const editBtnLabel = '⚙️ Edit Landing Page';
+  const editBtnLabel = `${platformIcon('settings')} Edit Landing Page`;
 
   const ctaId = opts.ctaId || 'start-course';
   const ctaLabel = opts.ctaLabel || (typeof L === 'function' ? L('nav.start_course') + ' →' : 'Start Course →');
@@ -798,7 +798,7 @@ function insertAssessment(course) {
         <p class="text-sm text-muted mt-8 mb-16">Choose a type. This is a formal, scored assessment — different from an in-lesson Knowledge Check.</p>
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
           <div class="card card-pad assess-type" data-type="Quiz" style="cursor:pointer; text-align:center;">
-            <div style="font-size:24px;">📝</div>
+            <div style="font-size:24px;">${platformIcon('notes')}</div>
             <div style="font-size:13px; font-weight:600; margin-top:8px;">Quiz</div>
           </div>
           <div class="card card-pad assess-type" data-type="Scenario" style="cursor:pointer; text-align:center;">
@@ -893,11 +893,11 @@ function layoutThumbFrame(layoutId) {
    ============================================================ */
 
 const PUBLISH_FORMATS = [
-  { id: 'scorm12',      label: 'SCORM 1.2',                  icon: '📦', desc: 'Compatible with most Learning Management Systems.' },
-  { id: 'scorm2004_2',  label: 'SCORM 2004 (2nd Edition)',    icon: '📦', desc: 'SCORM 2004 with improved sequencing support.' },
-  { id: 'scorm2004_3',  label: 'SCORM 2004 (3rd Edition)',    icon: '📦', desc: 'SCORM 2004 with enhanced navigation controls.' },
-  { id: 'scorm2004_4',  label: 'SCORM 2004 (4th Edition)',    icon: '📦', desc: 'Latest SCORM 2004 with advanced sequencing and branching.' },
-  { id: 'xapi',         label: 'xAPI (Tin Can)',              icon: '🧩', desc: 'Rich learning data tracking via a Learning Record Store (LRS).' },
+  { id: 'scorm12',      label: 'SCORM 1.2',                  icon: platformIcon('export-pack'), desc: 'Compatible with most Learning Management Systems.' },
+  { id: 'scorm2004_2',  label: 'SCORM 2004 (2nd Edition)',    icon: platformIcon('export-pack'), desc: 'SCORM 2004 with improved sequencing support.' },
+  { id: 'scorm2004_3',  label: 'SCORM 2004 (3rd Edition)',    icon: platformIcon('export-pack'), desc: 'SCORM 2004 with enhanced navigation controls.' },
+  { id: 'scorm2004_4',  label: 'SCORM 2004 (4th Edition)',    icon: platformIcon('export-pack'), desc: 'Latest SCORM 2004 with advanced sequencing and branching.' },
+  { id: 'xapi',         label: 'xAPI (Tin Can)',              icon: platformIcon('cat-interactive'), desc: 'Rich learning data tracking via a Learning Record Store (LRS).' },
   { id: 'html',         label: 'HTML Web Package',            icon: '🌐', desc: 'Self-contained web package — host on any web server.' },
   { id: 'pdf',          label: 'PDF Document',                icon: '📄', desc: 'Print-ready document export for offline reference.' },
 ];
@@ -1044,7 +1044,7 @@ function openTranslationModal(course) {
           <!-- Export Section -->
           <section>
             <div class="flex items-center gap-8" style="margin-bottom:12px;">
-              <span style="font-size:15px;">📤</span>
+              <span style="font-size:15px;">${platformIcon('publish')}</span>
               <strong style="font-size:14px;">Export for Translation</strong>
             </div>
             <p class="text-sm text-muted" style="margin-bottom:12px;">
@@ -1087,9 +1087,9 @@ function openTranslationModal(course) {
             <div id="tm-drop-zone" style="border:2px dashed var(--ws-border); border-radius:var(--r-lg); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; background:var(--ws-surface);">
               ${importFile
                 ? `<p class="text-sm">📄 <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
-                   <button class="btn btn-ghost btn-sm" id="tm-clear-file" style="margin-top:6px;">✕ Remove</button>`
+                   <button class="btn btn-ghost btn-sm" id="tm-clear-file" style="margin-top:6px;">${platformIcon('close')} Remove</button>`
                 : `<p class="text-sm text-muted">Drag &amp; drop your .xlf file here, or</p>
-                   <button class="btn btn-secondary btn-sm" id="tm-select-file" style="margin-top:8px;">📁 Select File</button>`
+                   <button class="btn btn-secondary btn-sm" id="tm-select-file" style="margin-top:8px;">${platformIcon('folder')} Select File</button>`
               }
             </div>
             <input type="file" id="tm-file-input" accept=".xlf,.xliff,application/xliff+xml,text/xml" style="display:none;" />
@@ -1100,7 +1100,7 @@ function openTranslationModal(course) {
               <button class="btn btn-primary btn-sm" id="tm-apply" style="margin-top:12px;" ${!lastValidation.ready ? 'disabled title="Fix validation issues before importing"' : ''}>
                 ✅ Apply Translation
               </button>
-            ` : (importFile ? `<button class="btn btn-secondary btn-sm" id="tm-validate" style="margin-top:12px;">🔍 Validate File</button>` : '')}
+            ` : (importFile ? `<button class="btn btn-secondary btn-sm" id="tm-validate" style="margin-top:12px;">${platformIcon('search')} Validate File</button>` : '')}
           </section>
 
           <div style="border-top:1px solid var(--ws-border);"></div>
@@ -1135,7 +1135,7 @@ function openTranslationModal(course) {
           <!-- Future / AI Section (reserved) -->
           <section style="opacity:0.5; pointer-events:none;">
             <div class="flex items-center gap-8" style="margin-bottom:8px;">
-              <span style="font-size:15px;">✨</span>
+              <span style="font-size:15px;">${platformIcon('ai')}</span>
               <strong style="font-size:14px;">AI Translation</strong>
               <span class="text-sm text-muted" style="background:var(--ws-surface); padding:2px 8px; border-radius:999px;">Coming soon</span>
             </div>
@@ -1171,7 +1171,7 @@ function openTranslationModal(course) {
       </div>`;
     }
     const readyColor = v.ready ? 'var(--success)' : 'var(--destructive)';
-    const readyIcon  = v.ready ? '✅' : '⚠️';
+    const readyIcon  = v.ready ? platformIcon('success') : platformIcon('warning');
     return `
       <div style="margin-top:12px; padding:12px; background:var(--surface-1); border-radius:var(--r-md); border:1px solid var(--border);">
         <p class="text-sm" style="font-weight:600; margin-bottom:8px; color:${readyColor};">${readyIcon} Validation ${v.ready ? 'Passed' : 'Issues Found'}</p>
@@ -1719,9 +1719,9 @@ function openCourseSettings(course, initialTab) {
         </div>
         <div class="tabs" id="cs-tabs" style="padding:0 28px;">
           <div class="tab ${SettingsUI.tab==='details'?'active':''}" data-tab="details">${platformIcon('edit')} Course Details</div>
-          <div class="tab ${SettingsUI.tab==='theme'?'active':''}" data-tab="theme">${platformIcon('color-palette')} Theme</div>
-          <div class="tab ${SettingsUI.tab==='layout'?'active':''}" data-tab="layout">${platformIcon('layout')} Layout</div>
-          <div class="tab ${SettingsUI.tab==='hero'?'active':''}" data-tab="hero">${platformIcon('image')} Hero Image</div>
+          <div class="tab ${SettingsUI.tab==='theme'?'active':''}" data-tab="theme">${platformIcon('preview')} Theme</div>
+          <div class="tab ${SettingsUI.tab==='layout'?'active':''}" data-tab="layout">${platformIcon('block-columns')} Layout</div>
+          <div class="tab ${SettingsUI.tab==='hero'?'active':''}" data-tab="hero">${platformIcon('image-placeholder')} Hero Image</div>
           <div class="tab ${SettingsUI.tab==='landing'?'active':''}" data-tab="landing">${platformIcon('block-hotspot')} Landing Sections</div>
         </div>
         <div id="cs-body" style="padding:24px 28px; overflow-y:auto; flex:1;"></div>
@@ -1798,7 +1798,7 @@ function openCourseSettings(course, initialTab) {
           </div>
           <input type="file" id="cs-thumb-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" id="cs-thumb-upload">${course.thumbnailImage.src ? '🔄 Replace Thumbnail' : '📤 Upload Thumbnail'}</button>
+            <button class="btn btn-secondary btn-sm" id="cs-thumb-upload">${course.thumbnailImage.src ? `${platformIcon('replace-media')} Replace Thumbnail` : `${platformIcon('publish')} Upload Thumbnail`}</button>
             ${course.thumbnailImage.src ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-thumb-remove">${platformIcon('delete')} Remove Thumbnail</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-thumb-reset">${platformIcon('restore')} Restore Default Thumbnail</button>
           </div>
@@ -2073,7 +2073,7 @@ function openCourseSettings(course, initialTab) {
           </div>
           <input type="file" id="cs-hero-file" accept="${heroFileAccept()}" style="display:none" />
           <div class="flex gap-12" style="flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" id="cs-hero-upload">${hasImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
+            <button class="btn btn-secondary btn-sm" id="cs-hero-upload">${hasImage ? `${platformIcon('replace-media')} Replace Image` : `${platformIcon('publish')} Upload Image`}</button>
             ${hasImage ? `<button class="btn btn-ghost btn-sm text-destructive" id="cs-hero-remove">${platformIcon('delete')} Remove Image</button>` : ''}
             <button class="btn btn-ghost btn-sm" id="cs-hero-reset">${platformIcon('restore')} Restore Default Image</button>
           </div>

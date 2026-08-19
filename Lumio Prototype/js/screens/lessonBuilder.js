@@ -418,7 +418,7 @@ function renderCanvasBlocks(blocks) {
         <div class="empty-canvas-line"></div>
         <button class="drop-zone-add empty-canvas-add" data-drop-index="0" title="Insert block" aria-label="Insert your first block">+</button>
         <p class="text-sm text-muted mt-12">Drag a block from the library, click + to add one, or let Lumio draft a starting point.</p>
-        <button class="btn btn-secondary btn-sm mt-12" id="ai-draft-lesson">✨ Draft this lesson with AI</button>
+        <button class="btn btn-secondary btn-sm mt-12" id="ai-draft-lesson">${platformIcon('ai')} Draft this lesson with AI</button>
       </div>
     `;
   }
@@ -2096,8 +2096,8 @@ function renderBlockContent(block, editable) {
             <div class="editable-text mt-8" data-role="body" data-field="gridItemTitle" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Item title" style="font-weight:600; font-size:13px;">${richTextOut(item.title || '')}</div>
             <div class="editable-text text-sm text-muted mt-4" data-role="body" data-field="gridItemDesc" data-col="${i}" data-richtext="true" ${ce} data-placeholder="Description (optional)">${richTextOut(item.description || '')}</div>
             ${editable ? `<div class="flex items-center justify-center gap-8 mt-8" style="flex-wrap:wrap;">
-              <button class="btn btn-secondary btn-sm grid-item-image-trigger" data-gindex="${i}">${item.imageUrl ? '🔄 Replace' : '📤 Upload'}</button>
-              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove text-destructive" data-gindex="${i}">🗑️ Remove Image</button>` : ''}
+              <button class="btn btn-secondary btn-sm grid-item-image-trigger" data-gindex="${i}">${item.imageUrl ? `${platformIcon('replace-media')} Replace` : `${platformIcon('publish')} Upload`}</button>
+              ${item.imageUrl ? `<button class="btn btn-ghost btn-sm grid-item-image-remove text-destructive" data-gindex="${i}">${platformIcon('delete')} Remove Image</button>` : ''}
             </div>` : ''}
           </div>
         `).join('')}
@@ -2664,7 +2664,7 @@ function blockIconFor(type) {
 
 function imagePlaceholder(label, height, width) {
   return `<div style="background:linear-gradient(135deg, var(--pastel-lavender), var(--pastel-cyan)); border-radius:var(--r-md); height:${height}px; ${width?`width:${width}px; flex-shrink:0;`:''} display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; color:var(--ink-400); border:1px dashed var(--border);">
-    <span style="font-size:24px;">🖼️</span><span class="text-sm">${label}</span>
+    <span style="font-size:24px;">${platformIcon('image-placeholder')}</span><span class="text-sm">${label}</span>
   </div>`;
 }
 
@@ -4097,10 +4097,10 @@ function chartDesignPanel(block, d, ds, isPie, isLine) {
       ${ds.bgStyle === 'image' ? `
         <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
           <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
           </div>
-          <button class="btn btn-secondary btn-sm chart-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm chart-bg-image-remove text-destructive">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm chart-bg-image-trigger">${ds.bgImage ? `${platformIcon('replace-media')} Replace Image` : `${platformIcon('publish')} Upload Image`}</button>
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm chart-bg-image-remove text-destructive">${platformIcon('delete')} Remove</button>` : ''}
         </div>` : ''}
     </div>
     <div class="prop-section" style="border-bottom:none;">
@@ -4167,7 +4167,7 @@ function kcMcContentPanel(block, d) {
         <div class="flex items-center gap-8" data-i="${i}">
           <input type="radio" class="kc-correct-radio" name="kc-mc-correct" data-i="${i}" ${i === correct ? 'checked' : ''} title="Mark as correct" />
           <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
-          <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
+          <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>${platformIcon('close')}</button>
         </div>
       `).join('')}
     </div>
@@ -4192,7 +4192,7 @@ function kcMrContentPanel(block, d) {
           <div class="flex items-center gap-8" data-i="${i}">
             <input type="checkbox" class="kc-correct-check" data-i="${i}" ${correct.includes(i) ? 'checked' : ''} title="Mark as correct" />
             <input class="input kc-answer-text" data-i="${i}" value="${escapeHtml(o)}" placeholder="Answer option…" style="flex:1; font-size:13px;" />
-            <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>✕</button>
+            <button class="btn-icon kc-answer-delete" data-i="${i}" title="Remove" ${opts.length <= 2 ? 'disabled' : ''}>${platformIcon('close')}</button>
           </div>
         `).join('')}
       </div>
@@ -4217,7 +4217,7 @@ function kcMatchingContentPanel(block, d) {
         <div style="display:grid; grid-template-columns:1fr 1fr 28px; gap:6px; align-items:center;" data-i="${i}">
           <input class="input kc-pair-left" data-i="${i}" value="${escapeHtml(row.l)}" placeholder="Choice…" style="font-size:13px;" />
           <input class="input kc-pair-right" data-i="${i}" value="${escapeHtml(row.r)}" placeholder="Match…" style="font-size:13px;" />
-          <button class="btn-icon kc-pair-delete" data-i="${i}" title="Remove" ${rows.length <= 2 ? 'disabled' : ''}>✕</button>
+          <button class="btn-icon kc-pair-delete" data-i="${i}" title="Remove" ${rows.length <= 2 ? 'disabled' : ''}>${platformIcon('close')}</button>
         </div>
       `).join('')}
     </div>
@@ -4239,7 +4239,7 @@ function kcFillGapContentPanel(block, d) {
         ${answers.map((a, i) => `
           <div class="flex items-center gap-8" data-i="${i}">
             <input class="input kc-accepted-text" data-i="${i}" value="${escapeHtml(a)}" placeholder="Acceptable answer…" style="flex:1; font-size:13px;" />
-            <button class="btn-icon kc-accepted-delete" data-i="${i}" title="Remove" ${answers.length <= 1 ? 'disabled' : ''}>✕</button>
+            <button class="btn-icon kc-accepted-delete" data-i="${i}" title="Remove" ${answers.length <= 1 ? 'disabled' : ''}>${platformIcon('close')}</button>
           </div>
         `).join('')}
       </div>
@@ -4287,7 +4287,7 @@ function kcMatchingCardsContentPanel(block, d) {
         ${categories.map((cat, ci) => `
           <div class="flex items-center gap-6" data-ci="${ci}">
             <input class="input kc-mc-cat-text" data-ci="${ci}" value="${escapeHtml(cat)}" placeholder="Category name…" style="flex:1; font-size:13px;" />
-            <button class="btn-icon kc-mc-cat-delete" data-ci="${ci}" title="Remove" ${categories.length <= 1 ? 'disabled' : ''}>✕</button>
+            <button class="btn-icon kc-mc-cat-delete" data-ci="${ci}" title="Remove" ${categories.length <= 1 ? 'disabled' : ''}>${platformIcon('close')}</button>
           </div>
         `).join('')}
       </div>
@@ -4303,7 +4303,7 @@ function kcMatchingCardsContentPanel(block, d) {
             <select class="input kc-mc-card-cat" data-ki="${ki}" style="width:110px; font-size:12px;">
               ${categories.map((cat, ci) => `<option value="${ci}" ${card.category === ci ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
             </select>
-            <button class="btn-icon kc-mc-card-delete" data-ki="${ki}" title="Remove" ${cards.length <= 1 ? 'disabled' : ''}>✕</button>
+            <button class="btn-icon kc-mc-card-delete" data-ki="${ki}" title="Remove" ${cards.length <= 1 ? 'disabled' : ''}>${platformIcon('close')}</button>
           </div>
         `).join('')}
       </div>
@@ -4641,10 +4641,10 @@ function continueDesignFields(ds) {
       ${ds.bgStyle === 'image' ? `
         <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
           <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+            ${ds.bgImage ? `<img src="${ds.bgImage}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
           </div>
-          <button class="btn btn-secondary btn-sm continue-bg-image-trigger">${ds.bgImage ? '🔄 Replace Image' : '📤 Upload Image'}</button>
-          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm continue-bg-image-remove text-destructive">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm continue-bg-image-trigger">${ds.bgImage ? `${platformIcon('replace-media')} Replace Image` : `${platformIcon('publish')} Upload Image`}</button>
+          ${ds.bgImage ? `<button class="btn btn-ghost btn-sm continue-bg-image-remove text-destructive">${platformIcon('delete')} Remove</button>` : ''}
         </div>` : ''}
     </div>
     <div class="prop-section">
@@ -4696,10 +4696,10 @@ function quoteImageUploadFields(block) {
       <div class="prop-section-title">Background Image</div>
       <div class="flex items-center gap-12 mt-8">
         <div class="media-thumb" style="width:48px; height:36px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d.background ? `<img src="${AssetStore.resolveMediaSrc(d.background)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d.background ? `<img src="${AssetStore.resolveMediaSrc(d.background)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
         </div>
-        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="background" data-title="Background Image">${d.background ? '🔄 Replace Background' : '📤 Upload Background'}</button>
-        ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="background">🗑️ Remove</button>` : ''}
+        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="background" data-title="Background Image">${d.background ? `${platformIcon('replace-media')} Replace Background` : `${platformIcon('publish')} Upload Background`}</button>
+        ${d.background ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="background">${platformIcon('delete')} Remove</button>` : ''}
       </div>
     </div>`;
 }
@@ -4711,10 +4711,10 @@ function mediaPickerAvatarField(d, target, title, label, noBorder) {
       <div class="prop-section-title">${label}</div>
       <div class="flex items-center gap-12 mt-8">
         <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
         </div>
-        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
-        ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
+        <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}">${d[target] ? `${platformIcon('replace-media')} Replace ${label}` : `${platformIcon('publish')} Upload ${label}`}</button>
+        ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">${platformIcon('delete')} Remove</button>` : ''}
       </div>
     </div>`;
 }
@@ -4735,11 +4735,11 @@ function mediaPickerImageField(d, target, title, label, noBorder, namespace) {
       <div class="prop-section-title">${label}</div>
       <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
         <div class="media-thumb" style="width:64px; height:48px; border-radius:var(--r-sm); overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${d[target] ? `<img src="${AssetStore.resolveMediaSrc(d[target])}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}" data-namespace="${ns}">${d[target] ? `🔄 Replace ${label}` : `📤 Upload ${label}`}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}" data-namespace="${ns}">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-title="${title}" data-namespace="${ns}">${d[target] ? `${platformIcon('replace-media')} Replace ${label}` : `${platformIcon('publish')} Upload ${label}`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}" data-namespace="${ns}">${platformIcon('delete')} Remove</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -4761,8 +4761,8 @@ function mediaPickerAudioField(d, target, title, label) {
             : `<div class="text-sm text-muted">No audio uploaded</div>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="audio" data-title="${title}">${d[target] ? '🔄 Replace Audio' : '📤 Upload Audio'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove Audio</button>` : ''}
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="audio" data-title="${title}">${d[target] ? `${platformIcon('replace-media')} Replace Audio` : `${platformIcon('publish')} Upload Audio`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">${platformIcon('delete')} Remove Audio</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: MP3, WAV, M4A, OGG · Max size 100MB.</p>
@@ -4787,8 +4787,8 @@ function mediaPickerVideoField(d, target, title, label) {
             : `<div class="text-sm text-muted">No video uploaded</div>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="video" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Video'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="video" data-title="${title}">${d[target] ? `${platformIcon('replace-media')} Replace` : `${platformIcon('publish')} Upload Video`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">${platformIcon('delete')} Remove</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: MP4, WEBM, MOV · Max size 500MB.</p>
@@ -4813,8 +4813,8 @@ function mediaPickerFileField(d, target, title, label) {
             : `<div class="text-sm text-muted">No file uploaded</div>`}
         </div>
         <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="file" data-title="${title}">${d[target] ? '🔄 Replace' : '📤 Upload Attachment'}</button>
-          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">🗑️ Remove</button>` : ''}
+          <button class="btn btn-secondary btn-sm media-picker-trigger" data-target="${target}" data-kind="file" data-title="${title}">${d[target] ? `${platformIcon('replace-media')} Replace` : `${platformIcon('publish')} Upload Attachment`}</button>
+          ${d[target] ? `<button class="btn btn-ghost btn-sm media-picker-remove text-destructive" data-target="${target}">${platformIcon('delete')} Remove</button>` : ''}
         </div>
       </div>
       <p class="text-sm text-muted mt-8">Supported formats: PDF, DOCX, PPTX, XLSX, CSV, TXT, ZIP · Max size 100MB.</p>
@@ -4965,8 +4965,8 @@ function renderVideoBlockPanel(block, index) {
       <div class="prop-section-title">Subtitles / Captions (optional)</div>
       <p class="text-sm text-muted mb-8">Upload a VTT or SRT file, or paste subtitle/transcript text below. Adds a CC button to the video player.</p>
       <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" id="subtitle-upload-trigger">${d.subtitles ? '🔄 Replace Subtitles File' : '📤 Upload Subtitles (VTT/SRT)'}</button>
-        ${d.subtitles ? `<button class="btn btn-ghost btn-sm text-destructive" id="subtitle-remove">🗑️ Remove</button>` : ''}
+        <button class="btn btn-secondary btn-sm" id="subtitle-upload-trigger">${d.subtitles ? `${platformIcon('replace-media')} Replace Subtitles File` : `${platformIcon('publish')} Upload Subtitles (VTT/SRT)`}</button>
+        ${d.subtitles ? `<button class="btn btn-ghost btn-sm text-destructive" id="subtitle-remove">${platformIcon('delete')} Remove</button>` : ''}
         <input type="file" id="subtitle-file-input" accept=".vtt,.srt,text/vtt" style="display:none" />
       </div>
       <textarea class="textarea content-field mt-8" data-field="subtitles" rows="5" placeholder="Or paste WebVTT / SRT subtitle text here">${escapeHtml(d.subtitles || '')}</textarea>
@@ -5409,14 +5409,14 @@ function itemMediaExtrasHtml(item) {
 function itemMediaContentFields(item, listKey, i) {
   return `
     <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
-      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="image" data-kind="image" data-title="Image">${item.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="image">🗑️ Remove Image</button>` : ''}
-      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="video" data-kind="video" data-title="Video">${item.video ? '🔄 Change Video' : '📤 Add Video'}</button>
-      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="video">🗑️ Remove Video</button>` : ''}
-      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="audio" data-kind="audio" data-title="Audio">${item.audio ? '🔄 Change Audio' : '📤 Add Audio'}</button>
-      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="audio">🗑️ Remove Audio</button>` : ''}
-      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="file" data-kind="file" data-title="Attachment">${item.file ? '🔄 Change File' : '📤 Add Attachment'}</button>
-      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="file">🗑️ Remove File</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="image" data-kind="image" data-title="Image">${item.image ? `${platformIcon('replace-media')} Change Image` : `${platformIcon('publish')} Add Image`}</button>
+      ${item.image ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="image">${platformIcon('delete')} Remove Image</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="video" data-kind="video" data-title="Video">${item.video ? `${platformIcon('replace-media')} Change Video` : `${platformIcon('publish')} Add Video`}</button>
+      ${item.video ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="video">${platformIcon('delete')} Remove Video</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="audio" data-kind="audio" data-title="Audio">${item.audio ? `${platformIcon('replace-media')} Change Audio` : `${platformIcon('publish')} Add Audio`}</button>
+      ${item.audio ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="audio">${platformIcon('delete')} Remove Audio</button>` : ''}
+      <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="${listKey}" data-iindex="${i}" data-field="file" data-kind="file" data-title="Attachment">${item.file ? `${platformIcon('replace-media')} Change File` : `${platformIcon('publish')} Add Attachment`}</button>
+      ${item.file ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="${listKey}" data-iindex="${i}" data-field="file">${platformIcon('delete')} Remove File</button>` : ''}
     </div>
     ${item.audio ? `<div class="field mt-8"><label>Audio Transcript</label><textarea class="textarea lumio-item-text" rows="2" data-list="${listKey}" data-iindex="${i}" data-field="audioTranscript">${escapeHtml(item.audioTranscript || '')}</textarea></div>` : ''}
     ${item.image ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="${listKey}" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
@@ -5473,10 +5473,10 @@ function quoteCarouselContentPanel(block, d) {
       <p class="text-sm text-muted mb-8">Click directly on the quote text or attribution in the canvas to edit them.</p>
       <div class="flex items-center gap-12" style="flex-wrap:wrap;">
         <div class="media-thumb" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--surface-50); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">🖼️</span>`}
+          ${q.avatar ? `<img src="${q.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:18px; opacity:0.5;">${platformIcon('image-placeholder')}</span>`}
         </div>
-        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="quotes" data-iindex="${i}" data-field="avatar" data-kind="image" data-title="Avatar Image">${q.avatar ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="quotes" data-iindex="${i}" data-field="avatar">🗑️ Remove Image</button>` : ''}
+        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="quotes" data-iindex="${i}" data-field="avatar" data-kind="image" data-title="Avatar Image">${q.avatar ? `${platformIcon('replace-media')} Change Image` : `${platformIcon('publish')} Add Image`}</button>
+        ${q.avatar ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="quotes" data-iindex="${i}" data-field="avatar">${platformIcon('delete')} Remove Image</button>` : ''}
       </div>
     </div>
   `).join('') + `<button class="btn btn-secondary w-full mt-8 lumio-item-add" data-list="quotes">+ Add Quote</button>` + aiActions();
@@ -5497,8 +5497,8 @@ function galleryCarouselContentPanel(block, d) {
       </div>
       <p class="text-sm text-muted mb-8">Click directly on the slide title or description in the canvas to edit them.</p>
       <div class="flex items-center gap-8 mt-4" style="flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="items" data-iindex="${i}" data-field="src" data-kind="image" data-title="Image">${item.src ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="items" data-iindex="${i}" data-field="src">🗑️ Remove Image</button>` : ''}
+        <button class="btn btn-secondary btn-sm lumio-item-media-trigger" data-list="items" data-iindex="${i}" data-field="src" data-kind="image" data-title="Image">${item.src ? `${platformIcon('replace-media')} Change Image` : `${platformIcon('publish')} Add Image`}</button>
+        ${item.src ? `<button class="btn btn-ghost btn-sm lumio-item-media-remove text-destructive" data-list="items" data-iindex="${i}" data-field="src">${platformIcon('delete')} Remove Image</button>` : ''}
       </div>
       ${item.src ? `<div class="mt-8"><p class="text-sm text-muted mb-4">Image layout</p><div class="seg-control lumio-item-fit-control" data-list="items" data-iindex="${i}">${ITEM_FIT_OPTIONS.map(o => `<button data-val="${o.id}" class="${(item.imageFit || 'cover') === o.id ? 'active' : ''}">${o.label}</button>`).join('')}</div></div>` : ''}
     </div>
@@ -5615,8 +5615,8 @@ function labelledGraphicContentPanel(block, d) {
     <div class="prop-section">
       <div class="prop-section-title">Primary Image</div>
       <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm lumio-lg-image-trigger">${d.image ? '🔄 Change Image' : '📤 Add Image'}</button>
-        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove text-destructive">🗑️ Remove Image</button>` : ''}
+        <button class="btn btn-secondary btn-sm lumio-lg-image-trigger">${d.image ? `${platformIcon('replace-media')} Change Image` : `${platformIcon('publish')} Add Image`}</button>
+        ${d.image ? `<button class="btn btn-ghost btn-sm lumio-lg-image-remove text-destructive">${platformIcon('delete')} Remove Image</button>` : ''}
       </div>
       <p class="text-sm text-muted mt-8">Drag the numbered markers directly on the canvas to position each hotspot.</p>
     </div>`;

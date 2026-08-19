@@ -1200,7 +1200,7 @@ async function openShareModal(id) {
           <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:14px; border-radius:var(--r-md); border:2px solid ${scopeIndividual ? 'var(--ws-primary)' : 'var(--border)'}; background:${scopeIndividual ? 'var(--violet-tint)' : 'var(--surface-0)'};" id="scope-individual-label">
             <input type="radio" name="share-scope" value="individual" ${scopeIndividual ? 'checked' : ''} style="margin-top:2px;">
             <div style="flex:1;">
-              <div style="font-weight:600; font-size:13px;">👤 Share with Individual</div>
+              <div style="font-weight:600; font-size:13px;">${platformIcon('person')} Share with Individual</div>
               <div class="text-sm text-muted mt-4">Visible only to you and the selected person.</div>
               <div id="individual-picker" style="margin-top:12px; display:${scopeIndividual ? 'block' : 'none'};">
                 ${otherUsers.length > 0 ? `
@@ -1272,7 +1272,7 @@ async function openShareModal(id) {
     p.sharedPermission = 'view';
     overlay.remove();
     renderProjects();
-    toast('Sharing removed', '🔒');
+    toast('Sharing removed', platformIcon('lock'));
     LumioAPI.projects.update(p.id, { project: { sharedScope: null, sharedPermission: 'view' } })
       .catch(err => console.error('[share-remove] persist failed:', err));
     // Delete any individual shares from project_shares.

@@ -1561,7 +1561,7 @@ function userRow(user) {
       <span class="pill ${user.status === 'active' ? 'pill-teal' : 'pill-grey'}">${user.status === 'active' ? 'Active' : 'Disabled'}</span>
       <div class="flex gap-8">
         <button class="btn btn-ghost btn-sm" data-user-toggle="${user.id}">${user.status === 'active' ? 'Disable' : 'Enable'}</button>
-        <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">🗑️ Remove</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-user-remove="${user.id}">${platformIcon('delete')} Remove</button>
       </div>
     </div>
   `;
@@ -1627,7 +1627,7 @@ function invitationRow(inv) {
       <span class="pill pill-grey">Pending</span>
       <div class="flex gap-8">
         ${inv.link ? `<button class="btn btn-ghost btn-sm" data-invite-copy="${inv.id}">Copy Link</button>` : ''}
-        <button class="btn btn-ghost btn-sm text-destructive" data-invite-revoke="${inv.id}">🗑️ Revoke</button>
+        <button class="btn btn-ghost btn-sm text-destructive" data-invite-revoke="${inv.id}">${platformIcon('delete')} Revoke</button>
       </div>
     </div>
   `;
@@ -2191,7 +2191,7 @@ function renderAcceptInvite(token) {
 
   // Show loading state while the API call is in flight.
   app.innerHTML = renderShell(`
-    <div style="font-size:40px; margin-bottom:12px;">✉️</div>
+    <div style="font-size:40px; margin-bottom:12px;">${platformIcon('email')}</div>
     <p class="text-sm text-muted">Loading invitation…</p>
   `);
 
@@ -2246,7 +2246,7 @@ function renderAcceptInvite(token) {
       }
 
       app.innerHTML = renderShell(`
-        <div style="font-size:40px; margin-bottom:12px;">✉️</div>
+        <div style="font-size:40px; margin-bottom:12px;">${platformIcon('email')}</div>
         <h2 style="font-size:20px; margin-bottom:4px;">You've been invited to Lumio</h2>
         <p class="text-sm text-muted mb-4">Role: <strong>${escapeHtml(roleLabel)}</strong></p>
         <p class="text-sm text-muted mb-20">Authentication: <strong>${escapeHtml(authLabel)}</strong></p>
@@ -2306,7 +2306,7 @@ function renderAcceptInvite(token) {
     })
     .catch(() => {
       app.innerHTML = renderShell(`
-        <div style="font-size:40px; margin-bottom:12px;">⚠️</div>
+        <div style="font-size:40px; margin-bottom:12px;">${platformIcon('warning')}</div>
         <h2 style="font-size:20px; margin-bottom:8px;">Invitation not found</h2>
         <p class="text-sm text-muted mb-16">This invitation link is invalid, expired, or has already been used.</p>
         <button class="btn btn-secondary w-full" id="accept-invite-back">Back to Login</button>
