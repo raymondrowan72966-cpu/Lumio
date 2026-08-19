@@ -732,16 +732,6 @@ function _wsPackSection(selectedPack) {
       </div>`;
   };
 
-  const customPackCard = `
-    <div class="ws-pack-card ws-pack-card--disabled" aria-disabled="true">
-      <div class="ws-pack-card__preview ws-pack-card__preview--empty"></div>
-      <div class="ws-pack-card__footer">
-        <span class="ws-pack-card__name">Custom</span>
-        <span class="pill pill-grey" style="font-size:10px;padding:2px 6px;">Coming Soon</span>
-      </div>
-      <div class="ws-pack-card__desc">Upload a custom SVG icon pack for your workspace.</div>
-    </div>`;
-
   return `
     <div class="card card-pad mb-24">
       <div class="ws-section-header mb-4">
@@ -752,7 +742,6 @@ function _wsPackSection(selectedPack) {
       </div>
       <div class="ws-pack-grid mt-16">
         ${_SELECTABLE_ICON_PACKS.map(packCard).join('')}
-        ${customPackCard}
       </div>
     </div>`;
 }
