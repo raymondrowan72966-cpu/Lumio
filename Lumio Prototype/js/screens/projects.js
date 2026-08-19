@@ -949,7 +949,7 @@ function openCreateNewModal() {
         </div>
         <div class="flex justify-between items-center mt-24">
           <button class="btn btn-ghost" id="import-existing" style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:15px;">📥</span> Import Existing Content
+            <span style="font-size:15px;">${platformIcon('download')}</span> Import Existing Content
           </button>
           <button class="btn btn-ghost" id="cancel-create">Cancel</button>
         </div>

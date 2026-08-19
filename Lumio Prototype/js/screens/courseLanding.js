@@ -1033,7 +1033,7 @@ function openTranslationModal(course) {
       <div class="modal" style="width:540px; max-width:95vw; max-height:90vh; overflow-y:auto;">
         <div class="flex items-center justify-between" style="padding:16px 20px; border-bottom:1px solid var(--ws-border);">
           <div class="flex items-center gap-8">
-            <span style="font-size:20px;">🌐</span>
+            <span style="font-size:20px;">${platformIcon('globe')}</span>
             <strong style="font-size:16px;">Translate Course</strong>
           </div>
           <button class="btn-icon" id="tm-close">${platformIcon('close')}</button>
@@ -1070,7 +1070,7 @@ function openTranslationModal(course) {
                 Preserve rich text formatting (recommended)
               </label>
             </div>
-            <button class="btn btn-secondary btn-sm" id="tm-export" style="margin-top:12px;">⬇ Export XLIFF</button>
+            <button class="btn btn-secondary btn-sm" id="tm-export" style="margin-top:12px;">${platformIcon('download')} Export XLIFF</button>
           </section>
 
           <div style="border-top:1px solid var(--ws-border);"></div>
@@ -1078,7 +1078,7 @@ function openTranslationModal(course) {
           <!-- Import Section -->
           <section>
             <div class="flex items-center gap-8" style="margin-bottom:12px;">
-              <span style="font-size:15px;">📥</span>
+              <span style="font-size:15px;">${platformIcon('download')}</span>
               <strong style="font-size:14px;">Import Translated File</strong>
             </div>
             <p class="text-sm text-muted" style="margin-bottom:12px;">
@@ -1086,7 +1086,7 @@ function openTranslationModal(course) {
             </p>
             <div id="tm-drop-zone" style="border:2px dashed var(--ws-border); border-radius:var(--r-lg); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; background:var(--ws-surface);">
               ${importFile
-                ? `<p class="text-sm">📄 <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
+                ? `<p class="text-sm">${platformIcon('file-document')} <strong>${escapeHtml(importFile.name)}</strong> <span class="text-muted">(${_fileSize(importFile.size)})</span></p>
                    <button class="btn btn-ghost btn-sm" id="tm-clear-file" style="margin-top:6px;">${platformIcon('close')} Remove</button>`
                 : `<p class="text-sm text-muted">Drag &amp; drop your .xlf file here, or</p>
                    <button class="btn btn-secondary btn-sm" id="tm-select-file" style="margin-top:8px;">${platformIcon('folder')} Select File</button>`
@@ -1098,7 +1098,7 @@ function openTranslationModal(course) {
 
             ${importFile && lastValidation ? `
               <button class="btn btn-primary btn-sm" id="tm-apply" style="margin-top:12px;" ${!lastValidation.ready ? 'disabled title="Fix validation issues before importing"' : ''}>
-                ✅ Apply Translation
+                ${platformIcon('success')} Apply Translation
               </button>
             ` : (importFile ? `<button class="btn btn-secondary btn-sm" id="tm-validate" style="margin-top:12px;">${platformIcon('search')} Validate File</button>` : '')}
           </section>
@@ -1108,7 +1108,7 @@ function openTranslationModal(course) {
           <!-- Label Sets Section -->
           <section>
             <div class="flex items-center gap-8" style="margin-bottom:12px;">
-              <span style="font-size:15px;">🏷️</span>
+              <span style="font-size:15px;">${platformIcon('tag')}</span>
               <strong style="font-size:14px;">Learner Interface Labels</strong>
             </div>
             <p class="text-sm text-muted" style="margin-bottom:12px;">
@@ -1122,11 +1122,11 @@ function openTranslationModal(course) {
               </select>
             </div>
             <div class="flex gap-8" style="flex-wrap:wrap;">
-              <button class="btn btn-secondary btn-sm" id="tm-label-set-apply">✓ Apply Label Set</button>
-              <button class="btn btn-ghost btn-sm" id="tm-label-export">⬇ Export Labels XLIFF</button>
+              <button class="btn btn-secondary btn-sm" id="tm-label-set-apply">${platformIcon('check')} Apply Label Set</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-export">${platformIcon('download')} Export Labels XLIFF</button>
               <button class="btn btn-ghost btn-sm" id="tm-label-create">+ New Custom Pack</button>
-              <button class="btn btn-ghost btn-sm" id="tm-label-rename" style="${_isCustomLabelPack(_labelDropdownSel) ? '' : 'display:none;'}">✏ Rename</button>
-              <button class="btn btn-ghost btn-sm" id="tm-label-delete" style="${_isCustomLabelPack(_labelDropdownSel) ? 'color:var(--destructive);' : 'display:none;'}">🗑 Delete</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-rename" style="${_isCustomLabelPack(_labelDropdownSel) ? '' : 'display:none;'}">${platformIcon('edit')} Rename</button>
+              <button class="btn btn-ghost btn-sm" id="tm-label-delete" style="${_isCustomLabelPack(_labelDropdownSel) ? 'color:var(--destructive);' : 'display:none;'}">${platformIcon('delete')} Delete</button>
             </div>
           </section>
 
@@ -1148,7 +1148,7 @@ function openTranslationModal(course) {
           <!-- Future / Translation History (reserved) -->
           <section style="opacity:0.5; pointer-events:none; padding-top:0;">
             <div class="flex items-center gap-8" style="margin-bottom:8px;">
-              <span style="font-size:15px;">🕐</span>
+              <span style="font-size:15px;">${platformIcon('recent')}</span>
               <strong style="font-size:14px;">Translation History</strong>
               <span class="text-sm text-muted" style="background:var(--ws-surface); padding:2px 8px; border-radius:999px;">Coming soon</span>
             </div>
@@ -1167,7 +1167,7 @@ function openTranslationModal(course) {
   function renderValidationStats(v) {
     if (v.error) {
       return `<div style="margin-top:12px; padding:12px; background:var(--destructive-tint); border-radius:var(--r-md); border:1px solid var(--destructive-border);">
-        <p class="text-sm" style="color:var(--destructive);">❌ ${escapeHtml(v.error)}</p>
+        <p class="text-sm" style="color:var(--destructive);">${platformIcon('error')} ${escapeHtml(v.error)}</p>
       </div>`;
     }
     const readyColor = v.ready ? 'var(--success)' : 'var(--destructive)';
