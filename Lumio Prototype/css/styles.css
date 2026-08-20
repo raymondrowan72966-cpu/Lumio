@@ -2114,7 +2114,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .lumio-hotspot:hover { transform: translate(-50%, -50%) scale(1.1); }
 .lumio-hotspot.pulse:not(.pulse-off)::after {
   content: ''; position: absolute; inset: -4px; border-radius: 50%;
-  border: 2px solid currentColor; opacity: 0.6;
+  border: 2px solid var(--hotspot-pulse-color, currentColor); opacity: 0.6;
   animation: lumio-hotspot-pulse 1.8s ease-out infinite;
 }
 @keyframes lumio-hotspot-pulse {

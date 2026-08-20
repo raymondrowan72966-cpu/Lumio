@@ -2344,6 +2344,7 @@ function renderBlockContent(block, editable) {
       const markerStyle = ds.markerStyle || 'numbers';
       const markerGlyph = (i) => markerStyle === 'numbers' ? String(i + 1) : (MARKER_ICONS[markerStyle] || String(i + 1));
       const visitedStyle = ds.visitedStyle || 'filled';
+      const pulseColorStyle = ds.pulseColor ? ` --hotspot-pulse-color:${ds.pulseColor};` : '';
       // Remediation Sprint 1, Phase 2: migrated onto Architecture A.
       const bgStyleStr = quoteCardBgStyle(ds);
       const fitMap = { cover: 'cover', contain: 'contain', stretch: 'fill', center: 'none' };
@@ -2351,7 +2352,7 @@ function renderBlockContent(block, editable) {
       return `<div class="lumio-labelled-graphic" data-autoclose="${settings.autoClose !== false ? '1' : '0'}" data-visitedstyle="${visitedStyle}" style="width:${imgWidth}%; max-width:100%; margin:0 auto; ${interactiveSpacingStyle(ds)}">
         <div class="lumio-lg-imagewrap" style="position:relative; border-radius:${radius}; overflow:hidden; ${bgStyleStr} border:${interactiveBorderStyle(ds)}; ${d.image ? '' : 'min-height:240px; display:flex; align-items:center; justify-content:center;'}">
           ${d.image ? `<img src="${AssetStore.resolveMediaSrc(d.image)}" alt="" style="width:100%; display:block; object-fit:${objectFit}; ${objectFit === 'none' ? 'height:320px;' : ''}" />` : `<span style="font-size:32px;">🗺️</span>`}
-          ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor};" data-hindex="${i}"
+          ${hotspots.map((h, i) => `<button class="lumio-hotspot ${animate ? 'pulse' : ''}" data-glyph="${escapeHtml(markerGlyph(i))}" style="left:${h.x ?? 50}%; top:${h.y ?? 50}%; width:${markerSize}px; height:${markerSize}px; background:${markerColor}; border-color:${markerBorderColor}; color:${markerBorderColor};${pulseColorStyle}" data-hindex="${i}"
               onmousedown="lumioHotspotDragStart(event, ${i})" ontouchstart="lumioHotspotDragStart(event, ${i})"
               onclick="event.stopPropagation(); lumioHotspotToggle(this, ${i})" aria-label="${escapeHtml(h.title || 'Hotspot ' + (i + 1))}">${markerGlyph(i)}</button>`).join('')}
           ${hotspots.map((h, i) => `<div class="lumio-hotspot-panel" data-hindex="${i}" style="display:none;" onclick="event.stopPropagation();">
@@ -5673,6 +5674,10 @@ function labelledGraphicDesignFields(block, ds) {
     <div class="prop-section">
       <div class="prop-section-title">Marker Border Color</div>
       <input type="color" class="design-color-input" data-prop="markerBorderColor" value="${ds.markerBorderColor || '#ffffff'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+    </div>
+    <div class="prop-section">
+      <div class="prop-section-title">Pulse Color</div>
+      <input type="color" class="design-color-input" data-prop="pulseColor" value="${ds.pulseColor || '#ffffff'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
     </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker Size</div>
