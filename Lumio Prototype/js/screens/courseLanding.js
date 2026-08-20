@@ -506,6 +506,7 @@ function openContentMenu(btn, course, kind, id) {
     }
     syncProjectFromCourse(course.id);
     renderCourseLanding(course.id);
+    scheduleLumioSave(); scheduleCloudSave();
     toast(`${isLesson ? 'Lesson' : 'Assessment'} duplicated`, '⧉');
   });
 
@@ -516,6 +517,7 @@ function openContentMenu(btn, course, kind, id) {
       [list[idx - 1], list[idx]] = [list[idx], list[idx - 1]];
       syncProjectFromCourse(course.id);
       renderCourseLanding(course.id);
+      scheduleLumioSave(); scheduleCloudSave();
     });
     menu.querySelector('[data-action="down"]')?.addEventListener('click', () => {
       if (idx >= list.length - 1) return;
@@ -523,6 +525,7 @@ function openContentMenu(btn, course, kind, id) {
       [list[idx + 1], list[idx]] = [list[idx], list[idx + 1]];
       syncProjectFromCourse(course.id);
       renderCourseLanding(course.id);
+      scheduleLumioSave(); scheduleCloudSave();
     });
   }
 
@@ -645,6 +648,7 @@ function confirmDeleteContentItem(course, kind, id) {
     overlay.remove();
     syncProjectFromCourse(course.id);
     renderCourseLanding(course.id);
+    scheduleLumioSave(); scheduleCloudSave();
     toast(`${isLesson ? 'Lesson' : 'Assessment'} deleted`, '🗑️');
   });
 }
@@ -701,6 +705,7 @@ function bindCourseLandingEvents(course, viewOnly) {
         lesson.title = newTitle;
         syncProjectFromCourse(course.id);
         renderCourseLanding(course.id);
+        scheduleLumioSave(); scheduleCloudSave();
         toast('Lesson renamed', '✏️');
       } else {
         titleEl.textContent = lesson.title;
@@ -739,6 +744,7 @@ function bindCourseLandingEvents(course, viewOnly) {
       course.lessons.splice(toIndex, 0, moved);
       syncProjectFromCourse(course.id);
       renderCourseLanding(course.id);
+      scheduleLumioSave(); scheduleCloudSave();
       toast('Lesson order updated', '☰');
     });
   });
@@ -783,6 +789,7 @@ function insertLesson(course) {
     const objVal = overlay.querySelector('#new-lesson-obj').value;
     newLesson.title = title;
     newLesson.objectiveIndex = objVal === '' ? null : parseInt(objVal);
+    scheduleLumioSave(); scheduleCloudSave();
     overlay.remove();
     LumioState.currentLessonId = id;
     navigate('#/lesson/' + id);
@@ -854,6 +861,7 @@ function insertAssessment(course) {
     course.assessments.push({ id: generateUniqueId('a'), title, type: selectedType, objectives: objs });
     overlay.remove();
     renderCourseLanding(course.id);
+    scheduleLumioSave(); scheduleCloudSave();
     toast('Assessment added', '✅');
 
     if (untaught.length) {
@@ -1846,6 +1854,7 @@ function openCourseSettings(course, initialTab) {
           syncProjectFromCourse(course.id);
           renderBody();
           renderCourseLanding(course.id);
+          scheduleLumioSave(); scheduleCloudSave();
         });
       });
       body.querySelectorAll('.cs-objective-down').forEach(btn => {
@@ -1857,6 +1866,7 @@ function openCourseSettings(course, initialTab) {
           syncProjectFromCourse(course.id);
           renderBody();
           renderCourseLanding(course.id);
+          scheduleLumioSave(); scheduleCloudSave();
         });
       });
       body.querySelectorAll('.cs-objective-remove').forEach(btn => {
@@ -1866,6 +1876,7 @@ function openCourseSettings(course, initialTab) {
           syncProjectFromCourse(course.id);
           renderBody();
           renderCourseLanding(course.id);
+          scheduleLumioSave(); scheduleCloudSave();
         });
       });
       body.querySelector('#cs-objective-add').addEventListener('click', () => {
@@ -1873,6 +1884,7 @@ function openCourseSettings(course, initialTab) {
         syncProjectFromCourse(course.id);
         renderBody();
         renderCourseLanding(course.id);
+        scheduleLumioSave(); scheduleCloudSave();
         const rows = body.querySelectorAll('.cs-objective-text');
         rows[rows.length - 1]?.focus();
       });
@@ -1906,12 +1918,14 @@ function openCourseSettings(course, initialTab) {
         ti.mimeType = null;
         syncProjectFromCourse(course.id);
         renderBody();
+        scheduleLumioSave(); scheduleCloudSave();
         toast('Course thumbnail removed', '🗑️');
       });
       body.querySelector('#cs-thumb-reset').addEventListener('click', () => {
         course.thumbnailImage = defaultThumbnailImage();
         syncProjectFromCourse(course.id);
         renderBody();
+        scheduleLumioSave(); scheduleCloudSave();
         toast('Course thumbnail reset to default', '↩️');
       });
     }
@@ -2004,6 +2018,7 @@ function openCourseSettings(course, initialTab) {
         td.primary = p.primary; td.secondary = p.secondary; td.accent = p.accent;
         renderBody();
         refreshPreview();
+        scheduleLumioSave(); scheduleCloudSave();
       }));
       body.querySelector('#cs-primary').addEventListener('input', e => { td.primary = e.target.value; refreshPreviewCard(); refreshPreview(); });
       body.querySelector('#cs-secondary').addEventListener('input', e => { td.secondary = e.target.value; refreshPreviewCard(); refreshPreview(); });
@@ -2022,6 +2037,7 @@ function openCourseSettings(course, initialTab) {
           btn.classList.add('active');
           refreshPreviewCard();
           refreshPreview();
+          scheduleLumioSave(); scheduleCloudSave();
         }));
       }
       bindSeg('cs-fontsize', 'fontSizeId');
@@ -2047,6 +2063,7 @@ function openCourseSettings(course, initialTab) {
         course.landingLayout = card.dataset.layout;
         renderBody();
         renderCourseLanding(course.id);
+        scheduleLumioSave(); scheduleCloudSave();
       }));
     }
 
@@ -2192,12 +2209,14 @@ function openCourseSettings(course, initialTab) {
         hi.mimeType = null;
         renderBody();
         renderCourseLanding(course.id);
+        scheduleLumioSave(); scheduleCloudSave();
         toast('Hero image removed', '🗑️');
       });
       body.querySelector('#cs-hero-reset').addEventListener('click', () => {
         course.heroImage = defaultHeroImage();
         renderBody();
         renderCourseLanding(course.id);
+        scheduleLumioSave(); scheduleCloudSave();
         toast('Hero image reset to default', '↩️');
       });
 
@@ -2235,6 +2254,7 @@ function openCourseSettings(course, initialTab) {
             body.querySelectorAll(`#${id} button`).forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
           }
+          scheduleLumioSave(); scheduleCloudSave();
         }));
       }
       bindSeg('cs-height', v => hs.height = v);
