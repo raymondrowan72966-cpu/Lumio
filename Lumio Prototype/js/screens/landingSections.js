@@ -17,7 +17,7 @@ const LANDING_SECTION_DEFAULTS = {
     headingText: '',
     headingFont: '', headingFontSize: 13, headingColor: '', headingAlign: 'left', headingWeight: '700',
     textFont: '', textFontSize: 14, textColor: '', bold: false, italic: false, underline: false, textAlign: 'left',
-    bg: '', border: '', radius: '', iconColor: '',
+    bg: '', border: '', radius: '', iconColor: '', iconImage: '', pulseColor: '',
   },
   courseStructure: {
     headingText: '',
@@ -132,9 +132,13 @@ function renderNavTipsSection(course, navTips) {
   ensureLandingStyles(course);
   const style = course.landingStyles.navTips;
   const heading = style.headingText || (typeof L === 'function' ? L('landing.navtips_heading') : LANDING_SECTION_DEFAULTS.navTips.headingText);
+  const pulseStyle = style.pulseColor ? ` --nav-tips-pulse-color:${style.pulseColor};` : '';
+  const iconContent = style.iconImage
+    ? `<img src="${AssetStore.resolveMediaSrc(style.iconImage)}" style="width:20px; height:20px; object-fit:contain;" alt="" />`
+    : '🧭';
   return `
     <div class="ai-card mt-32 fade-in" style="${landingNavTipsPanelStyle(style)}">
-      <div class="ai-spark" style="${landingNavTipsIconStyle(style)}">🧭</div>
+      <div class="ai-spark" style="${landingNavTipsIconStyle(style)}${pulseStyle}">${iconContent}</div>
       <div>
         <strong style="${landingHeadingStyle(style)}">${heading}</strong>
         <p class="text-sm mt-8" style="${landingTextStyle(style)}">${navTips}</p>
@@ -231,7 +235,7 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
       </div>
     </div>
 
-    <div class="prop-section" style="border-bottom:none;">
+    <div class="prop-section" ${sectionKey === 'navTips' ? '' : 'style="border-bottom:none;"'}>
       <div class="prop-section-title">Panel Appearance</div>
       <div class="field">
         <label>Background Colour</label>
@@ -260,6 +264,28 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
         </div>
       </div>` : ''}
     </div>
+
+    ${sectionKey === 'navTips' ? `
+    <div class="prop-section">
+      <div class="prop-section-title">Custom Icon</div>
+      <div class="flex items-center gap-12 mt-8" style="flex-wrap:wrap; row-gap:8px;">
+        <div style="width:40px; height:40px; border-radius:50%; overflow:hidden; background:${style.iconColor || 'var(--theme-accent, var(--cyan))'}; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:18px;">
+          ${style.iconImage ? `<img src="${AssetStore.resolveMediaSrc(style.iconImage)}" style="width:24px; height:24px; object-fit:contain;" alt="" />` : '🧭'}
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" id="ls-navtips-icon-upload">${style.iconImage ? 'Replace Icon' : 'Upload Icon'}</button>
+          ${style.iconImage ? `<button class="btn btn-ghost btn-sm text-destructive" id="ls-navtips-icon-remove">Remove</button>` : ''}
+        </div>
+      </div>
+      <p class="text-sm text-muted mt-8">Replaces the default 🧭 icon. Remove to restore it.</p>
+    </div>
+    <div class="prop-section" style="border-bottom:none;">
+      <div class="prop-section-title">Pulse Colour</div>
+      <div class="color-input-row">
+        <input type="color" id="ls-navtips-pulse-color" value="${style.pulseColor || '#06B6D4'}" />
+        <button class="btn btn-ghost btn-sm" id="ls-navtips-pulse-reset">Restore default</button>
+      </div>
+    </div>` : ''}
   `;
 
   const refresh = () => renderCourseLanding(course.id);
@@ -305,4 +331,30 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
   });
   body.querySelector('#ls-icon-color')?.addEventListener('input', e => { style.iconColor = e.target.value; refresh(); });
   body.querySelector('#ls-icon-reset')?.addEventListener('click', () => { style.iconColor = ''; renderBody(); refresh(); });
+
+  body.querySelector('#ls-navtips-icon-upload')?.addEventListener('click', () => {
+    openMediaPicker({
+      title: 'Navigation Tips Icon',
+      kind: 'image',
+      currentSrc: style.iconImage || null,
+      currentFileName: null,
+      onInsert: result => {
+        style.iconImage = result.src;
+        renderBody(); refresh();
+        scheduleLumioSave(); scheduleCloudSave();
+      },
+      onRemove: () => {
+        style.iconImage = '';
+        renderBody(); refresh();
+        scheduleLumioSave(); scheduleCloudSave();
+      },
+    });
+  });
+  body.querySelector('#ls-navtips-icon-remove')?.addEventListener('click', () => {
+    style.iconImage = '';
+    renderBody(); refresh();
+    scheduleLumioSave(); scheduleCloudSave();
+  });
+  body.querySelector('#ls-navtips-pulse-color')?.addEventListener('input', e => { style.pulseColor = e.target.value; refresh(); });
+  body.querySelector('#ls-navtips-pulse-reset')?.addEventListener('click', () => { style.pulseColor = ''; renderBody(); refresh(); });
 }
