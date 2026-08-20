@@ -8052,8 +8052,16 @@ function bindBuilderEvents(course, lesson, blocks) {
   app.querySelector('#link-objective')?.addEventListener('click', () => {
     if (!course) return;
     const current = Array.isArray(lesson.objectiveIndices) ? lesson.objectiveIndices : lesson.objectiveIndex != null ? [lesson.objectiveIndex] : [];
+    // Route the modal to the active course theme. The modal is appended to
+    // document.body, outside applyThemeVars() scope, so --theme-* vars are
+    // not inherited. Setting --ws-primary/gradient on the .modal element
+    // causes btn-primary and accent-color to resolve to course colours.
+    const _td = course.themeDesign || {};
+    const _olThemeVars = _td.primary
+      ? `--ws-primary:${_td.primary};--ws-secondary:${_td.secondary};--ws-accent:${_td.accent};--ws-gradient:linear-gradient(90deg,${_td.primary} 0%,${_td.secondary} 55%,${_td.accent} 100%);--theme-primary:${_td.primary};--theme-secondary:${_td.secondary};--theme-accent:${_td.accent};`
+      : '';
     const overlay = el(`
-      <div class="overlay"><div class="modal" style="width:420px; padding:24px;">
+      <div class="overlay"><div class="modal" style="width:420px; padding:24px; ${_olThemeVars}">
         <h3 style="font-size:16px;">Link objectives</h3>
         <div class="flex-col gap-4 mt-16">
           ${course.objectives.map((o, i) => `

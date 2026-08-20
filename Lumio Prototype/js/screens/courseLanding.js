@@ -873,8 +873,10 @@ function insertAssessment(course) {
 }
 
 function layoutThumbFrame(layoutId) {
-  const grad = 'linear-gradient(135deg, var(--violet), var(--cyan))';
-  const text = 'background: var(--pastel-lavender);';
+  // Uses --theme-primary/accent which resolve correctly inside the Course
+  // Settings modal (where _syncModalTheme() has applied course theme vars).
+  const grad = 'linear-gradient(135deg, var(--theme-primary, var(--violet)), var(--theme-accent, var(--cyan)))';
+  const text = 'background: color-mix(in srgb, var(--theme-secondary, var(--indigo)) 15%, white);';
   switch (layoutId) {
     case 'B':
       return `<div class="lt-frame"><div class="lt-block" style="flex:1; ${text}"></div><div class="lt-block" style="flex:1; background:${grad};"></div></div>`;
@@ -1269,7 +1271,7 @@ function openTranslationModal(course) {
       if (f) { importFile = f; lastValidation = null; renderModal(); }
     });
 
-    dropZone?.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--violet)'; });
+    dropZone?.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--ws-primary, var(--violet))'; });
     dropZone?.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
     dropZone?.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -1741,6 +1743,26 @@ function openCourseSettings(course, initialTab) {
   `);
   document.body.appendChild(overlay);
 
+  // Route the Course Settings modal to the active course theme.
+  // The modal lives on document.body, outside the applyThemeVars() scoped
+  // stylesheet, so CSS rules that use --ws-primary/gradient (tab active
+  // underlines, seg-control active buttons, btn-primary) would otherwise
+  // fall through to the platform (Lumio purple) palette.  Setting those vars
+  // directly on the .modal element causes all child rules to inherit the
+  // course colours without touching the global :root platform theme.
+  const _csModalEl = overlay.querySelector('.modal');
+  function _syncModalTheme() {
+    _csModalEl.style.setProperty('--ws-primary',   td.primary);
+    _csModalEl.style.setProperty('--ws-secondary', td.secondary);
+    _csModalEl.style.setProperty('--ws-accent',    td.accent);
+    _csModalEl.style.setProperty('--ws-gradient',
+      `linear-gradient(90deg,${td.primary} 0%,${td.secondary} 55%,${td.accent} 100%)`);
+    _csModalEl.style.setProperty('--theme-primary',   td.primary);
+    _csModalEl.style.setProperty('--theme-secondary', td.secondary);
+    _csModalEl.style.setProperty('--theme-accent',    td.accent);
+  }
+  _syncModalTheme();
+
   function renderBody() {
     const body = overlay.querySelector('#cs-body');
     if (SettingsUI.tab === 'details') {
@@ -2032,6 +2054,9 @@ function openCourseSettings(course, initialTab) {
       function refreshPreviewCard() {
         const card = body.querySelector('.theme-preview-card');
         if (card) card.setAttribute('style', themeVarStyle(td));
+        // Keep modal-level theme vars in sync so that active seg-control
+        // buttons and the Done button reflect the updated course colours.
+        _syncModalTheme();
       }
 
       function bindSeg(id, prop) {
@@ -2282,6 +2307,9 @@ function openCourseSettings(course, initialTab) {
     if (SettingsUI.tab === 'landing') {
       renderLandingSectionSettings(course, body, SettingsUI, renderBody);
     }
+
+    // Always re-sync after any render (tab switch, palette click, etc.).
+    _syncModalTheme();
   }
 
   overlay.querySelectorAll('#cs-tabs .tab').forEach(t => t.addEventListener('click', () => {
