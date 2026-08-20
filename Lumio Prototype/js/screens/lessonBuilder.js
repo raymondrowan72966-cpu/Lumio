@@ -1839,7 +1839,7 @@ function renderBlockContent(block, editable) {
       const rows = d.rows || DEFAULT_TABLE_ROWS;
       const cellAlign = d.cellAlign || [];
       const colWidths = d.colWidths || [];
-      const headerBg = ds.tableHeaderBg || 'var(--pastel-lavender)';
+      const headerBg = ds.tableHeaderBg || 'color-mix(in srgb, var(--theme-primary, #7C3AED) 12%, white)';
       const headerTextColor = ds.tableHeaderTextColor || '';
       const borderColor = ds.tableBorderColor || 'var(--border)';
       const bodyFill = ds.tableBodyFill || '';
@@ -2338,7 +2338,7 @@ function renderBlockContent(block, editable) {
       const animate = settings.hotspotAnimation !== false;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const imgWidth = ds.imageWidth ?? 100;
-      const markerColor = ds.markerColor || '#7C3AED';
+      const markerColor = ds.markerColor || resolveThemeColor('--theme-primary', '#7C3AED');
       const markerBorderColor = ds.markerBorderColor || '#ffffff';
       const markerSize = MARKER_SIZE_MAP[ds.markerSize] || MARKER_SIZE_MAP.md;
       const markerStyle = ds.markerStyle || 'numbers';
@@ -2763,8 +2763,12 @@ function formatChartValue(v) {
 
 /* Resolves the single-series accent colour for Bar/Line charts (Theme vs Custom Color). */
 function chartAccentColor(ds) {
-  return (ds.colorMode === 'custom' && ds.customColor) ? ds.customColor : '#7C3AED';
+  return (ds.colorMode === 'custom' && ds.customColor)
+    ? ds.customColor
+    : resolveThemeColor('--theme-primary', '#7C3AED');
 }
+
+const CHART_THEME_VARS = ['--theme-primary', '--theme-secondary', '--theme-accent'];
 
 /* Resolves a Pie segment's colour: per-segment override > custom palette (tinted) > theme palette. */
 function chartPieColor(ds, item, i) {
@@ -2772,6 +2776,7 @@ function chartPieColor(ds, item, i) {
   if (ds.colorMode === 'custom' && ds.customColor) {
     return `color-mix(in srgb, ${ds.customColor} ${Math.max(25, 100 - i * 16)}%, white)`;
   }
+  if (i < CHART_THEME_VARS.length) return resolveThemeColor(CHART_THEME_VARS[i], CHART_PALETTE[i]);
   return CHART_PALETTE[i % CHART_PALETTE.length];
 }
 
@@ -3261,7 +3266,7 @@ function renderTextBlockPanel(block, index) {
       <div class="prop-section-title">Table Style</div>
       <p class="text-sm text-muted mb-8">Header Background</p>
       <div class="flex items-center gap-8 mb-12">
-        <input type="color" class="design-color-input" data-prop="tableHeaderBg" value="${ds.tableHeaderBg || '#E4E1F9'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+        <input type="color" class="design-color-input" data-prop="tableHeaderBg" value="${ds.tableHeaderBg || resolveThemeColor('--theme-primary', '#7C3AED')}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
         <button class="btn btn-secondary btn-sm table-style-reset" data-prop="tableHeaderBg">Reset</button>
       </div>
       <p class="text-sm text-muted mb-8">Header Text Colour</p>
@@ -3555,7 +3560,7 @@ function renderListBlockPanel(block, index) {
         <p class="text-sm text-muted mb-8">Border Colour</p>
         <input type="color" class="input list-checkbox-border-color" value="${(ds.checkboxBorderColor && ds.checkboxBorderColor.startsWith('#')) ? ds.checkboxBorderColor : '#c4c4cc'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
         <p class="text-sm text-muted mb-8 mt-12">Tick Colour</p>
-        <input type="color" class="input list-checkbox-tick-color" value="${(ds.checkboxTickColor && ds.checkboxTickColor.startsWith('#')) ? ds.checkboxTickColor : '#7C3AED'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+        <input type="color" class="input list-checkbox-tick-color" value="${(ds.checkboxTickColor && ds.checkboxTickColor.startsWith('#')) ? ds.checkboxTickColor : resolveThemeColor('--theme-primary', '#7C3AED')}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
       </div>`;
   }
 
@@ -4543,6 +4548,18 @@ function colorSwatchInput(prop, value, label) {
   </div>`;
 }
 
+// Resolves a Course Theme CSS custom property to a hex string for use in
+// native <input type="color"> pickers and SVG fill/stroke attributes.
+// Reads from the themed canvas container where applyThemeVars() injects
+// --theme-* properties. Falls back to `fallback` when the element is absent.
+function resolveThemeColor(cssVar, fallback) {
+  const el = document.getElementById('lesson-canvas-wrap')
+           || document.querySelector('.lumio-learner-root')
+           || document.getElementById('lesson-canvas');
+  if (!el) return fallback;
+  return getComputedStyle(el).getPropertyValue(cssVar).trim() || fallback;
+}
+
 function lineDividerDesignFields(ds) {
   return `
     <div class="prop-section">
@@ -4584,7 +4601,7 @@ function numberedDividerDesignFields(ds) {
     </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker</div>
-      ${colorSwatchInput('markerFill', (ds.markerFill || '').startsWith('#') ? ds.markerFill : '#7C3AED', 'Fill colour')}
+      ${colorSwatchInput('markerFill', (ds.markerFill || '').startsWith('#') ? ds.markerFill : resolveThemeColor('--theme-primary', '#7C3AED'), 'Fill colour')}
       ${colorSwatchInput('markerBorderColor', ds.markerBorderColor || '#ffffff', 'Border colour')}
       ${colorSwatchInput('markerTextColor', ds.markerTextColor || '#ffffff', 'Text colour')}
       <label>Shape</label>
@@ -5023,7 +5040,7 @@ function blockTypeDesignFields(block, ds) {
         <div class="prop-section">
           <div class="prop-section-title">Badge Colour</div>
           <p class="text-sm text-muted mb-8">Colours only the small "Knowledge Check" header badge.</p>
-          <input type="color" class="input design-color-input" data-prop="kcBadgeColor" data-preview-target=".kc-badge" data-preview-prop="color" value="${(ds.kcBadgeColor && ds.kcBadgeColor.startsWith('#')) ? ds.kcBadgeColor : '#14B8A6'}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
+          <input type="color" class="input design-color-input" data-prop="kcBadgeColor" data-preview-target=".kc-badge" data-preview-prop="color" value="${(ds.kcBadgeColor && ds.kcBadgeColor.startsWith('#')) ? ds.kcBadgeColor : resolveThemeColor('--theme-accent', '#14B8A6')}" style="width:48px; height:32px; padding:2px; cursor:pointer;" />
         </div>
         ${interactiveBorderPaddingFields(ds)}`;
     case 'Text':
@@ -5651,7 +5668,7 @@ function labelledGraphicDesignFields(block, ds) {
     </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker Color</div>
-      <input type="color" class="design-color-input" data-prop="markerColor" value="${ds.markerColor || '#7C3AED'}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
+      <input type="color" class="design-color-input" data-prop="markerColor" value="${ds.markerColor || resolveThemeColor('--theme-primary', '#7C3AED')}" style="width:32px; height:32px; padding:0; border:1px solid var(--border); border-radius:6px; cursor:pointer;" />
     </div>
     <div class="prop-section">
       <div class="prop-section-title">Marker Border Color</div>
