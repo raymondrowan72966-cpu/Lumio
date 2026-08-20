@@ -3584,7 +3584,27 @@ function navigate(hash) {
   window.scrollTo(0, 0);
 }
 
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', function (e) {
+  // Flush any pending dirty cloud saves when navigating away from a course or
+  // lesson screen. Without this, a user who edits the landing page and
+  // immediately clicks "Back to Projects" would lose changes that are still
+  // sitting in the 2-second cloud-save debounce window.
+  //
+  // Calling _flushDirtyCloudSaves() here collapses that debounce to 0 ms on
+  // every outbound course/lesson navigation so the save fires before the
+  // projects list renders.  saveLumioState() is called first so the
+  // localStorage cache is also immediately consistent.
+  if (_dirtyProjects.size > 0) {
+    const oldPath = typeof e.oldURL === 'string'
+      ? (e.oldURL.split('#/')[1] || '').split('/')[0]
+      : '';
+    if (oldPath === 'course' || oldPath === 'lesson') {
+      saveLumioState();
+      _flushDirtyCloudSaves();
+    }
+  }
+  render();
+});
 window.addEventListener('DOMContentLoaded', async () => {
   const restoredHash = loadLumioState();
   ensureStableBlockIdentity();

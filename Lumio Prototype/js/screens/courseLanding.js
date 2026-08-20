@@ -1909,6 +1909,10 @@ function openCourseSettings(course, initialTab) {
           syncProjectFromCourse(course.id);
           renderBody();
           toast('Course thumbnail updated', '🖼️');
+          // readHeroImageFile is async (FileReader). The 'change' event already
+          // triggered _onUserEdit, but state was not yet updated at that point.
+          // Re-mark dirty here so the scheduled cloud save includes the new image.
+          markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave();
         });
         e.target.value = '';
       });
@@ -2200,6 +2204,10 @@ function openCourseSettings(course, initialTab) {
           renderBody();
           renderCourseLanding(course.id);
           toast('Hero image updated', '🖼️');
+          // readHeroImageFile is async (FileReader). The 'change' event already
+          // triggered _onUserEdit, but state was not yet updated at that point.
+          // Re-mark dirty here so the scheduled cloud save includes the new image.
+          markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave();
         });
         e.target.value = '';
       });
@@ -2283,13 +2291,24 @@ function openCourseSettings(course, initialTab) {
     renderBody();
   }));
 
-  overlay.querySelector('#cs-close').addEventListener('click', () => overlay.remove());
-  overlay.querySelector('#cs-done').addEventListener('click', () => {
+  function _csClose() {
+    // Flush any pending edits to localStorage and ensure the cloud save is
+    // scheduled before the modal is removed.  Input/change events already called
+    // markProjectDirty + scheduleCloudSave with a 2-second debounce; calling
+    // scheduleCloudSave() here re-affirms that schedule without resetting the
+    // dirty flag (markProjectDirty is NOT called here — if the project is not
+    // already dirty it means no change was made and no save should trigger).
+    if (typeof scheduleLumioSave === 'function') scheduleLumioSave();
+    if (typeof scheduleCloudSave === 'function') scheduleCloudSave();
     overlay.remove();
+  }
+  overlay.querySelector('#cs-close').addEventListener('click', _csClose);
+  overlay.querySelector('#cs-done').addEventListener('click', () => {
+    _csClose();
     renderCourseLanding(course.id);
     toast('Course settings saved', '✅');
   });
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) _csClose(); });
 
   renderBody();
 }
