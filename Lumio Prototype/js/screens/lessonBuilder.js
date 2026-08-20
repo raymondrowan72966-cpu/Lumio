@@ -8167,6 +8167,13 @@ function flashSaveStatus() {
   if (!status) return;
   status.innerHTML = `Saving…`;
   clearTimeout(window._saveTimeout);
+  // Mark the lesson's parent course dirty so the cloud save is permitted.
+  // flashSaveStatus() is called from drag/click handlers that don't emit
+  // input/change events (e.g. hotspot drag, rich-text colour picker), so
+  // the global _onUserEdit listener won't have fired for these interactions.
+  if (typeof markProjectDirty === 'function' && LumioState.currentCourseId) {
+    markProjectDirty(LumioState.currentCourseId);
+  }
   if (typeof scheduleCloudSave === 'function') scheduleCloudSave();
   // For cloud users, scheduleCloudSave() updates status to "Saved ✓" on completion (~2–3 s).
   // For non-cloud/localhost users it is a no-op, so fall back to a short cosmetic update.

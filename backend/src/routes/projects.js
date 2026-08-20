@@ -143,7 +143,50 @@ async function handleUpdate(request, params, ctx) {
   });
 
   if (course) {
-    await repo.upsertCourse(params.id, { ...course, workspaceId: ctx.auth.currentWorkspace.id });
+    const expectedRevision = body.expectedRevision != null ? Number(body.expectedRevision) : null;
+
+    // Enforce revision guard for existing courses.
+    // A course that already exists in D1 MUST supply expectedRevision so the
+    // atomic WHERE clause can protect against a stale write from another device.
+    // The only path that omits expectedRevision is the very first save of a
+    // brand-new course that has never been written to D1.
+    if (expectedRevision == null) {
+      const existingCourse = await repo.getCourse(params.id);
+      if (existingCourse) {
+        // Course exists but client sent no revision — reject to prevent a stale
+        // localStorage snapshot from silently overwriting a newer cloud version.
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'CONFLICT',
+              message: 'expectedRevision is required when updating an existing course.',
+              details: { currentRevision: existingCourse.revision },
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
+    const ok = await repo.upsertCourse(
+      params.id,
+      { ...course, workspaceId: ctx.auth.currentWorkspace.id },
+      expectedRevision,
+    );
+    if (!ok) {
+      // Atomic UPDATE found revision mismatch — another device wrote more recently.
+      const currentCourse = await repo.getCourse(params.id);
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'CONFLICT',
+            message: 'A newer version of this project exists in the cloud.',
+            details: { currentRevision: currentCourse ? currentCourse.revision : null },
+          },
+        }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
     const allLessons = [...(course.lessons || []), ...(course.assessments || [])];
     const keepIds    = allLessons.map(l => l.id);
     await _persistLessons(repo, params.id, ctx.auth.currentWorkspace.id, course, lessons || {});

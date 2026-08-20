@@ -303,9 +303,9 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
     refresh();
   });
   body.querySelector('#ls-heading-color').addEventListener('input', e => { style.headingColor = e.target.value; refresh(); });
-  body.querySelector('#ls-heading-color-reset').addEventListener('click', () => { style.headingColor = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
-  body.querySelectorAll('#ls-heading-align button').forEach(btn => btn.addEventListener('click', () => { style.headingAlign = btn.dataset.val; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); }));
-  body.querySelectorAll('#ls-heading-weight button').forEach(btn => btn.addEventListener('click', () => { style.headingWeight = btn.dataset.val; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); }));
+  body.querySelector('#ls-heading-color-reset').addEventListener('click', () => { style.headingColor = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelectorAll('#ls-heading-align button').forEach(btn => btn.addEventListener('click', () => { style.headingAlign = btn.dataset.val; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); }));
+  body.querySelectorAll('#ls-heading-weight button').forEach(btn => btn.addEventListener('click', () => { style.headingWeight = btn.dataset.val; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); }));
 
   body.querySelector('#ls-text-font').addEventListener('change', e => { style.textFont = e.target.value; refresh(); });
   body.querySelector('#ls-text-size').addEventListener('input', e => {
@@ -314,23 +314,23 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
     refresh();
   });
   body.querySelector('#ls-text-color').addEventListener('input', e => { style.textColor = e.target.value; refresh(); });
-  body.querySelector('#ls-text-color-reset').addEventListener('click', () => { style.textColor = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelector('#ls-text-color-reset').addEventListener('click', () => { style.textColor = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
   body.querySelector('#ls-text-bold').addEventListener('change', e => { style.bold = e.target.checked; refresh(); });
   body.querySelector('#ls-text-italic').addEventListener('change', e => { style.italic = e.target.checked; refresh(); });
   body.querySelector('#ls-text-underline').addEventListener('change', e => { style.underline = e.target.checked; refresh(); });
-  body.querySelectorAll('#ls-text-align button').forEach(btn => btn.addEventListener('click', () => { style.textAlign = btn.dataset.val; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); }));
+  body.querySelectorAll('#ls-text-align button').forEach(btn => btn.addEventListener('click', () => { style.textAlign = btn.dataset.val; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); }));
 
   body.querySelector('#ls-bg-color').addEventListener('input', e => { style.bg = e.target.value; refresh(); });
-  body.querySelector('#ls-bg-reset').addEventListener('click', () => { style.bg = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelector('#ls-bg-reset').addEventListener('click', () => { style.bg = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
   body.querySelector('#ls-border-color').addEventListener('input', e => { style.border = e.target.value; refresh(); });
-  body.querySelector('#ls-border-reset').addEventListener('click', () => { style.border = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelector('#ls-border-reset').addEventListener('click', () => { style.border = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
   body.querySelector('#ls-radius').addEventListener('input', e => {
     style.radius = e.target.value + 'px';
     body.querySelector('#ls-radius').closest('.field').querySelector('label').textContent = `Border Radius — ${e.target.value}px`;
     refresh();
   });
   body.querySelector('#ls-icon-color')?.addEventListener('input', e => { style.iconColor = e.target.value; refresh(); });
-  body.querySelector('#ls-icon-reset')?.addEventListener('click', () => { style.iconColor = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelector('#ls-icon-reset')?.addEventListener('click', () => { style.iconColor = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
 
   body.querySelector('#ls-navtips-icon-upload')?.addEventListener('click', () => {
     openMediaPicker({
@@ -341,20 +341,20 @@ function renderLandingSectionSettings(course, body, SettingsUI, renderBody) {
       onInsert: result => {
         style.iconImage = result.src;
         renderBody(); refresh();
-        scheduleLumioSave(); scheduleCloudSave();
+        markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave();
       },
       onRemove: () => {
         style.iconImage = '';
         renderBody(); refresh();
-        scheduleLumioSave(); scheduleCloudSave();
+        markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave();
       },
     });
   });
   body.querySelector('#ls-navtips-icon-remove')?.addEventListener('click', () => {
     style.iconImage = '';
     renderBody(); refresh();
-    scheduleLumioSave(); scheduleCloudSave();
+    markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave();
   });
   body.querySelector('#ls-navtips-pulse-color')?.addEventListener('input', e => { style.pulseColor = e.target.value; refresh(); });
-  body.querySelector('#ls-navtips-pulse-reset')?.addEventListener('click', () => { style.pulseColor = ''; renderBody(); refresh(); scheduleLumioSave(); scheduleCloudSave(); });
+  body.querySelector('#ls-navtips-pulse-reset')?.addEventListener('click', () => { style.pulseColor = ''; renderBody(); refresh(); markProjectDirty(LumioState.currentCourseId); scheduleLumioSave(); scheduleCloudSave(); });
 }

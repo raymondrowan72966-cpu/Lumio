@@ -162,47 +162,85 @@ export class ProjectRepository {
     return row ? rowToCourse(row) : null;
   }
 
-  async upsertCourse(projectId, data) {
+  /**
+   * Write a course row with revision protection.
+   *
+   * When `expectedRevision` is provided the UPDATE is atomic:
+   *
+   *   UPDATE courses SET …, revision = revision + 1
+   *   WHERE id = ? AND revision = ?
+   *
+   * D1's `meta.changes` tells us whether the WHERE clause matched:
+   *   1 → success; 0 → revision mismatch (conflict) or row doesn't exist.
+   *
+   * When `expectedRevision` is null the caller must ensure the row does not
+   * yet exist in D1 (first INSERT for a brand-new project). If the row
+   * already exists and no expectedRevision was supplied, the route layer
+   * returns HTTP 409 before ever calling this method.
+   *
+   * @param {string} projectId
+   * @param {object} data
+   * @param {number|null} expectedRevision
+   * @returns {Promise<boolean>} false = conflict (caller should HTTP 409)
+   */
+  async upsertCourse(projectId, data, expectedRevision = null) {
     const now = Date.now();
+
+    const fields = [
+      data.title || '',
+      data.description || null,
+      data.audience || null,
+      data.duration || null,
+      JSON.stringify(data.objectives || []),
+      JSON.stringify(data.learnerOutcomes || []),
+      data.themeId || null,
+      JSON.stringify(data.themeDesign || {}),
+      data.landingLayout || 'A',
+      JSON.stringify(data.heroImage || {}),
+      JSON.stringify(data.heroSettings || {}),
+      data.labelSet || null,
+    ];
+
+    if (expectedRevision != null) {
+      // Atomic compare-and-swap: the WHERE revision = ? clause guarantees
+      // that only one concurrent writer can succeed per revision value.
+      // Two devices that both read revision 10 will race here; exactly one
+      // UPDATE will match (changes = 1) and the other will find changes = 0.
+      const result = await this._db.run(
+        `UPDATE courses
+         SET title = ?, description = ?, audience = ?, duration = ?,
+             objectives = ?, learner_outcomes = ?, theme_id = ?,
+             theme_design = ?, landing_layout = ?, hero_image = ?,
+             hero_settings = ?, label_set = ?,
+             revision = revision + 1,
+             updated_at = ?
+         WHERE id = ? AND revision = ?`,
+        [...fields, now, projectId, expectedRevision],
+      );
+      // meta.changes = 0 means either no row exists or revision didn't match.
+      if (result.meta.changes === 0) return false; // conflict
+      return true;
+    }
+
+    // No expectedRevision supplied — caller guarantees this is an INSERT for a
+    // brand-new course. Use INSERT OR IGNORE so a race (two tabs creating the
+    // same new project simultaneously) is idempotent rather than throwing.
     await this._db.run(
-      `INSERT INTO courses
+      `INSERT OR IGNORE INTO courses
          (id, workspace_id, title, description, audience, duration,
           objectives, learner_outcomes, theme_id, theme_design,
-          landing_layout, hero_image, hero_settings, label_set, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         title            = excluded.title,
-         description      = excluded.description,
-         audience         = excluded.audience,
-         duration         = excluded.duration,
-         objectives       = excluded.objectives,
-         learner_outcomes = excluded.learner_outcomes,
-         theme_id         = excluded.theme_id,
-         theme_design     = excluded.theme_design,
-         landing_layout   = excluded.landing_layout,
-         hero_image       = excluded.hero_image,
-         hero_settings    = excluded.hero_settings,
-         label_set        = excluded.label_set,
-         updated_at       = excluded.updated_at`,
+          landing_layout, hero_image, hero_settings, label_set,
+          revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         projectId,
         data.workspaceId,
-        data.title || '',
-        data.description || null,
-        data.audience || null,
-        data.duration || null,
-        JSON.stringify(data.objectives || []),
-        JSON.stringify(data.learnerOutcomes || []),
-        data.themeId || null,
-        JSON.stringify(data.themeDesign || {}),
-        data.landingLayout || 'A',
-        JSON.stringify(data.heroImage || {}),
-        JSON.stringify(data.heroSettings || {}),
-        data.labelSet || null,
+        ...fields,
         now,
         now,
       ],
     );
+    return true;
   }
 
   // ── Lessons ───────────────────────────────────────────────────────────────
@@ -295,6 +333,7 @@ function rowToCourse(row) {
     heroImage:      _parseJson(row.hero_image, null),
     heroSettings:   _parseJson(row.hero_settings, null),
     labelSet:       row.label_set || null,
+    revision:       row.revision != null ? row.revision : 1,
   };
 }
 

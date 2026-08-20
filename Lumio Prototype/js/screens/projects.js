@@ -617,6 +617,7 @@ function openProjectMenu(btn, id) {
       if (!result.ok) { if (result.modal) { await alertModal(result.reason); } else { toast(result.reason, platformIcon('warning')); } return; }
       renderProjects();
       toast(`"${projectDisplayTitle(p)}" → ${PROJECT_STATUS_LABELS[p.status]}`, platformIcon('success'));
+      markProjectDirty(p.id);
       cloudPersistProject(p.id);
     });
   });
@@ -631,6 +632,7 @@ function openProjectMenu(btn, id) {
       closePopovers();
       renderProjects();
       scheduleLumioSave();
+      markProjectDirty(p.id);
       cloudPersistProject(p.id);
       NotifySystem.notify({ message: `Moved "${projectDisplayTitle(p)}" to ${opt.dataset.folder ? LumioState.folders.find(f=>f.id===opt.dataset.folder).name : 'Uncategorized'}`, type: 'success' });
     });
@@ -795,7 +797,7 @@ function confirmDeleteFolder(folderId) {
     if (LumioState.currentFolder === folderId) LumioState.currentFolder = null;
     scheduleLumioSave();
     cloudSyncWorkspace('folders');
-    affected.forEach(p => cloudPersistProject(p.id));
+    affected.forEach(p => { markProjectDirty(p.id); cloudPersistProject(p.id); });
     overlay.remove();
     renderProjects();
     toast('Folder deleted', platformIcon('delete'));

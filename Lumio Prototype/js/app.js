@@ -420,6 +420,9 @@ const LumioAuth = (function () {
     // no separate LumioState.currentUser mirror that could otherwise hold
     // stale data in the window before the next login.
     LumioState.session = { currentUserId: null, currentWorkspaceId: null, rememberMe: false };
+    // Fix A: clear workspace-scoped appearance state so it cannot bleed into
+    // the next user's session on the same browser via localStorage.
+    LumioState.workspaceIdentity = null;
     try { sessionStorage.removeItem(SESSION_TAB_MARKER); } catch (e) {}
     saveLumioState(); // immediate flush — see _establishSession for why logout can't wait on the debounce
   }
@@ -1715,6 +1718,22 @@ function loadLumioState() {
       }
     });
 
+    // Account isolation: if the stored session's userId does not match the
+    // current in-memory session (set before loadLumioState via LumioSession),
+    // the cache belongs to a different user on the same browser.  Discard
+    // course/lesson content so it cannot be shown to or saved under the wrong
+    // account.  Projects and workspace resources are refreshed from D1 anyway;
+    // this guard stops stale _course content_ from crossing account boundaries.
+    const storedUserId  = state.session && state.session.currentUserId;
+    const currentUserId = LumioState.session && LumioState.session.currentUserId;
+    if (storedUserId && currentUserId && storedUserId !== currentUserId) {
+      console.warn('[Lumio] localStorage belongs to a different user — discarding course/lesson cache.');
+      LumioState.courses = {};
+      LumioState.lessons = {};
+      // Don't restore the hash — it pointed at the other user's content.
+      return null;
+    }
+
     // Snapshot of ids this tab knew about at boot, for _mergeAuthCriticalArrays:
     // a record missing from this tab's in-memory array that WAS already known
     // at boot is a deliberate deletion by this tab and must stay deleted; a
@@ -1776,8 +1795,24 @@ function scheduleLumioSave() {
   lumioSaveTimer = setTimeout(saveLumioState, 400);
 }
 
+// ── Dirty-state tracking ────────────────────────────────────────────────────
+// A project is "dirty" only when the current device has made a user-initiated
+// edit since the last successful cloud load or cloud save.  On startup the set
+// is empty, so a freshly loaded localStorage cache can never trigger a
+// spurious cloud save and overwrite a newer cloud version.
+const _dirtyProjects = new Set();
+
+function markProjectDirty(courseId) {
+  if (courseId) _dirtyProjects.add(courseId);
+}
+
+function _clearProjectDirty(courseId) {
+  _dirtyProjects.delete(courseId);
+}
+
 // Debounced cloud auto-save for course/lesson editing.
-// Fires 2 s after the last edit; no-ops on non-course screens.
+// Fires 2 s after the last edit; no-ops on non-course screens or when the
+// project has not been dirtied by a user action on this device.
 let _cloudSaveTimer = null;
 let _cloudSaveGen   = 0; // generation counter — prevents stale responses updating UI
 function scheduleCloudSave() {
@@ -1787,6 +1822,9 @@ function scheduleCloudSave() {
   if (parts[0] === 'course' && parts[1]) courseId = parts[1];
   else if (parts[0] === 'lesson' && LumioState.currentCourseId) courseId = LumioState.currentCourseId;
   if (!courseId) return;
+  // Guard: only cloud-save when this device has an unsaved local edit.
+  // Callers are responsible for calling markProjectDirty() before this.
+  if (!_dirtyProjects.has(courseId)) return;
 
   if (_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
   const gen = ++_cloudSaveGen;
@@ -1815,6 +1853,7 @@ function scheduleCloudSave() {
  * @param {string} courseId  — project/course id that was mutated
  */
 function persistCourse(courseId) {
+  markProjectDirty(courseId);
   scheduleLumioSave();
   return cloudPersistProject(courseId);
 }
@@ -2926,7 +2965,13 @@ async function _loadCloudWorkspace() {
         if (def.singleton) {
           // Unwrap: server returns { [SINGLETON_KEY]: item } — store the item directly.
           const serverValue = serverItems[WORKSPACE_SINGLETON_KEY];
-          if (serverValue) LumioState[def.stateKey] = serverValue;
+          if (serverValue) {
+            LumioState[def.stateKey] = serverValue;
+          } else {
+            // Fix B: no record exists for this workspace — explicitly clear any
+            // stale state rather than letting a prior user's localStorage value persist.
+            LumioState[def.stateKey] = null;
+          }
         } else {
           LumioState[def.stateKey] = def.fromMap ? def.fromMap(serverItems) : serverItems;
         }
@@ -3022,7 +3067,11 @@ async function _cloudLoadCourse(id) {
   try {
     const full = await LumioAPI.projects.get(id);
     if (full && full.course) {
-      LumioState.courses[id] = _cloudCourseToState(full.course);
+      const courseState = _cloudCourseToState(full.course);
+      // Store the cloud revision so cloudPersistProject() can send it back as
+      // expectedRevision, enabling the backend to reject stale writes (409).
+      courseState._cloudRevision = full.course.revision != null ? full.course.revision : 1;
+      LumioState.courses[id] = courseState;
       Object.assign(LumioState.lessons, full.lessons || {});
     }
   } catch (err) {
@@ -3077,30 +3126,70 @@ async function cloudPersistProject(id) {
   if (!isCloudUser()) return;
   const p = LumioState.projects.find(function (x) { return x.id === id; });
   if (!p || p.deleted) return;
+  // Guard: only write to cloud when this device has an unsaved local edit.
+  if (!_dirtyProjects.has(id)) return;
 
   const payload = _buildCloudPayload(p);
+  const course  = LumioState.courses[id];
 
   try {
     if (p._cloud) {
-      await LumioAPI.projects.update(id, {
+      // Safety check: if we have no stored cloud revision, we must fetch the
+      // current one before writing. Sending without a revision would bypass
+      // the server's conflict guard and risk overwriting a newer cloud version.
+      if (course && course._cloudRevision == null) {
+        try {
+          const full = await LumioAPI.projects.get(id);
+          if (full && full.course && full.course.revision != null) {
+            course._cloudRevision = full.course.revision;
+          } else {
+            // Cloud has no course yet — we can proceed as if brand-new.
+            course._cloudRevision = undefined; // keep undefined so body omits it
+          }
+        } catch (_fetchErr) {
+          console.warn('[Lumio] Cannot verify cloud revision for project', id, '— save postponed.');
+          toast('Could not verify cloud version — save postponed. Retry in a moment.', '⚠️');
+          return;
+        }
+      }
+
+      const body = {
         project: {
           title:          payload.title,
           status:         payload.status,
           health:         payload.health,
           folderId:       payload.folderId,
           lastAccessedAt: p.lastAccessed || Date.now(),
-          labelSet:       (LumioState.courses[id] || {}).labelSet || null,
+          labelSet:       (course || {}).labelSet || null,
         },
         folder:  payload.folder,
         course:  payload.course,
         lessons: payload.lessons,
-      });
+      };
+      // Attach revision token so the backend can perform the atomic check.
+      if (course && course._cloudRevision != null) {
+        body.expectedRevision = course._cloudRevision;
+      }
+      await LumioAPI.projects.update(id, body);
+      // Backend incremented revision by 1 on success — mirror that locally so
+      // the next save sends the correct expectedRevision without a round-trip.
+      if (course && course._cloudRevision != null) {
+        course._cloudRevision += 1;
+      }
     } else {
       await LumioAPI.projects.create(payload);
       p._cloud = true;
+      // Store revision = 1 for the newly-created course.
+      if (course) course._cloudRevision = 1;
     }
+    _clearProjectDirty(id);
     saveLumioState();
   } catch (err) {
+    // HTTP 409 = conflict: another device wrote a newer version.
+    if (err && err.status === 409) {
+      _showConflictUI(id, err);
+      return;
+    }
     const msg = err && err.message
       ? err.message
       : (err && err.status ? 'Server error ' + err.status : 'Check your connection');
@@ -3111,11 +3200,84 @@ async function cloudPersistProject(id) {
 
   // Upload any locally-stored assets that haven't been synced to R2 yet.
   // Fire-and-forget — asset sync failure does not roll back the project save.
-  const course  = LumioState.courses[id];
   const lessons = payload.lessons;
   const refs    = _collectProjectAssetRefs(course, Object.values(lessons || {}));
   _cloudSyncAssets(id, refs).catch(function (err) {
     console.warn('[Lumio] Asset sync failed for project', id, err);
+  });
+}
+
+/**
+ * Show a conflict resolution modal when cloudPersistProject() receives a 409.
+ *
+ * "Load cloud version" — discards local unsynced edits, loads authoritative
+ *   cloud state, clears dirty flag.
+ *
+ * "Keep my changes" — fetches the CURRENT cloud revision to use as the new
+ *   expectedRevision base, then retries a fully-guarded save.  This is NOT
+ *   a force-write: the server still performs the atomic revision check.  If
+ *   another device writes between the fetch and the retry, another 409 fires.
+ *
+ * There is NO force-write bypass.  The revision guard is always enforced.
+ */
+function _showConflictUI(courseId, _err) {
+  // Avoid stacking multiple conflict dialogs for the same project.
+  if (document.getElementById('lumio-conflict-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'lumio-conflict-overlay';
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="width:480px;max-width:92vw;padding:28px;">
+      <h3 style="font-size:16px;margin-bottom:8px;">Sync conflict detected</h3>
+      <p class="text-sm text-muted" style="margin-bottom:20px;">
+        Another device saved a newer version of this project to the cloud while
+        you were editing. Your local changes are preserved — choose how to proceed.
+      </p>
+      <div class="flex gap-12" style="justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="conflict-load-cloud">
+          Load cloud version
+        </button>
+        <button class="btn btn-primary btn-sm" id="conflict-keep-local">
+          Keep my changes
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#conflict-load-cloud').addEventListener('click', async () => {
+    overlay.remove();
+    // Discard local edits and replace with authoritative cloud state.
+    await _cloudLoadCourse(courseId);
+    _clearProjectDirty(courseId);
+    saveLumioState();
+    render();
+    toast('Loaded the latest cloud version.', 'ℹ️');
+  });
+
+  overlay.querySelector('#conflict-keep-local').addEventListener('click', async () => {
+    overlay.remove();
+    // Retrieve the current cloud revision so we can use it as the save base.
+    // This is NOT a force-write — the backend's atomic check still applies.
+    // If another device writes again before our retry, we will receive
+    // another 409 and the conflict UI will appear again.
+    try {
+      const full = await LumioAPI.projects.get(courseId);
+      if (full && full.course && full.course.revision != null) {
+        const localCourse = LumioState.courses[courseId];
+        if (localCourse) {
+          // Update the revision base to the current cloud value.
+          // Local course content (the user's edits) is untouched.
+          localCourse._cloudRevision = full.course.revision;
+        }
+        markProjectDirty(courseId);
+        await cloudPersistProject(courseId);
+      } else {
+        toast('Could not retrieve cloud version. Your changes remain locally saved.', '⚠️');
+      }
+    } catch (_fetchErr) {
+      toast('Could not reach the server. Your changes remain locally saved.', '⚠️');
+    }
   });
 }
 
@@ -3411,6 +3573,7 @@ function _restoreProjectPayload(payload) {
   renderProjects();
   toast(`"${payload.project.title}" imported`, '📥');
   // Persist to D1 asynchronously — failure is non-fatal (localStorage remains the fallback).
+  markProjectDirty(p.id);
   cloudPersistProject(p.id);
 }
 
@@ -3457,6 +3620,23 @@ window.addEventListener('DOMContentLoaded', async () => {
       applyWorkspaceIdentity();
       await _migrateBase64Logos();
       await _resolveLogoCache();
+
+      // Bug #2 fix: if the session is restoring directly into a course or
+      // lesson screen, eagerly fetch the authoritative course content from D1
+      // before render() runs. Without this, render() calls renderCourseLanding()
+      // using the stale localStorage snapshot, making the PC the "last writer"
+      // instead of the cloud.
+      {
+        const hashParts = (restoredHash || location.hash || '').replace('#/', '').split('/');
+        const hashScreen = hashParts[0];
+        let prefetchId = null;
+        if (hashScreen === 'course' && hashParts[1]) prefetchId = hashParts[1];
+        else if (hashScreen === 'lesson' && LumioState.currentCourseId) prefetchId = LumioState.currentCourseId;
+        if (prefetchId) {
+          const proj = LumioState.projects.find(function (x) { return x.id === prefetchId; });
+          if (proj && proj._cloud) await _cloudLoadCourse(prefetchId);
+        }
+      }
     } catch (_e) {
       // 401 = no active session; any other error = treat as unauthenticated.
       LumioSession.clear();
@@ -3485,20 +3665,118 @@ window.addEventListener('DOMContentLoaded', async () => {
   render();
   BlockMigration.validateAllLessons();
 
-  // Re-render mutates #app's contents; treat that as a signal that state may
-  // have changed and persist it (covers project/lesson/theme/assessment edits
-  // made via any screen, without needing per-action save calls).
-  new MutationObserver(() => { scheduleLumioSave(); scheduleCloudSave(); })
+  // Re-render mutates #app's contents — persist localStorage so the local
+  // cache stays consistent.  Cloud saves are driven by explicit user-action
+  // handlers (input/change events and explicit scheduleCoud/persistCourse
+  // calls), not by DOM mutations, to avoid marking a freshly loaded screen
+  // as dirty before the user has done anything.
+  new MutationObserver(() => { scheduleLumioSave(); })
     .observe(document.getElementById('app'), { childList: true, subtree: false });
 
   // Catches edits to inputs/textareas/selects that update state without
   // triggering a re-render (e.g. lesson content fields, title inputs).
-  // scheduleCloudSave() is a no-op on non-course/lesson screens.
-  document.addEventListener('input',  () => { scheduleLumioSave(); scheduleCloudSave(); }, true);
-  document.addEventListener('change', () => { scheduleLumioSave(); scheduleCloudSave(); }, true);
+  // input/change events are genuine user mutations — mark the course dirty
+  // so cloudPersistProject() is allowed to write to the cloud.
+  function _onUserEdit() {
+    const parts = (location.hash || '').replace('#/', '').split('/');
+    const id = parts[0] === 'course' ? parts[1]
+             : parts[0] === 'lesson' ? LumioState.currentCourseId
+             : null;
+    if (id) markProjectDirty(id);
+    scheduleLumioSave();
+    scheduleCloudSave();
+  }
+  document.addEventListener('input',  _onUserEdit, true);
+  document.addEventListener('change', _onUserEdit, true);
 });
 
 window.addEventListener('beforeunload', saveLumioState);
+
+// ---------------------------------------------------------------------------
+// Unload / visibility flush — eliminate the debounce data-loss window
+//
+// Two-layer strategy:
+//
+//  Layer 1 — visibilitychange (hidden): fires when the tab goes to the
+//    background (tab switch, minimize, mobile app-switch, navigate-away).
+//    The page is still alive at this point so we can await the full
+//    cloudPersistProject() path including revision fetch if needed.
+//    This is the PRIMARY flush mechanism and covers the vast majority of
+//    "user finishes editing then leaves" scenarios.
+//
+//  Layer 2 — pagehide: fires when the page is actually being destroyed
+//    (close, navigate, BFCache eviction).  At this point async operations
+//    may not complete, so we fire fetch() with keepalive:true for each
+//    dirty project that already has a known cloud revision.  keepalive
+//    requests survive page teardown up to the browser's body-size limit
+//    (~64 KB per spec; 1 MB in Chromium).
+//
+//    Projects with an unknown revision (_cloudRevision == null) are skipped
+//    in Layer 2 — we cannot write safely without a revision.  They were
+//    already attempted in Layer 1; any remaining gap is documented below.
+//
+//  Known remaining limitation:
+//    A brand-new project (_cloud = false) that has never been saved to D1
+//    cannot be flushed via keepalive PUT.  It requires a POST (create) which
+//    the keepalive path doesn't cover.  Such a project survives in
+//    localStorage and will be uploaded on the next session open.
+// ---------------------------------------------------------------------------
+
+/**
+ * Flush all dirty projects to the cloud using the normal guarded save path.
+ * Called from the visibilitychange handler while the page is still alive.
+ * Non-blocking — callers must not await this in unload handlers.
+ */
+async function _flushDirtyCloudSaves() {
+  if (!isCloudUser() || _dirtyProjects.size === 0) return;
+  // Snapshot the set so a concurrent clear during iteration is safe.
+  const ids = Array.from(_dirtyProjects);
+  for (let i = 0; i < ids.length; i++) {
+    await cloudPersistProject(ids[i]);
+  }
+}
+
+// Layer 1: page goes to background — full async flush while page is alive.
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') {
+    _flushDirtyCloudSaves();
+  }
+});
+
+// Layer 2: page is being destroyed — keepalive fetch for revision-known projects.
+window.addEventListener('pagehide', function () {
+  saveLumioState(); // always sync localStorage on exit
+  if (!isCloudUser() || _dirtyProjects.size === 0) return;
+
+  _dirtyProjects.forEach(function (id) {
+    const p = LumioState.projects.find(function (x) { return x.id === id; });
+    if (!p || p.deleted || !p._cloud) return; // skip new (uncreated) projects
+
+    const course = LumioState.courses[id];
+    // Cannot safely write without a stored revision — skip to avoid stale overwrite.
+    if (!course || course._cloudRevision == null) return;
+
+    const payload = _buildCloudPayload(p);
+    const body = {
+      project: {
+        title:          payload.title,
+        status:         payload.status,
+        health:         payload.health,
+        folderId:       payload.folderId,
+        lastAccessedAt: p.lastAccessed || Date.now(),
+        labelSet:       course.labelSet || null,
+      },
+      folder:          payload.folder,
+      course:          payload.course,
+      lessons:         payload.lessons,
+      expectedRevision: course._cloudRevision,
+    };
+
+    // Fire-and-forget keepalive request — the browser will complete it even
+    // if the page is destroyed immediately after this handler returns.
+    LumioAPI.projects.updateKeepalive(id, body).catch(function () {});
+  });
+});
 
 /* ---------------- HELPERS ---------------- */
 function el(html) {

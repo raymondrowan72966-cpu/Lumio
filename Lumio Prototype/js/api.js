@@ -65,14 +65,16 @@ const LumioAPI = (function () {
    * @param {string}  path      - relative to BASE, e.g. '/health'
    * @param {*}       [body]    - serialised to JSON when present
    * @param {boolean} [_retry]  - internal; prevents infinite retry loops
+   * @param {boolean} [_keepalive] - pass true to set fetch keepalive (for pagehide/unload paths)
    * @returns {Promise<*>}
    */
-  async function request(method, path, body, _retry) {
+  async function request(method, path, body, _retry, _keepalive) {
     const init = {
       method,
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
     };
+    if (_keepalive) init.keepalive = true;
     if (body !== undefined) {
       init.body = JSON.stringify(body);
     }
@@ -359,6 +361,13 @@ const LumioAPI = (function () {
      * @returns {Promise<object>} the updated project row
      */
     update: function (id, data) { return request('PUT', '/projects/' + id, data); },
+
+    /**
+     * Same as update() but with fetch keepalive=true so the request can
+     * outlive the page during pagehide/unload. Use ONLY from the unload flush
+     * path in app.js — not for interactive saves.
+     */
+    updateKeepalive: function (id, data) { return request('PUT', '/projects/' + id, data, false, true); },
 
     /**
      * Soft-delete a project (moves to Trash in D1; reversible via restore).
