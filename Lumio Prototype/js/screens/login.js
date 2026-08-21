@@ -192,6 +192,11 @@ function bindLoginEvents() {
         const data = await LumioAPI.auth.register({ email, password, firstName, lastName });
         LumioSession.set(data);
         toast('Welcome to Lumio, ' + data.user.displayName + '!', '🎉');
+        AssetStore.setCloudAdapter({ download: function(assetId) { return LumioAPI.assets.getBlob(assetId); } });
+        await Promise.all([_loadCloudProjects(), _loadCloudWorkspace()]);
+        applyWorkspaceIdentity();
+        await _migrateBase64Logos();
+        await _resolveLogoCache();
         navigate('#/welcome');
       } catch (e) {
         const msg = e.code === 'DUPLICATE_EMAIL'
@@ -207,6 +212,11 @@ function bindLoginEvents() {
     try {
       const data = await LumioAPI.auth.login({ email, password, rememberMe });
       LumioSession.set(data);
+      AssetStore.setCloudAdapter({ download: function(assetId) { return LumioAPI.assets.getBlob(assetId); } });
+      await Promise.all([_loadCloudProjects(), _loadCloudWorkspace()]);
+      applyWorkspaceIdentity();
+      await _migrateBase64Logos();
+      await _resolveLogoCache();
       navigate('#/welcome');
     } catch (e) {
       const isDeactivated = e.status === 401 && e.message &&
