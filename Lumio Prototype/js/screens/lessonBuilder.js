@@ -936,7 +936,7 @@ function prefixedTypographyFields(ds, prefix, label, defaultSize) {
       <p class="text-sm text-muted mb-8 mt-12">Font Colour</p>
       <div class="flex gap-8 items-center">
         ${colorOptions.map(o => `<div class="text-color-swatch hotspot-typo-swatch ${activeColor === o.id ? 'selected' : ''}" data-prefix="${prefix}" data-color="${o.id}" title="${o.label}"
-          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? resolveThemeColor('--theme-primary', 'var(--violet)') : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
           border:${activeColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
         <input type="color" class="text-color-custom hotspot-typo-custom" data-prefix="${prefix}" title="Custom colour" value="${activeColor === 'custom' ? ds[colorProp] : '#000000'}"
           style="width:26px; height:26px; padding:0; border:${activeColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
@@ -3226,7 +3226,7 @@ function renderTextBlockPanel(block, index) {
       <p class="text-sm text-muted mb-8 mt-12">Font Colour</p>
       <div class="flex gap-8 items-center">
         ${fontColorOptions.map(o => `<div class="text-color-swatch ${activeFontColor === o.id ? 'selected' : ''}" data-color="${o.id}" title="${o.label}"
-          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? resolveThemeColor('--theme-primary', 'var(--violet)') : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
           border:${activeFontColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
         <input type="color" class="text-color-custom" title="Custom colour" value="${activeFontColor === 'custom' ? ds.fontColor : '#000000'}"
           style="width:26px; height:26px; padding:0; border:${activeFontColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
@@ -3419,7 +3419,7 @@ function renderStatementBlockPanel(block, index) {
       <p class="text-sm text-muted mb-8 mt-12">Font Colour</p>
       <div class="flex gap-8 items-center">
         ${fontColorOptions.map(o => `<div class="text-color-swatch ${activeFontColor === o.id ? 'selected' : ''}" data-color="${o.id}" title="${o.label}"
-          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+          style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? resolveThemeColor('--theme-primary', 'var(--violet)') : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
           border:${activeFontColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
         <input type="color" class="text-color-custom" title="Custom colour" value="${activeFontColor === 'custom' ? ds.fontColor : '#000000'}"
           style="width:26px; height:26px; padding:0; border:${activeFontColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
@@ -5075,7 +5075,7 @@ function blockTypeDesignFields(block, ds) {
           <div class="prop-section-title">Text Colour</div>
           <div class="flex gap-8 items-center">
             ${quoteFontColorOptions.map(o => `<div class="text-color-swatch ${activeQuoteFontColor === o.id ? 'selected' : ''}" data-color="${o.id}" title="${o.label}"
-              style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? 'var(--gradient-primary)' : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
+              style="width:26px; height:26px; border-radius:6px; cursor:pointer; background:${o.id === 'theme' ? resolveThemeColor('--theme-primary', 'var(--violet)') : o.id === 'white' ? '#fff' : TEXT_COLOR_MAP[o.id]};
               border:${activeQuoteFontColor === o.id ? '2px solid var(--indigo)' : '1px solid var(--border)'};"></div>`).join('')}
             <input type="color" class="text-color-custom" title="Custom colour" value="${activeQuoteFontColor === 'custom' ? ds.fontColor : '#000000'}"
               style="width:26px; height:26px; padding:0; border:${activeQuoteFontColor === 'custom' ? '2px solid var(--indigo)' : '1px solid var(--border)'}; border-radius:6px; cursor:pointer;" />
