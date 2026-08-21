@@ -1801,6 +1801,9 @@ function scheduleLumioSave() {
 // is empty, so a freshly loaded localStorage cache can never trigger a
 // spurious cloud save and overwrite a newer cloud version.
 const _dirtyProjects = new Set();
+// Courses for which _cloudLoadCourse() has already fired once this session.
+// Prevents redundant cloud fetches on repeated navigation to the same course.
+const _sessionCloudLoadedCourses = new Set();
 
 function markProjectDirty(courseId) {
   if (courseId) _dirtyProjects.add(courseId);
@@ -3410,6 +3413,12 @@ function _collectProjectAssetRefs(course, lessons) {
     collect((course.heroImage || {}).src);
     collect((course.heroImage || {})._thumbSrc);
     collect((course.thumbnailImage || {}).src);
+    // Course-level landing section assets (stored in landingStyles, not in lesson
+    // blocks, so the block loop below misses them).
+    const _ls = course.landingStyles || {};
+    collect((_ls.navTips  || {}).iconImage);
+    collect((_ls.objectives || {}).iconImage);
+    collect((_ls.structure  || {}).iconImage);
   }
 
   Object.values(lessons || {}).forEach(blocks => {
@@ -4508,9 +4517,21 @@ function render() {
     case 'wizard':
       renderWizard();
       break;
-    case 'course':
-      renderCourseLanding(param || LumioState.currentCourseId);
+    case 'course': {
+      const _cId = param || LumioState.currentCourseId;
+      renderCourseLanding(_cId);
+      // Fire a cloud load the first time this course is opened in this session.
+      // This runs the orphan rescue (locally-created lessons missing from D1 due
+      // to the migration-0013 incident) so the complete lesson list is in
+      // LumioState and subsequent exports include all content.
+      // Once per session is enough — _cloudLoadCourse sets _cloudRevision so the
+      // conflict guard works correctly on any later edits.
+      if (_cId && !_sessionCloudLoadedCourses.has(_cId) && typeof _cloudLoadCourse === 'function') {
+        _sessionCloudLoadedCourses.add(_cId);
+        _cloudLoadCourse(_cId).then(() => renderCourseLanding(_cId)).catch(() => {});
+      }
       break;
+    }
     case 'lesson':
       renderLessonBuilder(param || LumioState.currentLessonId);
       break;
