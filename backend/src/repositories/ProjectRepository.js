@@ -199,6 +199,7 @@ export class ProjectRepository {
       JSON.stringify(data.heroImage || {}),
       JSON.stringify(data.heroSettings || {}),
       data.labelSet || null,
+      data.landingStyles != null ? JSON.stringify(data.landingStyles) : null,
     ];
 
     if (expectedRevision != null) {
@@ -211,7 +212,7 @@ export class ProjectRepository {
          SET title = ?, description = ?, audience = ?, duration = ?,
              objectives = ?, learner_outcomes = ?, theme_id = ?,
              theme_design = ?, landing_layout = ?, hero_image = ?,
-             hero_settings = ?, label_set = ?,
+             hero_settings = ?, label_set = ?, landing_styles = ?,
              revision = revision + 1,
              updated_at = ?
          WHERE id = ? AND revision = ?`,
@@ -229,9 +230,9 @@ export class ProjectRepository {
       `INSERT OR IGNORE INTO courses
          (id, workspace_id, title, description, audience, duration,
           objectives, learner_outcomes, theme_id, theme_design,
-          landing_layout, hero_image, hero_settings, label_set,
+          landing_layout, hero_image, hero_settings, label_set, landing_styles,
           revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         projectId,
         data.workspaceId,
@@ -333,6 +334,7 @@ function rowToCourse(row) {
     heroImage:      _parseJson(row.hero_image, null),
     heroSettings:   _parseJson(row.hero_settings, null),
     labelSet:       row.label_set || null,
+    landingStyles:  _parseJson(row.landing_styles, null),
     revision:       row.revision != null ? row.revision : 1,
   };
 }

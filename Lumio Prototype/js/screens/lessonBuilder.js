@@ -2338,7 +2338,11 @@ function renderBlockContent(block, editable) {
       const animate = settings.hotspotAnimation !== false;
       const radius = RADIUS_MAP[ds.radius] || 'var(--r-lg)';
       const imgWidth = ds.imageWidth ?? 100;
-      const markerColor = ds.markerColor || resolveThemeColor('--theme-primary', '#7C3AED');
+      // Use a CSS var() fallback when no custom colour is stored, so the
+      // theme primary resolves at paint time rather than during JS execution
+      // (resolveThemeColor via getComputedStyle can read a stale/empty value
+      // if called before the theme <style> tag has been applied to the DOM).
+      const markerColor = ds.markerColor || 'var(--theme-primary, #7C3AED)';
       const markerBorderColor = ds.markerBorderColor || '#ffffff';
       const markerSize = MARKER_SIZE_MAP[ds.markerSize] || MARKER_SIZE_MAP.md;
       const markerStyle = ds.markerStyle || 'numbers';

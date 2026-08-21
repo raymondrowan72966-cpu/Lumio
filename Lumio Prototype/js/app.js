@@ -3067,12 +3067,46 @@ async function _cloudLoadCourse(id) {
   try {
     const full = await LumioAPI.projects.get(id);
     if (full && full.course) {
+      // Capture the locally-stored lesson/assessment lists BEFORE replacing the course.
+      // This allows us to preserve lesson entries that exist locally but are absent from
+      // D1 (e.g. created during a period when cloud saves were failing due to a missing
+      // migration). A lesson is only preserved if it has actual block data in
+      // LumioState.lessons — a deliberately deleted lesson has its blocks explicitly
+      // removed via `delete LumioState.lessons[id]` in the deletion handler, so an
+      // absent or empty entry here means the lesson was intentionally removed.
+      const localCourse = LumioState.courses[id];
+      const priorLessons     = localCourse ? (localCourse.lessons     || []) : [];
+      const priorAssessments = localCourse ? (localCourse.assessments || []) : [];
+
       const courseState = _cloudCourseToState(full.course);
       // Store the cloud revision so cloudPersistProject() can send it back as
       // expectedRevision, enabling the backend to reject stale writes (409).
       courseState._cloudRevision = full.course.revision != null ? full.course.revision : 1;
       LumioState.courses[id] = courseState;
       Object.assign(LumioState.lessons, full.lessons || {});
+
+      // Re-attach locally-known lessons/assessments that D1 does not yet contain.
+      // Only includes entries where block data exists locally (guards against deleted
+      // lessons being resurrected). Does not affect lessons already returned by D1.
+      const d1LessonIds     = new Set((courseState.lessons     || []).map(l => l.id));
+      const d1AssessmentIds = new Set((courseState.assessments || []).map(a => a.id));
+
+      const orphanedLessons = priorLessons.filter(
+        l => !d1LessonIds.has(l.id) && LumioState.lessons[l.id] && LumioState.lessons[l.id].length > 0
+      );
+      const orphanedAssessments = priorAssessments.filter(
+        a => !d1AssessmentIds.has(a.id) && LumioState.lessons[a.id] && LumioState.lessons[a.id].length > 0
+      );
+
+      if (orphanedLessons.length > 0 || orphanedAssessments.length > 0) {
+        courseState.lessons     = [...(courseState.lessons     || []), ...orphanedLessons];
+        courseState.assessments = [...(courseState.assessments || []), ...orphanedAssessments];
+        console.warn(
+          '[Lumio] Preserved', orphanedLessons.length, 'lesson(s) and',
+          orphanedAssessments.length, 'assessment(s) not yet in D1 for course', id,
+          '— they will be written to D1 on next cloud save.'
+        );
+      }
     }
   } catch (err) {
     console.warn('[Lumio] Could not load course from cloud for project', id, err);
