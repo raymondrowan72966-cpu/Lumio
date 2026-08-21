@@ -288,7 +288,13 @@ function renderCourseLanding(courseId) {
   // fresh page load until something else incidentally warmed the cache.
   const _heroRef = (course.heroImage || {}).src;
   const _thumbRef = (course.thumbnailImage || {}).src;
-  const _heroRefs = [_heroRef, _thumbRef].filter(Boolean);
+  // Also warm the URL cache for the custom icon on the Navigation Tips landing
+  // section. resolveMediaSrc() is synchronous and reads the URL cache only, so
+  // without this preload the icon renders blank on every fresh page load even
+  // though the asset:// ref is correctly persisted in landingStyles.
+  const _iconRef = (course.landingStyles && course.landingStyles.navTips)
+    ? course.landingStyles.navTips.iconImage : null;
+  const _heroRefs = [_heroRef, _thumbRef, _iconRef].filter(Boolean);
   if (_heroRefs.length) {
     AssetStore.preloadBlocks([], _heroRefs).then(count => {
       if (count > 0) renderCourseLanding(courseId);

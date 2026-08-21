@@ -3104,8 +3104,14 @@ async function _cloudLoadCourse(id) {
         console.warn(
           '[Lumio] Preserved', orphanedLessons.length, 'lesson(s) and',
           orphanedAssessments.length, 'assessment(s) not yet in D1 for course', id,
-          '— they will be written to D1 on next cloud save.'
+          '— marking project dirty so they are written to D1 on next cloud save.'
         );
+        // Mark dirty so the recovered lessons are written to D1 on the next cloud save.
+        // Without this the rescue loop fires on every page load but D1 is never updated.
+        markProjectDirty(id);
+        // Defer the cloud persist so it fires after render() settles and the
+        // course/lesson state is fully hydrated in memory.
+        setTimeout(() => { if (typeof cloudPersistProject === 'function') cloudPersistProject(id); }, 3000);
       }
     }
   } catch (err) {

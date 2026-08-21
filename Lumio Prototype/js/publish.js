@@ -189,6 +189,10 @@ async function buildExportPackage(course, triggerBtn, adapter) {
     // Collect all asset:// refs from this course and fetch their blobs.
     const assetRefs = _collectProjectAssetRefs(course, lessonData);
     NotifySystem.updateProgress(pgId, 20, 'Collecting assets…');
+    // Warm the URL cache and pull down any cloud-hosted assets not yet in local
+    // IndexedDB (e.g. assets created on another device, or during a period when
+    // cloud-sync was failing). exportAll() reads IDB only — no R2 fallback.
+    for (const ref of assetRefs) { await AssetStore.resolveUrl(ref); }
     const assetEntries = await AssetStore.exportAll(assetRefs);
 
     // Build publish-safe path map: { 'asset://hash' → 'assets/hash.ext' }
@@ -1077,6 +1081,7 @@ async function publishPdfPackage(course, triggerBtn, opts) {
 
     const assetRefs = _collectProjectAssetRefs(course, lessonData);
     NotifySystem.updateProgress(pgId, 20, 'Collecting assets…');
+    for (const ref of assetRefs) { await AssetStore.resolveUrl(ref); }
     const assetEntries = await AssetStore.exportAll(assetRefs);
 
     NotifySystem.updateProgress(pgId, 55, 'Rendering pages…');
