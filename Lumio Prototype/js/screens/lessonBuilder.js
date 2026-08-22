@@ -930,7 +930,7 @@ function prefixedTypographyFields(ds, prefix, label, defaultSize) {
       <div class="prop-section-title">${label} Typography</div>
       <p class="text-sm text-muted mb-8">Font Size</p>
       <div class="flex items-center gap-8">
-        <input type="range" class="design-range hotspot-typo-size" data-prefix="${prefix}" min="10" max="48" value="${ds[sizeProp] || defaultSize}" style="flex:1;" />
+        <input type="range" class="hotspot-typo-size" data-prefix="${prefix}" min="10" max="48" value="${ds[sizeProp] || defaultSize}" style="flex:1;" />
         <span class="text-sm range-val" style="min-width:36px; text-align:right;">${ds[sizeProp] || defaultSize}px</span>
       </div>
       <p class="text-sm text-muted mb-8 mt-12">Font Colour</p>
