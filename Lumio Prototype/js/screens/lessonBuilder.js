@@ -903,6 +903,8 @@ function textTypographyStyle(ds, defaultSize, prefix) {
     style += `color:${TEXT_COLOR_MAP[fontColor] || fontColor};`;
   } else if (!prefix && ds.bgType === 'dark') {
     style += `color:#ffffff;`;
+  } else {
+    style += `color:var(--theme-primary, #7C3AED);`;
   }
   if (!prefix) {
     if (ds.bold) style += `font-weight:700;`;
@@ -1012,7 +1014,7 @@ function applyQuoteStylesToDom(block, index) {
       overlay.style.background = `rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)})`;
     }
     wrapper.querySelectorAll('.editable-text[data-field="text"], .editable-text[data-field="author"]').forEach(elx => {
-      elx.style.color = TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor || '#fff';
+      elx.style.color = TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor || 'var(--theme-primary, #7C3AED)';
     });
   }
 }
