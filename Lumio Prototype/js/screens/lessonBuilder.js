@@ -1540,107 +1540,62 @@ function ensureRichTextToolbar() {
   // picker keeps the OS-level drag session uninterrupted while the text
   // colour still updates live.
   let liveColorEl = null;
-  // Pre-apply the current colour on mousedown — before the OS picker opens —
-  // so liveColorEl is always captured while the page still has focus.
-  // Every subsequent input tick (drag and RGB typing alike) then takes the
-  // direct-mutation fast path and never calls focus() or execCommand, which
-  // is the root cause of cursor jumping in the picker's RGB text fields.
+  // Pre-apply colour on mousedown — before the OS picker opens — so liveColorEl
+  // is captured while the page still has focus. Subsequent input ticks mutate
+  // liveColorEl.style.color directly without re-focusing, keeping the native
+  // colour picker's drag session uninterrupted.
   el.querySelector('.rt-color').addEventListener('mousedown', () => {
     RichTextToolbar.colorPickerActive = true;
     liveColorEl = null;
     const colorEl = el.querySelector('.rt-color');
 
-    // Stage 1: try execCommand — fast, handles complex multi-element selections.
+    // Range-based colour application: wrap ONLY the selected content in a new
+    // <span style="color:...">. This guarantees the colour lands on exactly the
+    // selected range — the container style.color is never touched, and adjacent
+    // or pre-existing spans outside the selection are never affected.
+    // surroundContents() handles simple (non-crossing) ranges; extractContents()
+    // handles complex ranges where the selection spans partial element boundaries
+    // (e.g. text that crosses a <strong> or an existing colour span).
     applyAndSync((active) => {
-      // Capture pre-execCommand state: the existing container colour (block-level
-      // design colour written by applyBlockStylesToDom) and whether the selection
-      // covers the entire element. These are the source-of-truth checks for F3.
-      const colorBefore = active.elx.style.color;
-      const selNow = window.getSelection();
-      const rangeNow = selNow && selNow.rangeCount > 0 ? selNow.getRangeAt(0).cloneRange() : null;
-      const isFullElem = isSelectionFullElement(rangeNow, active.elx);
-
-      document.execCommand('foreColor', false, colorEl.value || '#000000');
-      normalizeLegacyFontTags(active.elx);
-
-      // F3: execCommand('foreColor') on a full-element selection sometimes writes
-      // to elx.style.color on the container rather than wrapping in a child span,
-      // so syncRichTextField reads no colour in innerHTML and the colour vanishes
-      // after re-render. Promote the container colour to an inline span.
-      //
-      // Gate on isFullElem (the actual Range) — NOT on style.color being non-empty.
-      // A block-level Design-tab colour is already on the container BEFORE execCommand
-      // runs, so checking style.color alone false-positives on any partial-word
-      // selection inside a block that has a Design-tab colour set.
-      if (isFullElem && active.elx.style.color !== colorBefore) {
-        // execCommand wrote a new colour to the container on a full-element selection.
-        const c = active.elx.style.color;
-        active.elx.style.color = colorBefore; // restore block-level design colour
-        const wrapper = document.createElement('span');
-        wrapper.style.color = c;
-        wrapper.innerHTML = active.elx.innerHTML;
-        active.elx.innerHTML = '';
-        active.elx.appendChild(wrapper);
-        liveColorEl = wrapper; // set directly — selection is gone after innerHTML rewrite
-      } else if (!isFullElem) {
-        // Partial selection — acquire liveColorEl from the browser selection.
-        // execCommand('foreColor') guarantees the new/modified element contains
-        // the active selection; .closest('[style*="color"]') anchors to it
-        // precisely regardless of how many other coloured spans exist in the field.
-        const sel = window.getSelection();
-        if (sel.rangeCount > 0) {
-          let node = sel.getRangeAt(0).commonAncestorContainer;
-          if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-          liveColorEl = node ? node.closest('[style*="color"]') : null;
-        }
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.color = colorEl.value || '#000000';
+      try {
+        range.surroundContents(span);
+      } catch (_) {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
       }
-      // else: isFullElem + same colour → liveColorEl stays null → Stage 2 handles it
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      liveColorEl = span;
     });
-
-    // Stage 2 fallback: execCommand is a no-op when the colour matches the
-    // element's computed colour (browser skips the redundant wrap). In that
-    // case use Range.surroundContents() to create a span directly so
-    // liveColorEl is guaranteed to be set for any simple (single-root) range.
-    if (!liveColorEl) {
-      const range = RichTextToolbar.savedRange?.cloneRange();
-      if (range && !range.collapsed) {
-        const span = document.createElement('span');
-        span.style.color = colorEl.value || '#000000';
-        try {
-          range.surroundContents(span);
-          liveColorEl = span;
-          const newRange = document.createRange();
-          newRange.selectNodeContents(span);
-          RichTextToolbar.savedRange = newRange;
-          const active = RichTextToolbar.activeField;
-          if (active) syncRichTextField(active.block, active.elx);
-        } catch (e) {
-          // Selection crosses element boundaries (e.g. partially bold text) —
-          // liveColorEl stays null; the input handler's applyAndSync fallback
-          // handles it. This is the same path as before this fix for that case.
-        }
-      }
-    }
   });
   el.querySelector('.rt-color').addEventListener('input', (e) => {
     if (liveColorEl && liveColorEl.isConnected) {
       // Fast path: mutate the pre-created span directly — no focus(), no
-      // execCommand(), no cursor stealing from the picker's RGB fields.
+      // re-execution, no cursor stealing from the picker's RGB fields.
       liveColorEl.style.color = e.target.value;
       return;
     }
-    // Fallback for the rare case where mousedown couldn't capture liveColorEl
-    // (e.g., the selection was collapsed when the picker opened).
+    // Fallback: liveColorEl wasn't captured (e.g. selection was already collapsed).
     applyAndSync((active) => {
-      document.execCommand('foreColor', false, e.target.value);
-      normalizeLegacyFontTags(active.elx);
-      // Same selection-anchored acquisition as Stage 1 in mousedown.
       const sel = window.getSelection();
-      if (sel.rangeCount > 0) {
-        let node = sel.getRangeAt(0).commonAncestorContainer;
-        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-        liveColorEl = node ? node.closest('[style*="color"]') : null;
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.color = e.target.value;
+      try {
+        range.surroundContents(span);
+      } catch (_) {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
       }
+      liveColorEl = span;
     });
   });
   el.querySelector('.rt-color').addEventListener('change', () => {
