@@ -1316,6 +1316,45 @@ function richTextOut(value) {
   return sanitizeRichHtml(value);
 }
 
+/* Strip colour spans whose text content covers ≥90% of the field's total text.
+   These are all-content corruption spans (created by the old F3 bug) that would
+   override the block-level Design colour via CSS cascade. Partial/word-level
+   colour spans (< 90% of total text) are left intact for Phase 2 inline colour. */
+function stripAllContentColourSpans(html) {
+  if (!html) return html;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const totalLen = tmp.textContent.length;
+  if (!totalLen) return html;
+  let changed = false;
+  function visit(container) {
+    Array.from(container.children).forEach(child => {
+      if (child.tagName === 'SPAN' && child.style.color && child.textContent.length >= totalLen * 0.9) {
+        const frag = document.createDocumentFragment();
+        while (child.firstChild) frag.appendChild(child.firstChild);
+        child.replaceWith(frag);
+        changed = true;
+      } else {
+        visit(child);
+      }
+    });
+  }
+  visit(tmp);
+  return changed ? tmp.innerHTML : html;
+}
+
+/* Remove all-content colour-span corruption from every top-level rich-text field
+   in the block. Call before applying a Design Font Colour so the container colour
+   is not overridden by old corruption. */
+function cleanBlockColourSpans(block) {
+  if (!block || !block.data) return;
+  ['body', 'heading', 'text', 'author', 'title', 'subtitle', 'caption'].forEach(field => {
+    if (typeof block.data[field] === 'string') {
+      block.data[field] = stripAllContentColourSpans(block.data[field]);
+    }
+  });
+}
+
 /* Convert computed "rgb(r, g, b)" or "rgba(r, g, b, a)" colour string to
    "#rrggbb" hex for use as <input type="color"> value. Returns null if the
    input is not a recognised rgb/rgba string. Alpha is discarded — the colour
@@ -6999,8 +7038,12 @@ function bindBuilderEvents(course, lesson, blocks) {
     const block = blocks[BuilderUI.selected];
     if (!block) return;
     block.design = block.design || {};
-    if (sw.dataset.color === 'theme') delete block.design.fontColor;
-    else block.design.fontColor = sw.dataset.color;
+    if (sw.dataset.color === 'theme') {
+      delete block.design.fontColor;
+    } else {
+      block.design.fontColor = sw.dataset.color;
+      cleanBlockColourSpans(block);
+    }
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   }));
@@ -7012,6 +7055,8 @@ function bindBuilderEvents(course, lesson, blocks) {
     applyLivePreview(block, BuilderUI.selected);
   });
   app.querySelector('.text-color-custom')?.addEventListener('change', () => {
+    const block = blocks[BuilderUI.selected];
+    if (block) cleanBlockColourSpans(block);
     renderLessonBuilder(lesson.id);
     flashSaveStatus();
   });
