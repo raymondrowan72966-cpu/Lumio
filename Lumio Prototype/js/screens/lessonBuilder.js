@@ -1316,10 +1316,12 @@ function richTextOut(value) {
   return sanitizeRichHtml(value);
 }
 
-/* Convert computed "rgb(r, g, b)" colour string to "#rrggbb" hex for use as
-   <input type="color"> value. Returns null if the input is not a plain rgb(). */
+/* Convert computed "rgb(r, g, b)" or "rgba(r, g, b, a)" colour string to
+   "#rrggbb" hex for use as <input type="color"> value. Returns null if the
+   input is not a recognised rgb/rgba string. Alpha is discarded — the colour
+   picker only works in opaque hex. */
 function rgbToHex(rgb) {
-  const m = rgb && rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  const m = rgb && rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (!m) return null;
   return '#' + [m[1], m[2], m[3]].map(n => parseInt(n, 10).toString(16).padStart(2, '0')).join('');
 }
@@ -1498,15 +1500,33 @@ function ensureRichTextToolbar() {
     applyAndSync((active) => {
       document.execCommand('foreColor', false, colorEl.value || '#000000');
       normalizeLegacyFontTags(active.elx);
-      // Acquire liveColorEl from the browser selection, not DOM order.
-      // execCommand('foreColor') guarantees the new/modified element contains
-      // the active selection; .closest('[style*="color"]') anchors to it
-      // precisely regardless of how many other coloured spans exist in the field.
-      const sel = window.getSelection();
-      if (sel.rangeCount > 0) {
-        let node = sel.getRangeAt(0).commonAncestorContainer;
-        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-        liveColorEl = node ? node.closest('[style*="color"]') : null;
+      // F3: on some browser/platform combinations (particularly when the entire
+      // element content is selected), execCommand('foreColor') sets
+      // active.elx.style.color on the container element instead of wrapping the
+      // selection in a child span. syncRichTextField reads elx.innerHTML, which
+      // would not contain the colour, causing it to disappear after re-render.
+      // Detect this and move the colour into an inline span so the normal
+      // innerHTML → block.data persistence path captures it correctly.
+      if (active.elx.style.color) {
+        const c = active.elx.style.color;
+        active.elx.style.color = '';
+        const wrapper = document.createElement('span');
+        wrapper.style.color = c;
+        wrapper.innerHTML = active.elx.innerHTML;
+        active.elx.innerHTML = '';
+        active.elx.appendChild(wrapper);
+        liveColorEl = wrapper; // set directly — selection is gone after innerHTML rewrite
+      } else {
+        // Normal path: acquire liveColorEl from the browser selection.
+        // execCommand('foreColor') guarantees the new/modified element contains
+        // the active selection; .closest('[style*="color"]') anchors to it
+        // precisely regardless of how many other coloured spans exist in the field.
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) {
+          let node = sel.getRangeAt(0).commonAncestorContainer;
+          if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+          liveColorEl = node ? node.closest('[style*="color"]') : null;
+        }
       }
     });
 
@@ -1624,6 +1644,13 @@ function ensureRichTextToolbar() {
 }
 
 function syncRichTextField(block, elx) {
+  // F2: if a renderLessonBuilder() call has already replaced the DOM (e.g. the
+  // user switched blocks while the native colour picker was open), elx is now
+  // detached. Reading innerHTML from a detached element would write the
+  // intermediate colour from mousedown rather than the final dragged colour.
+  // Bail out silently — the in-memory block.data already holds the last
+  // correctly-synced value and no stale data is written.
+  if (!elx.isConnected) return;
   block.data = block.data || {};
   if (elx.dataset.field === 'col') {
     const cols = block.data.cols || (block.data.cols = DEFAULT_COLUMNS.slice());
