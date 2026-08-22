@@ -903,8 +903,6 @@ function textTypographyStyle(ds, defaultSize, prefix) {
     style += `color:${TEXT_COLOR_MAP[fontColor] || fontColor};`;
   } else if (!prefix && ds.bgType === 'dark') {
     style += `color:#ffffff;`;
-  } else {
-    style += `color:var(--theme-primary, #7C3AED);`;
   }
   if (!prefix) {
     if (ds.bold) style += `font-weight:700;`;
@@ -926,7 +924,7 @@ function prefixedTypographyFields(ds, prefix, label, defaultSize) {
   const colorProp = `${prefix}FontColor`;
   const familyProp = `${prefix}FontFamily`;
   const activeColor = (!ds[colorProp] || ds[colorProp] === 'theme') ? 'theme' : (TEXT_COLOR_MAP[ds[colorProp]] ? ds[colorProp] : 'custom');
-  const colorOptions = [{ id: 'theme', label: 'Theme' }, { id: 'black', label: 'Black' }, { id: 'white', label: 'White' }, { id: 'grey', label: 'Grey' }];
+  const colorOptions = [{ id: 'black', label: 'Black' }, { id: 'white', label: 'White' }, { id: 'grey', label: 'Grey' }];
   return `
     <div class="prop-section">
       <div class="prop-section-title">${label} Typography</div>
@@ -1014,7 +1012,7 @@ function applyQuoteStylesToDom(block, index) {
       overlay.style.background = `rgba(0,0,0,${(overlayOpacity / 100).toFixed(2)})`;
     }
     wrapper.querySelectorAll('.editable-text[data-field="text"], .editable-text[data-field="author"]').forEach(elx => {
-      elx.style.color = TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor || 'var(--theme-primary, #7C3AED)';
+      elx.style.color = TEXT_COLOR_MAP[ds.fontColor] || ds.fontColor || '#fff';
     });
   }
 }
@@ -3208,7 +3206,6 @@ function renderTextBlockPanel(block, index) {
   // DESIGN TAB — Typography / Spacing / Background / Advanced
   const fontSizeDefault = (block.type === 'heading' || block.type === 'heading_paragraph') ? 22 : 15;
   const fontColorOptions = [
-    { id: 'theme', label: 'Theme' },
     { id: 'black', label: 'Black' },
     { id: 'white', label: 'White' },
     { id: 'grey', label: 'Grey' },
@@ -3373,7 +3370,6 @@ function renderStatementBlockPanel(block, index) {
 
   // DESIGN TAB — Icon / Typography / Spacing / Background / Border
   const fontColorOptions = [
-    { id: 'theme', label: 'Theme' },
     { id: 'black', label: 'Black' },
     { id: 'white', label: 'White' },
     { id: 'grey', label: 'Grey' },
@@ -5058,7 +5054,6 @@ function blockTypeDesignFields(block, ds) {
         </div>`;
     case 'Quotes': {
       const quoteFontColorOptions = [
-        { id: 'theme', label: 'Theme' },
         { id: 'black', label: 'Black' },
         { id: 'white', label: 'White' },
         { id: 'grey', label: 'Grey' },
