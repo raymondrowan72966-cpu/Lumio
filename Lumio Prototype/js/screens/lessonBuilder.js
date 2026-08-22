@@ -1326,6 +1326,21 @@ function rgbToHex(rgb) {
   return '#' + [m[1], m[2], m[3]].map(n => parseInt(n, 10).toString(16).padStart(2, '0')).join('');
 }
 
+/* Return true if range covers all content of elx (full-element selection).
+   Used to gate F3: only promote elx.style.color to an inline span when the user
+   actually selected everything — a partial selection always produces a child span. */
+function isSelectionFullElement(range, elx) {
+  if (!range || !elx || range.collapsed) return false;
+  try {
+    const elxRange = document.createRange();
+    elxRange.selectNodeContents(elx);
+    return range.compareBoundaryPoints(Range.START_TO_START, elxRange) <= 0 &&
+           range.compareBoundaryPoints(Range.END_TO_END, elxRange) >= 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* execCommand('foreColor') can still emit legacy <font color="..."> tags —
    convert those to sanitizer-safe <span style="color:..."> */
 function normalizeLegacyFontTags(root) {
@@ -1498,26 +1513,38 @@ function ensureRichTextToolbar() {
 
     // Stage 1: try execCommand — fast, handles complex multi-element selections.
     applyAndSync((active) => {
+      // Capture pre-execCommand state: the existing container colour (block-level
+      // design colour written by applyBlockStylesToDom) and whether the selection
+      // covers the entire element. These are the source-of-truth checks for F3.
+      const colorBefore = active.elx.style.color;
+      const selNow = window.getSelection();
+      const rangeNow = selNow && selNow.rangeCount > 0 ? selNow.getRangeAt(0).cloneRange() : null;
+      const isFullElem = isSelectionFullElement(rangeNow, active.elx);
+
       document.execCommand('foreColor', false, colorEl.value || '#000000');
       normalizeLegacyFontTags(active.elx);
-      // F3: on some browser/platform combinations (particularly when the entire
-      // element content is selected), execCommand('foreColor') sets
-      // active.elx.style.color on the container element instead of wrapping the
-      // selection in a child span. syncRichTextField reads elx.innerHTML, which
-      // would not contain the colour, causing it to disappear after re-render.
-      // Detect this and move the colour into an inline span so the normal
-      // innerHTML → block.data persistence path captures it correctly.
-      if (active.elx.style.color) {
+
+      // F3: execCommand('foreColor') on a full-element selection sometimes writes
+      // to elx.style.color on the container rather than wrapping in a child span,
+      // so syncRichTextField reads no colour in innerHTML and the colour vanishes
+      // after re-render. Promote the container colour to an inline span.
+      //
+      // Gate on isFullElem (the actual Range) — NOT on style.color being non-empty.
+      // A block-level Design-tab colour is already on the container BEFORE execCommand
+      // runs, so checking style.color alone false-positives on any partial-word
+      // selection inside a block that has a Design-tab colour set.
+      if (isFullElem && active.elx.style.color !== colorBefore) {
+        // execCommand wrote a new colour to the container on a full-element selection.
         const c = active.elx.style.color;
-        active.elx.style.color = '';
+        active.elx.style.color = colorBefore; // restore block-level design colour
         const wrapper = document.createElement('span');
         wrapper.style.color = c;
         wrapper.innerHTML = active.elx.innerHTML;
         active.elx.innerHTML = '';
         active.elx.appendChild(wrapper);
         liveColorEl = wrapper; // set directly — selection is gone after innerHTML rewrite
-      } else {
-        // Normal path: acquire liveColorEl from the browser selection.
+      } else if (!isFullElem) {
+        // Partial selection — acquire liveColorEl from the browser selection.
         // execCommand('foreColor') guarantees the new/modified element contains
         // the active selection; .closest('[style*="color"]') anchors to it
         // precisely regardless of how many other coloured spans exist in the field.
@@ -1528,6 +1555,7 @@ function ensureRichTextToolbar() {
           liveColorEl = node ? node.closest('[style*="color"]') : null;
         }
       }
+      // else: isFullElem + same colour → liveColorEl stays null → Stage 2 handles it
     });
 
     // Stage 2 fallback: execCommand is a no-op when the colour matches the
