@@ -7,6 +7,7 @@ import { projectRoutes } from './projects.js';
 import { assetRoutes } from './assets.js';
 import { workspaceResourceRoutes } from './workspaceResources.js';
 import { brandingRoutes } from './branding.js';
+import { reviewRoutes } from './review.js';
 
 /**
  * Single assembly point for every route group — adding a new resource means
@@ -22,5 +23,6 @@ export function createAppRouter() {
     ...assetRoutes,
     ...workspaceResourceRoutes,
     ...brandingRoutes,
+    ...reviewRoutes,
   ]);
 }

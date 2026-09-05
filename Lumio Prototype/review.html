@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumio Review</title>
+  <link rel="icon" href="assets/lumio-logo.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <!--
+    ============================================================
+    GLOBAL STUBS — defined before any other JS file loads.
+
+    review.html deliberately does NOT load app.js, so there is no
+    authentication guard, no builder UI, and no authoring routes.
+    These stubs provide the globals that learnerPreview.js and
+    lessonBuilder.js expect from app.js / courseLanding.js.
+
+    Every stub here is either:
+      - a no-op (scheduleLumioSave, navigate-to-builder)
+      - a minimal safe implementation (el, escapeHtml)
+      - a review-specific implementation (AssetStore, navigate)
+      - a verbatim copy of a function from app.js or wizard.js
+        (applyThemeVars, themeVarStyle, THEME_BG_SOLID_MAP)
+
+    None of these stubs modify any existing source file.
+    ============================================================
+  -->
+  <script>
+    /* ── Application state ──────────────────────────────────── */
+    const LumioState = {
+      courses:            {},
+      lessons:            {},
+      learnerProgress:    {},
+      learnerProfile:     null,
+      resume:             null,
+      currentCourseId:    null,
+      learnerPreview:     null,
+      interactionHistory: [],
+      assessmentAttempts: [],
+      labelPacks:         {},
+    };
+
+    /* ── Persistence stubs (no saving in review mode) ────────── */
+    function scheduleLumioSave()  {}
+    function saveLumioState()     {}
+    function touchCurrentProject() {}
+
+    /* ── DOM helpers (verbatim from app.js) ──────────────────── */
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;');
+    }
+    function el(html) {
+      const t = document.createElement('template');
+      t.innerHTML = html.trim();
+      return t.content.firstElementChild;
+    }
+
+    /* ── Icon and notification stubs ─────────────────────────── */
+    function platformIcon() { return ''; }
+    const NotifySystem = { notify: function() {} };
+
+    /* ── Anonymous reviewer profile ──────────────────────────── */
+    function ensureLearnerProfile() {
+      if (!LumioState.learnerProfile) {
+        LumioState.learnerProfile = {
+          learnerId:      'review-' + Math.random().toString(36).slice(2, 10),
+          learnerName:    'Reviewer',
+          startedAt:      Date.now(),
+          lastAccessedAt: Date.now(),
+        };
+      } else {
+        LumioState.learnerProfile.lastAccessedAt = Date.now();
+      }
+      return LumioState.learnerProfile;
+    }
+
+    /* ── Label accessor (labelEngine.js overrides at load time) ─ */
+    window.L = function(key) { return key; };
+
+    /* ── AssetStore stub ─────────────────────────────────────────
+       reviewBootstrap.js populates _assetMap after fetching the
+       snapshot. resolveMediaSrc() converts asset:// IDs to the
+       review-specific asset URLs returned by the backend.
+       assetStore.js is NOT loaded in review.html — it defines
+       `const AssetStore` which would cause a redeclaration error.
+    ────────────────────────────────────────────────────────────── */
+    const AssetStore = {
+      _assetMap: {},
+      preloadBlocks:   function()  { return Promise.resolve(0); },
+      resolveMediaSrc: function(src) {
+        if (!src) return '';
+        return AssetStore._assetMap[src] || src;
+      },
+      resolveUrl: function(assetId) {
+        return Promise.resolve(AssetStore._assetMap[assetId] || null);
+      },
+    };
+
+    /* ── ensureCourseDesign stub ─────────────────────────────────
+       Mirrors the essential guards from courseLanding.js:196.
+       ensureHeroDefaults() is available from heroImage.js (loaded
+       below). ensureThumbnailDefaults/ensureLandingStyles are
+       builder-only concerns and are safely omitted here.
+    ────────────────────────────────────────────────────────────── */
+    function ensureCourseDesign(c) {
+      if (!c.themeDesign) {
+        c.themeDesign = (typeof defaultThemeDesign === 'function') ? defaultThemeDesign() : {};
+      }
+      if (!c.landingLayout)  c.landingLayout  = 'A';
+      if (!c.language)       c.language       = 'English';
+      if (!c.labelSet)       c.labelSet       = 'en';
+      if (!c.publishHistory) c.publishHistory = [];
+      if (!c.publishVersion) c.publishVersion = '1.0';
+      if (typeof ensureHeroDefaults === 'function') ensureHeroDefaults(c);
+      return c;
+    }
+
+    /* ── Theme vars ──────────────────────────────────────────────
+       Copied verbatim from wizard.js:256-274 and app.js:4132-4147.
+       LumioData is available after data.js loads (below).
+    ────────────────────────────────────────────────────────────── */
+    const THEME_BG_SOLID_MAP = {
+      white:           '#FFFFFF',
+      'light-grey':    '#F1F1F4',
+      flat:            'var(--surface-50)',
+      mesh:            'var(--surface-50)',
+      'soft-gradient': 'var(--surface-0)',
+    };
+
+    function themeVarStyle(td) {
+      if (!td || typeof LumioData === 'undefined') return '';
+      const D = LumioData.themeDesigner;
+      const font   = D.fontFamilies.find(function(f) { return f.id === td.fontId; })       || D.fontFamilies[0];
+      const size   = D.fontSizes.find(function(f) { return f.id === td.fontSizeId; })      || D.fontSizes[1];
+      const btn    = D.buttonStyles.find(function(b) { return b.id === td.buttonStyleId; }) || D.buttonStyles[0];
+      const radius = D.cornerRadii.find(function(r) { return r.id === td.radiusId; })      || D.cornerRadii[1];
+      const bg     = D.backgroundStyles.find(function(b) { return b.id === td.bgStyleId; }) || D.backgroundStyles[0];
+      const bgSolid = (bg && THEME_BG_SOLID_MAP[bg.id]) || 'var(--surface-50)';
+      return `--theme-primary:${td.primary}; --theme-secondary:${td.secondary}; --theme-accent:${td.accent};
+              --theme-font-display:${font ? font.display : 'inherit'}; --theme-font-body:${font ? font.body : 'inherit'}; --theme-font-size:${size ? size.value : '16px'};
+              --theme-button-style:${btn ? btn.value : 'pill'}; --theme-radius:${radius ? radius.value : '8px'};
+              --theme-bg-style:${bg ? bg.value : '#fff'}; --theme-bg-solid:${bgSolid};`;
+    }
+
+    function applyThemeVars(course) {
+      let sheet = document.getElementById('__lumio-course-theme');
+      if (!sheet) {
+        sheet = document.createElement('style');
+        sheet.id = '__lumio-course-theme';
+        document.head.appendChild(sheet);
+      }
+      if (course) {
+        ensureCourseDesign(course);
+        const vars = themeVarStyle(course.themeDesign);
+        sheet.textContent =
+          '#lesson-canvas-wrap, #lesson-canvas, .lumio-learner-root, .course-landing-root { ' + vars + ' }';
+      } else {
+        sheet.textContent = '';
+      }
+    }
+
+    /* ── navigate stub ───────────────────────────────────────────
+       Handles only learner-internal navigation (overview ↔ lesson).
+       All authoring routes (#/projects, #/course/...) are no-ops.
+       renderLearnerLesson / renderLearnerCourseOverview are defined
+       in learnerPreview.js (loaded below) and available at call time.
+    ────────────────────────────────────────────────────────────── */
+    window.navigate = function(hash) {
+      if (!hash) return;
+      var m = hash.match(/^#\/learner\/([^/]+)(?:\/(.+))?$/);
+      if (m) {
+        var courseId = m[1];
+        var lessonId = m[2];
+        var course   = LumioState.courses[courseId];
+        if (!course) return;
+        if (lessonId) renderLearnerLesson(course, lessonId);
+        else          renderLearnerCourseOverview(course);
+        window.scrollTo(0, 0);
+      }
+      // All builder / project routes are no-ops in review mode.
+    };
+  </script>
+
+  <!-- ============================================================
+       Block runtimes and learner renderer.
+       Loaded read-only — no modifications to any of these files.
+       app.js is intentionally absent: it carries the auth guard,
+       builder routing, and session logic that must not run here.
+       ============================================================ -->
+  <script src="js/data.js"></script>
+  <script src="js/blocks/families.js"></script>
+  <script src="js/blocks/capabilities.js"></script>
+  <script src="js/blocks/schema.js"></script>
+  <script src="js/blocks/migration.js"></script>
+  <script src="js/blocks/designSystem.js"></script>
+  <script src="js/blocks/behaviourRuntime.js"></script>
+  <script src="js/blocks/accessibilityRuntime.js"></script>
+  <script src="js/blocks/completionEngine.js"></script>
+  <script src="js/heroImage.js"></script>
+  <script src="js/labelEngine.js"></script>
+  <script src="js/screens/lessonBuilder.js"></script>
+  <script src="js/screens/learnerPreview.js"></script>
+
+  <!-- Review bootstrap: fetches the frozen snapshot and renders. -->
+  <script src="js/reviewBootstrap.js"></script>
+</body>
+</html>
