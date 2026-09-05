@@ -907,7 +907,6 @@ function layoutThumbFrame(layoutId) {
    ============================================================ */
 
 const PUBLISH_FORMATS = [
-  { id: 'review',       label: 'Publish for Review',          icon: '👁', desc: 'Create a shareable, view-only version for SME review.' },
   { id: 'scorm12',      label: 'SCORM 1.2',                  icon: platformIcon('export-pack'), desc: 'Compatible with most Learning Management Systems.' },
   { id: 'scorm2004_2',  label: 'SCORM 2004 (2nd Edition)',    icon: platformIcon('export-pack'), desc: 'SCORM 2004 with improved sequencing support.' },
   { id: 'scorm2004_3',  label: 'SCORM 2004 (3rd Edition)',    icon: platformIcon('export-pack'), desc: 'SCORM 2004 with enhanced navigation controls.' },
@@ -1417,7 +1416,7 @@ function openPublishModal(course) {
     // every other format id in PUBLISH_FORMATS (SCORM 2004 2nd/3rd
     // Edition, xAPI, PDF) remains "Coming Soon" — see Sprint 7A's
     // recommendation against implementing 2004 2nd/3rd Edition.
-    const IMPLEMENTED_FORMATS = ['review', 'html', 'scorm12', 'scorm2004_2', 'scorm2004_3', 'scorm2004_4', 'xapi', 'pdf'];
+    const IMPLEMENTED_FORMATS = ['html', 'scorm12', 'scorm2004_2', 'scorm2004_3', 'scorm2004_4', 'xapi', 'pdf'];
     const formatsHtml = PUBLISH_FORMATS.map(f => `
       <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
         <span style="font-size:22px; flex-shrink:0;">${f.icon}</span>
@@ -1426,7 +1425,7 @@ function openPublishModal(course) {
           <div class="text-sm text-muted">${f.desc}</div>
         </div>
         ${IMPLEMENTED_FORMATS.includes(f.id) && isReady
-          ? `<button class="btn btn-primary btn-sm" data-publish-format="${f.id}" style="font-size:12px; white-space:nowrap;">${f.id === 'review' ? 'Publish for Review' : 'Publish'}</button>`
+          ? `<button class="btn btn-primary btn-sm" data-publish-format="${f.id}" style="font-size:12px; white-space:nowrap;">Publish</button>`
           : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
       </div>`).join('');
 
@@ -1443,7 +1442,6 @@ function openPublishModal(course) {
     const publishTabContent = `
       ${readinessBanner}
       ${summaryPanel}
-      <div id="review-result"></div>
       <div id="publish-asset-panel" style="margin-bottom:20px;"><div class="text-sm text-muted" style="padding:4px 0;">Analyzing assets…</div></div>
       <div style="display:flex; flex-direction:column; gap:8px;">
         ${formatsHtml}
@@ -1562,7 +1560,6 @@ function openPublishModal(course) {
             </ul>
           </div>` : '';
         body.innerHTML = readinessBannerInner + summaryPanelInner +
-          `<div id="review-result"></div>` +
           `<div id="publish-asset-panel" style="margin-bottom:20px;"><div class="text-sm text-muted" style="padding:4px 0;">Analyzing assets…</div></div>` +
           `<div style="display:flex; flex-direction:column; gap:8px;">${PUBLISH_FORMATS.map(f => `
           <div style="display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface-0); ${!isReady ? 'opacity:0.5;' : ''}">
@@ -1571,8 +1568,8 @@ function openPublishModal(course) {
               <div style="font-size:13px; font-weight:600; color:var(--ink-900);">${f.label}</div>
               <div class="text-sm text-muted">${f.desc}</div>
             </div>
-            ${IMPLEMENTED_FORMATS.includes(f.id) && isReady
-              ? `<button class="btn btn-primary btn-sm" data-publish-format="${f.id}" style="font-size:12px; white-space:nowrap;">${f.id === 'review' ? 'Publish for Review' : 'Publish'}</button>`
+            ${f.id === 'html' && isReady
+              ? `<button class="btn btn-primary btn-sm" data-publish-html style="font-size:12px; white-space:nowrap;">Publish</button>`
               : `<span class="pill pill-grey" style="font-size:11px; flex-shrink:0;">Coming Soon</span>`}
           </div>`).join('')}</div>`;
         loadAssetPanel();
@@ -1594,8 +1591,7 @@ function openPublishModal(course) {
   overlay.addEventListener('click', e => {
     const btn = e.target.closest('[data-publish-format]');
     if (!btn) return;
-    if (btn.dataset.publishFormat === 'review') publishForReview(course, btn);
-    else if (btn.dataset.publishFormat === 'html') publishHtmlPackage(course, btn);
+    if (btn.dataset.publishFormat === 'html') publishHtmlPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm12') publishScormPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm2004_2') publishScorm2004_2ndPackage(course, btn);
     else if (btn.dataset.publishFormat === 'scorm2004_3') publishScorm2004_3rdPackage(course, btn);
